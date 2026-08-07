@@ -2,14 +2,18 @@ import { FirebaseError } from 'firebase/app';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import {
   browserLocalPersistence,
+  applyActionCode,
+  confirmPasswordReset,
+  createUserWithEmailAndPassword,
   getAuth,
   getMultiFactorResolver,
   onAuthStateChanged,
-  sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
   TotpMultiFactorGenerator,
+  updateProfile,
+  verifyPasswordResetCode,
   type Auth,
   type MultiFactorError,
   type MultiFactorResolver,
@@ -88,6 +92,35 @@ export async function passwordSignIn(
   }
 }
 
+export async function createPasswordAccount(
+  email: string,
+  password: string,
+): Promise<User> {
+  const auth = await readyAuth();
+  if (auth.currentUser) await signOut(auth);
+  return (await createUserWithEmailAndPassword(auth, email, password)).user;
+}
+
+export async function applyEmailVerificationCode(code: string): Promise<void> {
+  const auth = await readyAuth();
+  await applyActionCode(auth, code);
+  if (auth.currentUser) await auth.currentUser.reload();
+}
+
+export async function inspectPasswordResetCode(code: string): Promise<string> {
+  const auth = await readyAuth();
+  return verifyPasswordResetCode(auth, code);
+}
+
+export async function applyPasswordReset(code: string, password: string): Promise<void> {
+  const auth = await readyAuth();
+  await confirmPasswordReset(auth, code, password);
+}
+
+export async function updateFirebaseDisplayName(user: User, name: string): Promise<void> {
+  await updateProfile(user, { displayName: name.trim() });
+}
+
 export async function completeTotpSignIn(
   resolver: MultiFactorResolver,
   verificationCode: string,
@@ -102,11 +135,6 @@ export async function completeTotpSignIn(
     verificationCode,
   );
   return (await resolver.resolveSignIn(assertion)).user;
-}
-
-export async function resetPassword(email: string): Promise<void> {
-  const auth = await readyAuth();
-  await sendPasswordResetEmail(auth, email);
 }
 
 export async function firebaseSignOut(): Promise<void> {

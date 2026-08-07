@@ -48,6 +48,11 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 | `/app` | Resumen administrativo |
 | `/app/invitaciones` | Crear, consultar, revocar y reenviar invitaciones |
 | `/app/pos` | Consultar, abrir y cerrar la sesión de caja |
+| `/invitaciones/aceptar` | Confirmar identidad y aceptar una invitación recibida por correo |
+| `/acceso/verificar` | Procesar el enlace de verificación de correo de Firebase |
+| `/acceso/recuperar` | Definir una contraseña nueva desde un enlace de recuperación |
+| `/legal/terminos/:version` | Publicar los Términos vigentes |
+| `/legal/privacidad/:version` | Publicar el Aviso de privacidad vigente |
 | `/plataforma/acceso` | Inicio separado de Super Admin con MFA/TOTP |
 | `/plataforma` | Resumen global de la plataforma |
 | `/plataforma/establecimientos` | Crear, configurar, suspender y reactivar establecimientos |
@@ -59,6 +64,19 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 - Administración/POS y Super Admin abren contextos diferentes en el backend; la Web no inventa permisos ni permite elegir roles públicos.
 - Las operaciones mutables usan `Idempotency-Key`.
 - Super Admin exige que Firebase complete el segundo factor TOTP antes de solicitar el contexto de plataforma.
+- El token de invitación se retira inmediatamente de la URL, vive como máximo dos horas en la pestaña actual y se elimina al activar el acceso.
+
+## Alta desde una invitación
+
+La persona invitada no necesita existir previamente en Firebase ni en Supabase. Desde
+`/invitaciones/aceptar` puede crear su cuenta, verificar el correo, completar nombre y
+consentimiento, y activar la membresía. Si ya tiene cuenta, la misma ruta reutiliza su
+identidad y solo pide los pasos que falten. El rol siempre viene firmado por la invitación;
+la Web nunca lo deja elegir.
+
+Los documentos de `src/content/legal-documents.ts` permanecen deliberadamente como
+`published: false` hasta recibir texto aprobado. Mientras falten, el alta se bloquea y las
+rutas legales muestran un estado explícito de documento pendiente.
 
 ## Verificación
 
@@ -77,6 +95,12 @@ Las pruebas E2E usan Playwright. Si es la primera ejecución, instala Chromium c
 
 1. Configura las mismas variables `VITE_*` en el proyecto Web.
 2. Agrega el dominio local y el dominio publicado a los dominios autorizados de Firebase.
-3. Agrega esos orígenes a `CORS_ORIGINS` del backend en Railway.
-4. Comprueba los flujos reales de acceso, invitaciones, caja y TOTP con cuentas de prueba.
-
+3. En Firebase Authentication → Templates, personaliza la URL de acción del correo de
+   verificación como `https://app.vaiinilla.app/acceso/verificar` y la de recuperación
+   como `https://app.vaiinilla.app/acceso/recuperar`.
+4. Publica los Términos y el Aviso de privacidad aprobados y cambia ambos documentos a
+   `published: true`.
+5. Configura `APP_PUBLIC_URL=https://app.vaiinilla.app` y agrega el dominio a
+   `CORS_ORIGINS` del backend en Railway.
+6. Comprueba los flujos reales de alta, acceso, invitaciones, caja, recuperación y TOTP
+   con cuentas de prueba antes de abrir el dominio a usuarios.

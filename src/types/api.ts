@@ -64,6 +64,44 @@ export interface StaffInvitation {
   reemplaza_invitacion_id: string | null;
 }
 
+export interface InvitationAcceptance {
+  invitacion_id: string;
+  membresia: {
+    id: string;
+    establecimiento_id: string;
+    rol: InvitationRole;
+    activo: boolean;
+  };
+  aceptada_en: string;
+}
+
+export interface LegalVersions {
+  terminos_version: string;
+  terminos_url: string;
+  privacidad_version: string;
+  privacidad_url: string;
+}
+
+export interface IdentityRegistrationInput {
+  nombre: string;
+  terminos_version: string;
+  privacidad_version: string;
+}
+
+export interface IdentityRegistration {
+  usuario: {
+    id: string;
+    nombre: string;
+    email: string;
+    email_verificado_en: string | null;
+  };
+  consentimiento: {
+    terminos_version: string;
+    privacidad_version: string;
+    aceptado_en: string;
+  };
+}
+
 export interface CashSession {
   id: string;
   fecha_operativa: string;

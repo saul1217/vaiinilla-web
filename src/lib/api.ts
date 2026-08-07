@@ -5,11 +5,15 @@ import type {
   ApiErrorEnvelope,
   CashSession,
   EstablishmentInput,
+  IdentityRegistration,
+  IdentityRegistrationInput,
+  InvitationAcceptance,
   InvitationRole,
   InvitationStatus,
   PlatformContextResponse,
   PlatformEstablishment,
   PlatformSummary,
+  LegalVersions,
   SessionAccess,
   StaffInvitation,
   TenantContextResponse,
@@ -64,6 +68,52 @@ function params(values: Record<string, string | number | undefined>): string {
 }
 
 export const api = {
+  async getLegalVersions(): Promise<LegalVersions> {
+    return (await request<LegalVersions>('/publico/legal/vigente')).data;
+  },
+
+  async requestEmailVerification(firebaseToken: string): Promise<void> {
+    await request<{ aceptado: true }>('/publico/correos/verificacion', {
+      method: 'POST',
+      token: firebaseToken,
+    });
+  },
+
+  async requestPasswordRecovery(email: string): Promise<void> {
+    await request<{ aceptado: true }>('/publico/correos/recuperacion', {
+      method: 'POST',
+      body: { email },
+    });
+  },
+
+  async registerIdentity(
+    firebaseToken: string,
+    input: IdentityRegistrationInput,
+  ): Promise<IdentityRegistration> {
+    return (
+      await request<IdentityRegistration>('/identidad/alta', {
+        method: 'POST',
+        token: firebaseToken,
+        idempotent: true,
+        body: input,
+      })
+    ).data;
+  },
+
+  async acceptInvitation(
+    firebaseToken: string,
+    invitationToken: string,
+  ): Promise<InvitationAcceptance> {
+    return (
+      await request<InvitationAcceptance>('/invitaciones/aceptar', {
+        method: 'POST',
+        token: firebaseToken,
+        idempotent: true,
+        body: { token: invitationToken },
+      })
+    ).data;
+  },
+
   async listAccesses(firebaseToken: string): Promise<SessionAccess[]> {
     return (await request<SessionAccess[]>('/sesiones/accesos', { token: firebaseToken })).data;
   },

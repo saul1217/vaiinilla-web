@@ -1547,6 +1547,434 @@ tbody tr:last-child td {
   color: var(--color-muted);
 }
 
+.invitation-page {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(180, 224, 77, 0.25), transparent 28rem),
+    var(--color-cream);
+  padding: 24px;
+}
+
+.invitation-shell {
+  display: grid;
+  width: min(100%, 1040px);
+  min-height: min(720px, calc(100dvh - 48px));
+  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 1.1fr);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  background: var(--color-white-warm);
+  box-shadow: var(--shadow-lg);
+}
+
+.invitation-intro {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 48px;
+  background: var(--color-ink);
+  padding: clamp(28px, 5vw, 54px);
+  color: var(--color-white-warm);
+}
+
+.invitation-intro .eyebrow {
+  color: #cbc5b7;
+}
+
+.invitation-intro h1 {
+  max-width: 10ch;
+  margin-top: 18px;
+  font-size: clamp(2.5rem, 5vw, 4.4rem);
+  font-weight: 800;
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+
+.invitation-intro > div > p:last-child {
+  max-width: 46ch;
+  margin-top: 22px;
+  color: #c8c2b5;
+  font-size: 0.92rem;
+  line-height: 1.75;
+}
+
+.invitation-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 14px;
+  color: #d8d3c8;
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.invitation-security-note svg {
+  width: 19px;
+  flex: 0 0 auto;
+  color: var(--color-lime);
+}
+
+.invitation-panel {
+  display: grid;
+  place-items: center;
+  padding: clamp(28px, 6vw, 70px);
+}
+
+.invitation-card {
+  width: min(100%, 470px);
+}
+
+.invitation-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 30px;
+}
+
+.invitation-progress__step {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: var(--color-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.invitation-progress__step::before {
+  position: absolute;
+  top: 14px;
+  right: 50%;
+  width: 100%;
+  height: 1px;
+  background: var(--line);
+  content: '';
+}
+
+.invitation-progress__step:first-child::before {
+  display: none;
+}
+
+.invitation-progress__step > span {
+  z-index: 1;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--color-white-warm);
+}
+
+.invitation-progress__step > span svg {
+  width: 14px;
+}
+
+.invitation-progress__step--active {
+  color: var(--color-ink);
+}
+
+.invitation-progress__step--active::before {
+  background: #8cb329;
+}
+
+.invitation-progress__step--active > span {
+  border-color: var(--color-lime);
+  background: var(--color-lime);
+}
+
+.invitation-card__icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 24px;
+  place-items: center;
+  border-radius: 17px;
+  background: var(--color-lime);
+}
+
+.invitation-card__icon svg {
+  width: 24px;
+}
+
+.invitation-card h2 {
+  margin: 10px 0 8px;
+  font-size: clamp(2rem, 4vw, 2.65rem);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1.08;
+}
+
+.invitation-card__subtitle,
+.invitation-helper,
+.invitation-result > p {
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  line-height: 1.7;
+}
+
+.invitation-helper {
+  text-align: center;
+}
+
+.invitation-confirmation,
+.invitation-result {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.invitation-auth {
+  margin-top: 24px;
+}
+
+.invitation-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.auth-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--color-cream);
+  padding: 4px;
+}
+
+.auth-mode__button {
+  min-height: 44px;
+  border-radius: 11px;
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.auth-mode__button:hover {
+  color: var(--color-ink);
+}
+
+.auth-mode__button--active {
+  background: var(--color-white-warm);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.signed-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--color-cream);
+  padding: 14px;
+}
+
+.signed-account span,
+.signed-account strong,
+.signed-account small {
+  display: block;
+}
+
+.signed-account span,
+.signed-account small {
+  color: var(--color-muted);
+  font-size: 0.7rem;
+}
+
+.signed-account strong {
+  margin: 3px 0;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+
+.legal-consent {
+  display: grid;
+  gap: 12px;
+}
+
+.consent-check {
+  display: flex;
+  min-height: 56px;
+  align-items: flex-start;
+  gap: 11px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--color-cream);
+  padding: 13px;
+  color: var(--color-ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.consent-check input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: #668c16;
+}
+
+.consent-check a {
+  color: #4e7010;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.consent-check:has(input:disabled) {
+  opacity: 0.64;
+}
+
+.verification-page {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  background: var(--color-cream);
+  padding: 24px;
+}
+
+.verification-card {
+  width: min(100%, 480px);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--color-white-warm);
+  padding: clamp(28px, 6vw, 52px);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.verification-card > a:first-child {
+  display: inline-flex;
+  margin-bottom: 38px;
+}
+
+.verification-icon {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 24px;
+  place-items: center;
+  border-radius: 20px;
+  background: var(--color-lime);
+}
+
+.verification-icon--error {
+  background: #f8d3ce;
+  color: #84251d;
+}
+
+.verification-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.verification-card h1 {
+  margin-top: 10px;
+  font-size: clamp(2rem, 7vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+}
+
+.verification-card > p:last-of-type {
+  margin: 12px auto 26px;
+  color: var(--color-muted);
+  font-size: 0.86rem;
+  line-height: 1.7;
+}
+
+.legal-page {
+  min-height: 100dvh;
+  background: var(--color-cream);
+  padding: 24px;
+}
+
+.legal-header {
+  display: flex;
+  width: min(100%, 940px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 auto 24px;
+}
+
+.legal-back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 8px 13px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.legal-back:hover {
+  background: var(--color-cream-2);
+}
+
+.legal-back svg {
+  width: 17px;
+}
+
+.legal-document {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--color-white-warm);
+  padding: clamp(26px, 6vw, 64px);
+  box-shadow: var(--shadow-sm);
+}
+
+.legal-document > h1 {
+  margin: 12px 0 30px;
+  font-size: clamp(2.2rem, 6vw, 4.2rem);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.legal-document section + section {
+  margin-top: 32px;
+}
+
+.legal-document section h2,
+.legal-pending h2 {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.legal-document section p,
+.legal-pending p {
+  margin-top: 10px;
+  color: var(--color-muted);
+  font-size: 0.88rem;
+  line-height: 1.8;
+}
+
+.legal-pending {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 22px;
+  border: 1px solid #e5c866;
+  border-radius: 18px;
+  background: #fff7d7;
+  padding: 18px;
+  color: #6b4c00;
+}
+
+.legal-pending > svg {
+  width: 24px;
+  flex: 0 0 auto;
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
 }
@@ -1586,6 +2014,37 @@ tbody tr:last-child td {
 }
 
 @media (max-width: 820px) {
+  .invitation-page {
+    display: block;
+    padding: 0;
+  }
+
+  .invitation-shell {
+    display: block;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .invitation-intro {
+    min-height: 390px;
+    padding: 28px;
+  }
+
+  .invitation-intro h1 {
+    max-width: 12ch;
+    font-size: clamp(2.65rem, 11vw, 4rem);
+  }
+
+  .invitation-panel {
+    padding: 54px 24px 70px;
+  }
+
+  .legal-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .auth-page {
     display: block;
   }

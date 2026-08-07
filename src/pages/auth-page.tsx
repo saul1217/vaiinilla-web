@@ -11,10 +11,10 @@ import { Button, Feedback, Field } from '../components/ui';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { errorMessage } from '../lib/api-error';
+import { api } from '../lib/api';
 import {
   completeTotpSignIn,
   passwordSignIn,
-  resetPassword,
 } from '../lib/firebase';
 
 const credentialsSchema = z.object({
@@ -106,8 +106,8 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
     setResetting(true);
     setError(null);
     try {
-      await resetPassword(email);
-      setNotice('Si la cuenta existe, Firebase enviará las instrucciones de recuperación.');
+      await api.requestPasswordRecovery(email);
+      setNotice('Si la cuenta existe, enviaremos las instrucciones de recuperación.');
     } catch (caught) {
       setError(authErrorMessage(caught));
     } finally {

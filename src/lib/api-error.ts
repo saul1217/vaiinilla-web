@@ -13,6 +13,15 @@ const friendlyMessages: Record<string, string> = {
   INVITATION_REVOKED: 'La invitación fue revocada.',
   INVITATION_REPLACED: 'La invitación fue reemplazada por un reenvío.',
   INVITATION_ALREADY_USED: 'La invitación ya fue utilizada.',
+  INVITATION_INVALID: 'El enlace de invitación no es válido.',
+  INVITATION_EMAIL_MISMATCH:
+    'Esta invitación pertenece a otro correo. Inicia sesión con la cuenta invitada.',
+  IDENTITY_NOT_REGISTERED:
+    'La cuenta existe en Firebase, pero todavía no completó su registro de identidad.',
+  IDENTITY_EMAIL_CONFLICT:
+    'Este correo ya está asociado con otra identidad. Solicita ayuda al administrador.',
+  LEGAL_CONSENT_REQUIRED:
+    'Debes aceptar las versiones vigentes de Términos y Privacidad para continuar.',
   SESSION_INVALID_STATE: 'La sesión de Caja ya cambió de estado.',
   RATE_LIMITED: 'Se alcanzó el límite temporal. Espera antes de volver a intentar.',
   VALIDATION_ERROR: 'Revisa los datos capturados e inténtalo nuevamente.',

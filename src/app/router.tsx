@@ -12,6 +12,10 @@ const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ defau
 const PlatformDashboardPage = lazy(() => import('../pages/platform-dashboard-page').then((module) => ({ default: module.PlatformDashboardPage })));
 const EstablishmentsPage = lazy(() => import('../pages/establishments-page').then((module) => ({ default: module.EstablishmentsPage })));
 const NotFoundPage = lazy(() => import('../pages/not-found-page').then((module) => ({ default: module.NotFoundPage })));
+const InvitationAcceptancePage = lazy(() => import('../pages/invitation-acceptance-page').then((module) => ({ default: module.InvitationAcceptancePage })));
+const EmailVerificationPage = lazy(() => import('../pages/email-verification-page').then((module) => ({ default: module.EmailVerificationPage })));
+const PasswordRecoveryPage = lazy(() => import('../pages/password-recovery-page').then((module) => ({ default: module.PasswordRecoveryPage })));
+const LegalDocumentPage = lazy(() => import('../pages/legal-document-page').then((module) => ({ default: module.LegalDocumentPage })));
 
 function LoadingRoute() {
   return (
@@ -70,6 +74,11 @@ export function AppRouter() {
           <Route exact path="/"><Redirect to="/acceso" /></Route>
           <Route exact path="/acceso"><AuthPage surface="tenant" /></Route>
           <Route exact path="/accesos"><AccessSelectionPage /></Route>
+          <Route exact path="/invitaciones/aceptar"><InvitationAcceptancePage /></Route>
+          <Route exact path="/acceso/verificar"><EmailVerificationPage /></Route>
+          <Route exact path="/acceso/recuperar"><PasswordRecoveryPage /></Route>
+          <Route exact path="/legal/terminos/:version"><LegalDocumentPage kind="terminos" /></Route>
+          <Route exact path="/legal/privacidad/:version"><LegalDocumentPage kind="privacidad" /></Route>
           <Route path="/app"><TenantArea /></Route>
           <Route exact path="/plataforma/acceso"><AuthPage surface="platform" /></Route>
           <Route path="/plataforma"><PlatformArea /></Route>
