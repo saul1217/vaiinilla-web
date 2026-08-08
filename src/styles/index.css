@@ -446,29 +446,6 @@ select:enabled {
   color: #c8c2b5;
 }
 
-.auth-visual__note {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(251, 249, 242, 0.7);
-  padding: 10px 15px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  backdrop-filter: blur(8px);
-}
-
-.auth-visual__note svg {
-  width: 18px;
-}
-
-.auth-page--platform .auth-visual__note {
-  border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .auth-panel {
   display: grid;
   min-height: 100vh;

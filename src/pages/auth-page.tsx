@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FirebaseError } from 'firebase/app';
-import { KeyRound, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { KeyRound, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, Redirect, useHistory } from 'react-router-dom';
@@ -138,10 +138,6 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
               : 'Administra personal y mantén la Caja lista con permisos emitidos por el backend.'}
           </p>
         </div>
-        <div className="auth-visual__note">
-          {isPlatform ? <ShieldCheck aria-hidden="true" /> : <LockKeyhole aria-hidden="true" />}
-          <span>{isPlatform ? 'Firebase + TOTP obligatorio' : 'Sin selector público de roles'}</span>
-        </div>
       </section>
 
       <section className="auth-panel">
@@ -154,7 +150,7 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
           <p className="auth-card__subtitle">
             {resolver
               ? 'Abre tu aplicación autenticadora y captura el código TOTP actual.'
-              : 'Ingresa con la cuenta de Firebase que ya tiene acceso autorizado.'}
+              : ''}
           </p>
 
           {!configured && (
@@ -231,13 +227,11 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
             </form>
           )}
 
-          <div className="auth-card__switch">
-            {isPlatform ? (
+          {isPlatform && (
+            <div className="auth-card__switch">
               <Link to="/acceso">Volver a Administración y POS</Link>
-            ) : (
-              <Link to="/plataforma/acceso">Acceso restringido de plataforma</Link>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </section>
     </main>
