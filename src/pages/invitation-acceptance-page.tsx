@@ -30,6 +30,7 @@ import {
   capturePendingInvitationFromUrl,
   clearPendingInvitation,
 } from '../lib/pending-invitation';
+import { unpublishedLegalTestingEnabled } from '../lib/legal-testing';
 import type { InvitationAcceptance, LegalVersions } from '../types/api';
 
 const credentialsSchema = z.object({
@@ -92,13 +93,14 @@ export function InvitationAcceptancePage() {
 
   const currentUser = signedUser ?? user;
   const currentEmailVerified = emailVerified ?? currentUser?.emailVerified ?? false;
-  const legalReady = Boolean(
+  const legalDocumentsPublished = Boolean(
     legalVersions &&
       legalDocumentsReady(
         legalVersions.terminos_version,
         legalVersions.privacidad_version,
       ),
   );
+  const legalReady = legalDocumentsPublished || unpublishedLegalTestingEnabled;
   const progressStep = accepted
     ? 4
     : profileRequired
@@ -570,9 +572,14 @@ export function InvitationAcceptancePage() {
                 {legalLoading && <p className="invitation-helper">Consultando las versiones legales vigentes…</p>}
                 {legalVersions && legalLinks && (
                   <div className="legal-consent">
-                    {!legalReady && (
+                    {!legalDocumentsPublished && !unpublishedLegalTestingEnabled && (
                       <Feedback tone="error">
                         Los textos legales versión {legalVersions.terminos_version} aún no están aprobados y publicados. El alta permanecerá bloqueada hasta resolverlo.
+                      </Feedback>
+                    )}
+                    {!legalDocumentsPublished && unpublishedLegalTestingEnabled && (
+                      <Feedback tone="info">
+                        <strong>Modo de prueba activo.</strong> Los documentos legales todavía no están publicados. Continúa únicamente con cuentas internas de prueba y desactiva este modo antes del lanzamiento.
                       </Feedback>
                     )}
                     <label className="consent-check">
@@ -582,12 +589,22 @@ export function InvitationAcceptancePage() {
                         disabled={!legalReady}
                         onChange={(event) => setTermsAccepted(event.target.checked)}
                       />
-                      <span>
-                        Acepto los{' '}
-                        <a href={legalLinks.terms} target="_blank" rel="noreferrer">
-                          Términos y condiciones (versión {legalVersions.terminos_version})
-                        </a>
-                      </span>
+                      {legalDocumentsPublished ? (
+                        <span>
+                          Acepto los{' '}
+                          <a href={legalLinks.terms} target="_blank" rel="noreferrer">
+                            Términos y condiciones (versión {legalVersions.terminos_version})
+                          </a>
+                        </span>
+                      ) : (
+                        <span>
+                          Confirmo que esta cuenta es para una prueba técnica y que los{' '}
+                          <a href={legalLinks.terms} target="_blank" rel="noreferrer">
+                            Términos versión {legalVersions.terminos_version}
+                          </a>{' '}
+                          siguen pendientes de publicación.
+                        </span>
+                      )}
                     </label>
                     <label className="consent-check">
                       <input
@@ -596,12 +613,22 @@ export function InvitationAcceptancePage() {
                         disabled={!legalReady}
                         onChange={(event) => setPrivacyAccepted(event.target.checked)}
                       />
-                      <span>
-                        He leído el{' '}
-                        <a href={legalLinks.privacy} target="_blank" rel="noreferrer">
-                          Aviso de privacidad (versión {legalVersions.privacidad_version})
-                        </a>
-                      </span>
+                      {legalDocumentsPublished ? (
+                        <span>
+                          He leído el{' '}
+                          <a href={legalLinks.privacy} target="_blank" rel="noreferrer">
+                            Aviso de privacidad (versión {legalVersions.privacidad_version})
+                          </a>
+                        </span>
+                      ) : (
+                        <span>
+                          Confirmo que continuaré sin un{' '}
+                          <a href={legalLinks.privacy} target="_blank" rel="noreferrer">
+                            Aviso de privacidad publicado
+                          </a>{' '}
+                          exclusivamente para esta prueba interna.
+                        </span>
+                      )}
                     </label>
                   </div>
                 )}
@@ -612,7 +639,9 @@ export function InvitationAcceptancePage() {
                   loading={busy || profileForm.formState.isSubmitting}
                   disabled={!legalReady || !termsAccepted || !privacyAccepted}
                 >
-                  Crear perfil y activar acceso
+                  {!legalDocumentsPublished && unpublishedLegalTestingEnabled
+                    ? 'Crear perfil de prueba y activar acceso'
+                    : 'Crear perfil y activar acceso'}
                 </Button>
               </form>
             )}

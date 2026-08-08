@@ -78,6 +78,11 @@ Los documentos de `src/content/legal-documents.ts` permanecen deliberadamente co
 `published: false` hasta recibir texto aprobado. Mientras falten, el alta se bloquea y las
 rutas legales muestran un estado explícito de documento pendiente.
 
+Para un smoke interno temporal se puede definir
+`VITE_ALLOW_UNPUBLISHED_LEGAL_TESTING=true`. La interfaz mostrará un aviso permanente y
+habilitará el alta solo para cuentas de prueba. Esta variable debe eliminarse o volver a
+`false` antes de abrir la Web a usuarios reales.
+
 ## Verificación
 
 ```bash
