@@ -64,6 +64,7 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 - Administración/POS y Super Admin abren contextos diferentes en el backend; la Web no inventa permisos ni permite elegir roles públicos.
 - Las operaciones mutables usan `Idempotency-Key`.
 - Super Admin exige que Firebase complete el segundo factor TOTP antes de solicitar el contexto de plataforma.
+- `/plataforma/acceso` puede preparar una cuenta Firebase existente: verifica correo, registra identidad y enrola TOTP. No crea cuentas, no permite elegir roles y no concede autoridad.
 - El token de invitación se retira inmediatamente de la URL, vive como máximo dos horas en la pestaña actual y se elimina al activar el acceso.
 
 ## Alta desde una invitación
@@ -82,6 +83,14 @@ Para un smoke interno temporal se puede definir
 `VITE_ALLOW_UNPUBLISHED_LEGAL_TESTING=true`. La interfaz mostrará un aviso permanente y
 habilitará el alta solo para cuentas de prueba. Esta variable debe eliminarse o volver a
 `false` antes de abrir la Web a usuarios reales.
+
+## Preparación de una autoridad de plataforma
+
+Una cuenta creada previamente en Firebase puede iniciar sesión en `/plataforma/acceso` para
+completar los requisitos que falten: verificación real del correo, alta de identidad y
+enrolamiento de una aplicación TOTP. Al terminar, la sesión se cierra y la cuenta permanece
+sin permisos. La autoridad `superadmin` se concede posteriormente y de forma individual con
+el bootstrap manual auditado del backend; no existe alta pública ni autoservicio de roles.
 
 ## Verificación
 

@@ -7,6 +7,7 @@ import { Link, Redirect, useHistory } from 'react-router-dom';
 import { z } from 'zod';
 import type { MultiFactorResolver, User } from 'firebase/auth';
 import { Logo } from '../components/brand-mark';
+import { PlatformAccountPreparation } from '../components/platform-account-preparation';
 import { Button, Feedback, Field } from '../components/ui';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
@@ -25,7 +26,7 @@ const credentialsSchema = z.object({
 type Credentials = z.infer<typeof credentialsSchema>;
 
 export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
-  const { user, ready, configured } = useAuth();
+  const { user, ready, configured, signOut } = useAuth();
   const { tenant, platform, openPlatformSession } = useSessions();
   const history = useHistory();
   const [resolver, setResolver] = useState<MultiFactorResolver | null>(null);
@@ -34,6 +35,7 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [submittingTotp, setSubmittingTotp] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [platformPreparationUser, setPlatformPreparationUser] = useState<User | null>(null);
 
   const {
     register,
@@ -49,12 +51,12 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
   if (surface === 'tenant' && tenant) return <Redirect to="/app" />;
   if (surface === 'platform' && platform) return <Redirect to="/plataforma" />;
 
-  async function finish(userResult: User) {
-    if (!userResult.emailVerified) {
-      setNotice('Tu identidad inició sesión, pero debes verificar el correo antes de obtener acceso.');
-    }
-
+  async function finish(userResult: User, secondFactorSatisfied = false) {
     if (surface === 'platform') {
+      if (!secondFactorSatisfied) {
+        setPlatformPreparationUser(userResult);
+        return;
+      }
       await openPlatformSession(userResult);
       history.replace('/plataforma');
     } else {
@@ -89,7 +91,7 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
     setSubmittingTotp(true);
     setError(null);
     try {
-      await finish(await completeTotpSignIn(resolver, totpCode));
+      await finish(await completeTotpSignIn(resolver, totpCode), true);
     } catch (caught) {
       setError(authErrorMessage(caught));
     } finally {
@@ -117,6 +119,15 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
 
   const isPlatform = surface === 'platform';
 
+  async function exitPlatformPreparation() {
+    await signOut();
+    setPlatformPreparationUser(null);
+    setResolver(null);
+    setTotpCode('');
+    setError(null);
+    setNotice(null);
+  }
+
   return (
     <main className={`auth-page ${isPlatform ? 'auth-page--platform' : ''}`}>
       <section className="auth-visual" aria-label="Vaiinilla para operación">
@@ -140,8 +151,15 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
         </div>
       </section>
 
-      <section className="auth-panel">
-        <div className="auth-card">
+      <section className={`auth-panel ${platformPreparationUser ? 'auth-panel--preparation' : ''}`}>
+        <div className={`auth-card ${platformPreparationUser ? 'auth-card--preparation' : ''}`}>
+          {platformPreparationUser ? (
+            <PlatformAccountPreparation
+              user={platformPreparationUser}
+              onExit={exitPlatformPreparation}
+            />
+          ) : (
+            <>
           <div className="auth-card__icon">
             {resolver ? <KeyRound aria-hidden="true" /> : <Mail aria-hidden="true" />}
           </div>
@@ -231,6 +249,8 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
             <div className="auth-card__switch">
               <Link to="/acceso">Volver a Administración y POS</Link>
             </div>
+          )}
+            </>
           )}
         </div>
       </section>

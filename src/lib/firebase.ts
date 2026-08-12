@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
   getMultiFactorResolver,
+  multiFactor,
   onAuthStateChanged,
   setPersistence,
   signInWithEmailAndPassword,
@@ -17,6 +18,7 @@ import {
   type Auth,
   type MultiFactorError,
   type MultiFactorResolver,
+  type TotpSecret,
   type User,
 } from 'firebase/auth';
 
@@ -135,6 +137,44 @@ export async function completeTotpSignIn(
     verificationCode,
   );
   return (await resolver.resolveSignIn(assertion)).user;
+}
+
+export interface TotpEnrollment {
+  qrCodeUri: string;
+  secretKey: string;
+  secret: TotpSecret;
+}
+
+export async function beginTotpEnrollment(user: User): Promise<TotpEnrollment> {
+  await user.reload();
+  if (!user.emailVerified) {
+    throw new Error('Verifica el correo antes de configurar el segundo factor.');
+  }
+  const session = await multiFactor(user).getSession();
+  const secret = await TotpMultiFactorGenerator.generateSecret(session);
+  return {
+    qrCodeUri: secret.generateQrCodeUrl(user.email ?? 'cuenta', 'Vaiinilla'),
+    secretKey: secret.secretKey,
+    secret,
+  };
+}
+
+export async function completeTotpEnrollment(
+  user: User,
+  enrollment: TotpEnrollment,
+  verificationCode: string,
+): Promise<void> {
+  const assertion = TotpMultiFactorGenerator.assertionForEnrollment(
+    enrollment.secret,
+    verificationCode,
+  );
+  await multiFactor(user).enroll(assertion, 'Google Authenticator');
+}
+
+export function hasTotpEnrollment(user: User): boolean {
+  return multiFactor(user).enrolledFactors.some(
+    (factor) => factor.factorId === TotpMultiFactorGenerator.FACTOR_ID,
+  );
 }
 
 export async function firebaseSignOut(): Promise<void> {

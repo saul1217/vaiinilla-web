@@ -454,8 +454,16 @@ select:enabled {
   background: var(--color-white-warm);
 }
 
+.auth-panel--preparation {
+  place-items: start center;
+}
+
 .auth-card {
   width: min(100%, 460px);
+}
+
+.auth-card--preparation {
+  width: min(100%, 560px);
 }
 
 .auth-card__icon {
@@ -508,6 +516,184 @@ select:enabled {
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+.platform-preparation > .feedback,
+.preparation-progress + .feedback,
+.platform-preparation > .feedback + .feedback {
+  margin-top: 14px;
+}
+
+.preparation-progress {
+  display: grid;
+  margin: 24px 0 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+}
+
+.preparation-progress__step {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.preparation-progress__step::before {
+  position: absolute;
+  top: 16px;
+  right: 50%;
+  left: -50%;
+  height: 2px;
+  background: var(--line);
+  content: "";
+}
+
+.preparation-progress__step:first-child::before {
+  display: none;
+}
+
+.preparation-progress__step > span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--color-white-warm);
+  color: var(--color-muted);
+}
+
+.preparation-progress__step > span svg {
+  width: 17px;
+}
+
+.preparation-progress__step--active {
+  color: var(--color-ink);
+}
+
+.preparation-progress__step--active::before {
+  background: var(--color-lime-dark);
+}
+
+.preparation-progress__step--active > span {
+  border-color: var(--color-lime-dark);
+  background: var(--color-lime);
+  color: var(--color-ink);
+}
+
+.preparation-panel {
+  margin-top: 22px;
+}
+
+.preparation-account {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--color-cream);
+  padding: 15px 17px;
+}
+
+.preparation-account span,
+.preparation-account strong,
+.preparation-account small {
+  display: block;
+}
+
+.preparation-account span,
+.preparation-account small {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.preparation-account strong {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+  color: var(--color-ink);
+  font-size: 0.9rem;
+}
+
+.preparation-help {
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.preparation-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--color-cream);
+  padding: 16px;
+  color: var(--color-ink-soft);
+}
+
+.preparation-security-note > svg {
+  width: 21px;
+  flex: 0 0 auto;
+  color: var(--color-lime-dark);
+}
+
+.preparation-security-note p {
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.totp-setup {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.totp-setup__step {
+  justify-self: stretch;
+  color: var(--color-ink);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.totp-setup img {
+  width: min(240px, 100%);
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--color-white-warm);
+  padding: 8px;
+}
+
+.totp-secret {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--color-cream);
+  padding: 14px;
+}
+
+.totp-secret > span {
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.totp-secret code {
+  overflow-wrap: anywhere;
+  color: var(--color-ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.65;
+  user-select: all;
 }
 
 .selection-page {
