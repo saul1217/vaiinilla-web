@@ -5,6 +5,7 @@ import {
   CircleDollarSign,
   Clock3,
   LockKeyhole,
+  Radio,
   ReceiptText,
   ScanLine,
   WalletCards,
@@ -17,6 +18,7 @@ import { OrderCard, OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
+import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { calculateChange, formatMoney } from '../lib/money';
@@ -34,9 +36,9 @@ export function PosPage() {
   const scopeId = tenant?.context.establecimiento_id ?? '';
   const role = tenant?.context.rol;
   const isCashier = role === 'cajero';
+  const isOperationalWorker = isHeartbeatRole(role);
   const canOperateSession = role === 'admin' || isCashier;
   const queryClient = useQueryClient();
-  const [deviceId] = useState(getCashierDeviceId);
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
   const [cashReceipt, setCashReceipt] = useState<CashPaymentResult | null>(null);
   const [deliveryOrder, setDeliveryOrder] = useState<OrderDetail | null>(null);
@@ -50,16 +52,7 @@ export function PosPage() {
     refetchInterval: 15_000,
   });
 
-  const heartbeat = useQuery({
-    queryKey: ['cashier-heartbeat', scopeId, deviceId],
-    enabled: Boolean(token) && isCashier,
-    queryFn: async () => {
-      await api.heartbeat(token, deviceId, 'cajero');
-      return true;
-    },
-    refetchInterval: 5_000,
-    retry: 1,
-  });
+  const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
 
   const cashierQueue = useInfiniteQuery({
     queryKey: ['orders', 'cashier-queue', scopeId],
@@ -164,12 +157,8 @@ export function PosPage() {
     <div className="page-stack">
       <PageHeader
         eyebrow="Operación POS"
-        title={isCashier ? 'Caja y entrega de pedidos' : 'Sesión de Caja'}
-        description={
-          isCashier
-            ? 'Cobra pedidos en efectivo, entrega pedidos para llevar mediante su QR y mantén la Caja en línea.'
-            : 'Consulta, abre o cierra la sesión operativa del establecimiento.'
-        }
+        title={pageTitle(role)}
+        description={pageDescription(role)}
       />
 
       <OperationalStatusPanel />
@@ -187,8 +176,21 @@ export function PosPage() {
       {deliveryNotice && <Feedback tone="success">{deliveryNotice}</Feedback>}
       {heartbeat.isError && (
         <Feedback tone="error">
-          Esta Caja perdió su conexión operativa. Revisa internet; intentaremos reconectar automáticamente.
+          {roleLabel(role)} perdió su conexión operativa. Revisa internet; intentaremos reconectar automáticamente.
         </Feedback>
+      )}
+
+      {isOperationalWorker && !isCashier && (
+        <section className="operation-card">
+          <Radio aria-hidden="true" className="size-7 text-muted" />
+          <div>
+            <p className="eyebrow">Presencia operativa</p>
+            <h2>{heartbeat.isSuccess ? `${roleLabel(role)} en línea` : `Conectando ${roleLabel(role)}`}</h2>
+            <p>
+              Esta ventana reporta el perfil cada cinco segundos y lo mantiene visible para Administración.
+            </p>
+          </div>
+        </section>
       )}
 
       <section className={`cash-hero ${active ? 'cash-hero--open' : ''}`}>
@@ -469,17 +471,29 @@ function QueueColumn({
   );
 }
 
-function getCashierDeviceId(): string {
-  const storageKey = 'vaiinilla-cashier-device';
-  try {
-    const current = window.sessionStorage.getItem(storageKey);
-    if (current) return current;
-    const next = `web-caja-${window.crypto.randomUUID()}`;
-    window.sessionStorage.setItem(storageKey, next);
-    return next;
-  } catch {
-    return `web-caja-${window.crypto.randomUUID()}`;
+function pageTitle(role: string | undefined): string {
+  if (role === 'cajero') return 'Caja y entrega de pedidos';
+  if (role === 'cocina') return 'Conexión de Cocina';
+  if (role === 'mesero') return 'Conexión de Servicio en mesa';
+  return 'Sesión de Caja';
+}
+
+function pageDescription(role: string | undefined): string {
+  if (role === 'cajero') {
+    return 'Cobra pedidos en efectivo, entrega pedidos para llevar mediante su QR y mantén la Caja en línea.';
   }
+  if (role === 'cocina') {
+    return 'Mantén esta ventana abierta para que el establecimiento detecte Cocina en línea.';
+  }
+  if (role === 'mesero') {
+    return 'Mantén esta ventana abierta para que el establecimiento detecte Servicio en mesa.';
+  }
+  return 'Consulta, abre o cierra la sesión operativa del establecimiento.';
+}
+
+function roleLabel(role: string | undefined): string {
+  return ({ cajero: 'Caja', cocina: 'Cocina', mesero: 'Servicio en mesa' } as Record<string, string>)[role ?? '']
+    ?? 'El dispositivo';
 }
 
 function formatDate(value: string): string {

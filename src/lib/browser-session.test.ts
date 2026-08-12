@@ -11,13 +11,24 @@ import {
 describe('browser-session', () => {
   afterEach(() => endBrowserSession());
 
-  it('mantiene solo una marca de navegador y la membresía seleccionada', () => {
+  it('mantiene una marca de navegador y la membresía seleccionada por ventana', () => {
     beginBrowserSession();
     rememberTenantMembership('membresia-123');
 
     expect(hasBrowserSession()).toBe(true);
     expect(getRememberedTenantMembership()).toBe('membresia-123');
     expect(document.cookie).not.toContain('token');
+  });
+
+  it('conserva el rol de esta ventana aunque otra cambie la membresía por defecto', () => {
+    rememberTenantMembership('membresia-caja');
+
+    document.cookie = 'vaiinilla_tenant_membership=membresia-cocina; Path=/; SameSite=Lax';
+
+    expect(getRememberedTenantMembership()).toBe('membresia-caja');
+
+    window.sessionStorage.removeItem('vaiinilla_tenant_membership_window');
+    expect(getRememberedTenantMembership()).toBe('membresia-cocina');
   });
 
   it('permite cambiar de acceso sin conservar la membresía anterior', () => {

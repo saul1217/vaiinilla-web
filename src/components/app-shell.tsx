@@ -1,6 +1,9 @@
 import {
+  ArrowLeftRight,
   Building2,
+  ChefHat,
   ClipboardList,
+  ConciergeBell,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -35,6 +38,8 @@ const adminNavigation: NavItem[] = [
 ];
 
 const posNavigation: NavItem[] = [{ to: '/app/pos', label: 'Caja / POS', icon: WalletCards }];
+const kitchenNavigation: NavItem[] = [{ to: '/app/pos', label: 'Cocina', icon: ChefHat }];
+const waiterNavigation: NavItem[] = [{ to: '/app/pos', label: 'Servicio en mesa', icon: ConciergeBell }];
 
 const platformNavigation: NavItem[] = [
   { to: '/plataforma', label: 'Resumen global', icon: ShieldCheck, end: true },
@@ -42,13 +47,18 @@ const platformNavigation: NavItem[] = [
 ];
 
 export function TenantShell({ children }: { children: ReactNode }) {
-  const { tenant, clearAll } = useSessions();
+  const { tenant, clearAll, clearTenant } = useSessions();
   const { signOut } = useAuth();
   const history = useHistory();
   const [open, setOpen] = useState(false);
 
   if (!tenant) return null;
-  const items = tenant.context.rol === 'admin' ? adminNavigation : posNavigation;
+  const items = navigationForRole(tenant.context.rol);
+
+  function switchContext() {
+    clearTenant();
+    history.replace('/accesos');
+  }
 
   async function exit() {
     clearAll();
@@ -64,6 +74,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
       subtitle={roleLabel(tenant.context.rol)}
       mobileOpen={open}
       onMobileOpenChange={setOpen}
+      onSwitchContext={switchContext}
       onExit={exit}
       children={children}
     />
@@ -105,6 +116,7 @@ function Shell({
   subtitle,
   mobileOpen,
   onMobileOpenChange,
+  onSwitchContext,
   onExit,
   children,
 }: {
@@ -114,6 +126,7 @@ function Shell({
   subtitle: string;
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;
+  onSwitchContext?: () => void;
   onExit: () => Promise<void>;
   children: ReactNode;
 }) {
@@ -178,6 +191,12 @@ function Shell({
         </nav>
 
         <div className="sidebar__footer">
+          {onSwitchContext && (
+            <Button variant="ghost" className="w-full justify-start" onClick={onSwitchContext}>
+              <ArrowLeftRight aria-hidden="true" className="size-5" />
+              Cambiar acceso
+            </Button>
+          )}
           <Button variant="ghost" className="w-full justify-start" onClick={() => void onExit()}>
             <LogOut aria-hidden="true" className="size-5" />
             Cerrar sesión
@@ -206,4 +225,11 @@ function roleLabel(role: string): string {
       mesero: 'Servicio en mesa',
     }[role] ?? role
   );
+}
+
+function navigationForRole(role: string): NavItem[] {
+  if (role === 'admin') return adminNavigation;
+  if (role === 'cocina') return kitchenNavigation;
+  if (role === 'mesero') return waiterNavigation;
+  return posNavigation;
 }
