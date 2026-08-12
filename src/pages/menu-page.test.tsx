@@ -12,6 +12,8 @@ const apiMock = vi.hoisted(() => ({
   createProduct: vi.fn(),
   updateProduct: vi.fn(),
   changeProductAvailability: vi.fn(),
+  uploadProductImage: vi.fn(),
+  deleteProductImage: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
@@ -42,7 +44,9 @@ const product = {
 };
 
 function TestProvider({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
@@ -57,6 +61,11 @@ describe('administración del menú', () => {
     apiMock.updateCategory.mockReset();
     apiMock.updateProduct.mockReset();
     apiMock.changeProductAvailability.mockReset();
+    apiMock.uploadProductImage.mockReset().mockResolvedValue({
+      ...product,
+      imagen_url: 'https://cdn.test/producto.png',
+    });
+    apiMock.deleteProductImage.mockReset().mockResolvedValue({ ...product, imagen_url: null });
   });
 
   it('muestra el catálogo y crea sin enviar precio_digital', async () => {
@@ -73,8 +82,15 @@ describe('administración del menú', () => {
     await user.type(name, 'Latte');
     await user.clear(counterPrice);
     await user.type(counterPrice, '20.00');
+    const image = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+      'latte.png',
+      { type: 'image/png' },
+    );
+    await user.upload(within(dialog).getByLabelText('Elegir imagen'), image);
 
     expect(within(dialog).getByText('$26.00 MXN')).toBeVisible();
+    expect(within(dialog).getByText('latte.png')).toBeVisible();
     await user.click(within(dialog).getByRole('button', { name: 'Crear producto' }));
 
     await waitFor(() => expect(apiMock.createProduct).toHaveBeenCalledTimes(1));
@@ -86,5 +102,40 @@ describe('administración del menú', () => {
       grupos_opcion: [],
     });
     expect(payload).not.toHaveProperty('precio_digital');
+    expect(payload).not.toHaveProperty('imagen_url');
+    await waitFor(() =>
+      expect(apiMock.uploadProductImage).toHaveBeenCalledWith('tenant-token', 101, image),
+    );
+  });
+
+  it('reintenta la imagen sin duplicar un producto ya creado', async () => {
+    apiMock.uploadProductImage
+      .mockRejectedValueOnce(new Error('storage temporalmente no disponible'))
+      .mockResolvedValueOnce({ ...product, imagen_url: 'https://cdn.test/latte.png' });
+    apiMock.updateProduct.mockResolvedValue(product);
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+
+    await screen.findByRole('heading', { name: 'Chocolate frío' });
+    await user.click(screen.getByRole('button', { name: 'Nuevo producto' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Nombre *'), 'Latte');
+    await user.type(within(dialog).getByPlaceholderText('20.00'), '20.00');
+    const image = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'latte.jpg', {
+      type: 'image/jpeg',
+    });
+    await user.upload(within(dialog).getByLabelText('Elegir imagen'), image);
+    await user.click(within(dialog).getByRole('button', { name: 'Crear producto' }));
+
+    expect(await within(dialog).findByText(/el cambio de imagen no terminó/i)).toBeVisible();
+    await user.click(within(dialog).getByRole('button', { name: 'Crear producto' }));
+
+    await waitFor(() => expect(apiMock.uploadProductImage).toHaveBeenCalledTimes(2));
+    expect(apiMock.createProduct).toHaveBeenCalledTimes(1);
+    expect(apiMock.updateProduct).toHaveBeenCalledWith(
+      'tenant-token',
+      101,
+      expect.objectContaining({ nombre: 'Latte' }),
+    );
   });
 });

@@ -11,12 +11,7 @@ export type OrderStatus =
   | 'expirado';
 export type PaymentMethod = 'stripe' | 'efectivo' | 'saldo';
 export type OrderDestination = 'para_llevar' | 'en_espacio';
-export type InvitationStatus =
-  | 'pendiente'
-  | 'aceptada'
-  | 'revocada'
-  | 'reemplazada'
-  | 'expirada';
+export type InvitationStatus = 'pendiente' | 'aceptada' | 'revocada' | 'reemplazada' | 'expirada';
 
 export interface ApiEnvelope<T> {
   data: T;
@@ -289,7 +284,6 @@ export interface CatalogProductInput {
   tiempo_estimado_min: number;
   precio_mostrador: string;
   disponible: boolean;
-  imagen_url: string | null;
   grupos_opcion: CatalogOptionGroupInput[];
 }
 

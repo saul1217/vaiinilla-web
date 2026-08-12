@@ -39,16 +39,18 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
+  const { token, body, idempotent, ...requestOptions } = options;
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
-  if (options.body !== undefined) headers.set('Content-Type', 'application/json');
-  if (options.token) headers.set('Authorization', `Bearer ${options.token}`);
-  if (options.idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
+  const isFormData = body instanceof FormData;
+  if (body !== undefined && !isFormData) headers.set('Content-Type', 'application/json');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
 
   const response = await fetch(`${apiUrl}${path}`, {
-    ...options,
+    ...requestOptions,
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
   });
 
   if (response.ok && response.status === 204) {
@@ -56,9 +58,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
   }
 
   const payload = (await response.json().catch(() => null)) as
-    | ApiEnvelope<T>
-    | ApiErrorEnvelope
-    | null;
+    ApiEnvelope<T> | ApiErrorEnvelope | null;
 
   if (!response.ok || !payload || payload.error) {
     const error = payload?.error ?? {
@@ -129,7 +129,11 @@ export const api = {
   },
 
   async listAccesses(firebaseToken: string): Promise<SessionAccess[]> {
-    return (await request<SessionAccess[]>('/sesiones/accesos', { token: firebaseToken })).data;
+    return (
+      await request<SessionAccess[]>('/sesiones/accesos', {
+        token: firebaseToken,
+      })
+    ).data;
   },
 
   async createTenantContext(
@@ -147,12 +151,15 @@ export const api = {
 
   async listInvitations(
     token: string,
-    options: { estado?: InvitationStatus; cursor?: string; limit?: number } = {},
+    options: {
+      estado?: InvitationStatus;
+      cursor?: string;
+      limit?: number;
+    } = {},
   ): Promise<{ invitations: StaffInvitation[]; cursor: string | null }> {
-    const response = await request<StaffInvitation[]>(
-      `/personal/invitaciones${params(options)}`,
-      { token },
-    );
+    const response = await request<StaffInvitation[]>(`/personal/invitaciones${params(options)}`, {
+      token,
+    });
     return { invitations: response.data, cursor: response.meta.cursor ?? null };
   },
 
@@ -260,7 +267,10 @@ export const api = {
         method: 'POST',
         token,
         idempotent: true,
-        body: { monto_recibido: montoRecibido, version_esperada: versionEsperada },
+        body: {
+          monto_recibido: montoRecibido,
+          version_esperada: versionEsperada,
+        },
       })
     ).data;
   },
@@ -297,10 +307,7 @@ export const api = {
     return (await request<CatalogResponse>('/catalogo', { token })).data;
   },
 
-  async createCategory(
-    token: string,
-    input: CatalogCategoryInput,
-  ): Promise<CatalogCategory> {
+  async createCategory(token: string, input: CatalogCategoryInput): Promise<CatalogCategory> {
     return (
       await request<CatalogCategory>('/catalogo/categorias', {
         method: 'POST',
@@ -367,6 +374,29 @@ export const api = {
     ).data;
   },
 
+  async uploadProductImage(token: string, id: number, file: File): Promise<CatalogProduct> {
+    const body = new FormData();
+    body.append('imagen', file);
+    return (
+      await request<CatalogProduct>(`/catalogo/productos/${id}/imagen`, {
+        method: 'PUT',
+        token,
+        idempotent: true,
+        body,
+      })
+    ).data;
+  },
+
+  async deleteProductImage(token: string, id: number): Promise<CatalogProduct> {
+    return (
+      await request<CatalogProduct>(`/catalogo/productos/${id}/imagen`, {
+        method: 'DELETE',
+        token,
+        idempotent: true,
+      })
+    ).data;
+  },
+
   async createPlatformContext(firebaseToken: string): Promise<PlatformContextResponse> {
     return (
       await request<PlatformContextResponse>('/plataforma/sesiones/contexto', {
@@ -388,12 +418,18 @@ export const api = {
       cursor?: string;
       limit?: number;
     } = {},
-  ): Promise<{ establishments: PlatformEstablishment[]; cursor: string | null }> {
+  ): Promise<{
+    establishments: PlatformEstablishment[];
+    cursor: string | null;
+  }> {
     const response = await request<PlatformEstablishment[]>(
       `/plataforma/establecimientos${params(options)}`,
       { token },
     );
-    return { establishments: response.data, cursor: response.meta.cursor ?? null };
+    return {
+      establishments: response.data,
+      cursor: response.meta.cursor ?? null,
+    };
   },
 
   async createEstablishment(

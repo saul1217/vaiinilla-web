@@ -8,10 +8,12 @@ import {
   NotebookTabs,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   Trash2,
+  UploadCloud,
 } from 'lucide-react';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useFieldArray, useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
@@ -20,13 +22,11 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { calculateDigitalPrice } from '../lib/catalog-pricing';
 import { formatMoney } from '../lib/money';
-import type {
-  CatalogCategory,
-  CatalogProduct,
-  CatalogProductInput,
-} from '../types/api';
+import type { CatalogCategory, CatalogProduct, CatalogProductInput } from '../types/api';
 
 const moneyPattern = /^\d{1,8}\.\d{2}$/;
+const maxProductImageBytes = 5 * 1024 * 1024;
+const productImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const categorySchema = z.object({
   nombre: z.string().trim().min(1, 'Captura el nombre.').max(80),
@@ -70,14 +70,6 @@ const productSchema = z.object({
   tiempo_estimado_min: z.number().int().min(0).max(240),
   precio_mostrador: z.string().regex(moneyPattern, 'Usa pesos con dos decimales.'),
   disponible: z.boolean(),
-  imagen_url: z
-    .string()
-    .trim()
-    .max(2048)
-    .refine(
-      (value) => value === '' || /^https?:\/\//i.test(value),
-      'Usa una URL que comience con http:// o https://.',
-    ),
   grupos_opcion: z.array(optionGroupSchema).max(12),
 });
 
@@ -116,8 +108,7 @@ export function MenuPage() {
         deferredSearch === '' ||
         product.nombre.toLocaleLowerCase('es-MX').includes(deferredSearch) ||
         product.descripcion?.toLocaleLowerCase('es-MX').includes(deferredSearch);
-      const matchesCategory =
-        categoryFilter === 'todos' || product.categoria_id === categoryFilter;
+      const matchesCategory = categoryFilter === 'todos' || product.categoria_id === categoryFilter;
       const matchesAvailability =
         availability === 'todos' ||
         (availability === 'disponibles' ? product.disponible : !product.disponible);
@@ -222,9 +213,8 @@ export function MenuPage() {
           <div className="category-list">
             {categories.map((category) => {
               const count =
-                catalog.data?.productos.filter(
-                  (product) => product.categoria_id === category.id,
-                ).length ?? 0;
+                catalog.data?.productos.filter((product) => product.categoria_id === category.id)
+                  .length ?? 0;
               return (
                 <div
                   key={category.id}
@@ -317,7 +307,7 @@ export function MenuPage() {
       </div>
 
       <CategoryFormModal
-        key={`category-${categoryEditor === 'new' ? 'new' : categoryEditor?.id ?? 'closed'}`}
+        key={`category-${categoryEditor === 'new' ? 'new' : (categoryEditor?.id ?? 'closed')}`}
         open={categoryEditor !== null}
         category={categoryEditor === 'new' ? null : categoryEditor}
         token={token}
@@ -331,7 +321,7 @@ export function MenuPage() {
       />
 
       <ProductFormModal
-        key={`product-${productEditor === 'new' ? 'new' : productEditor?.id ?? 'closed'}`}
+        key={`product-${productEditor === 'new' ? 'new' : (productEditor?.id ?? 'closed')}`}
         open={productEditor !== null}
         product={productEditor === 'new' ? null : productEditor}
         categories={categories}
@@ -526,6 +516,7 @@ function ProductFormModal({
   onSaved: (editing: boolean) => Promise<void>;
 }) {
   const editing = product !== null;
+  const queryClient = useQueryClient();
   const form = useForm<ProductForm>({
     resolver: zodResolver(productSchema),
     defaultValues: productDefaults(product, categories[0]?.id ?? 0),
@@ -535,16 +526,84 @@ function ProductFormModal({
     name: 'grupos_opcion',
     keyName: 'fieldKey',
   });
-  const counterPrice = useWatch({ control: form.control, name: 'precio_mostrador' });
-  const imageUrl = useWatch({ control: form.control, name: 'imagen_url' });
+  const counterPrice = useWatch({
+    control: form.control,
+    name: 'precio_mostrador',
+  });
   const digitalPrice = calculateDigitalPrice(counterPrice);
+  const imageInputId = useId();
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [removeExistingImage, setRemoveExistingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [saveStage, setSaveStage] = useState<'product' | 'image'>('product');
+  const [createdProductId, setCreatedProductId] = useState<number | null>(null);
+  const previewUrl =
+    selectedImageUrl ?? (removeExistingImage ? null : (product?.imagen_url ?? null));
+
+  useEffect(() => {
+    return () => {
+      if (selectedImageUrl && typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(selectedImageUrl);
+      }
+    };
+  }, [selectedImageUrl]);
+
+  function chooseImage(file: File | undefined) {
+    if (!file) return;
+    if (!productImageTypes.has(file.type)) {
+      setImageError('Elige una imagen JPG, PNG o WebP.');
+      return;
+    }
+    if (file.size > maxProductImageBytes) {
+      setImageError('La imagen no puede pesar más de 5 MB.');
+      return;
+    }
+    setSelectedImage(file);
+    setSelectedImageUrl(
+      typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : null,
+    );
+    setRemoveExistingImage(false);
+    setImageError(null);
+  }
+
+  function removeImage() {
+    setSelectedImage(null);
+    setSelectedImageUrl(null);
+    setRemoveExistingImage(Boolean(product?.imagen_url));
+    setImageError(null);
+  }
 
   const mutation = useMutation({
-    mutationFn: (input: ProductForm) => {
+    mutationFn: async (input: ProductForm) => {
+      setSaveStage('product');
       const payload = toProductInput(input);
-      return editing
-        ? api.updateProduct(token, product.id, payload)
-        : api.createProduct(token, payload);
+      const existingProductId = product?.id ?? createdProductId;
+      const saved = await (existingProductId
+        ? api.updateProduct(token, existingProductId, payload)
+        : api.createProduct(token, payload));
+      if (!existingProductId) setCreatedProductId(saved.id);
+      if (selectedImage) {
+        setSaveStage('image');
+        try {
+          return await api.uploadProductImage(token, saved.id, selectedImage);
+        } catch (error) {
+          await queryClient.invalidateQueries({ queryKey: ['catalog'] });
+          throw error;
+        }
+      }
+      if (editing && removeExistingImage && product.imagen_url) {
+        setSaveStage('image');
+        try {
+          return await api.deleteProductImage(token, saved.id);
+        } catch (error) {
+          await queryClient.invalidateQueries({ queryKey: ['catalog'] });
+          throw error;
+        }
+      }
+      return saved;
     },
     onSuccess: () => onSaved(editing),
   });
@@ -557,7 +616,18 @@ function ProductFormModal({
       title={editing ? `Editar ${product.nombre}` : 'Crear producto'}
       description="Configura lo que verá el cliente. Los campos con * son obligatorios."
     >
-      {mutation.isError && <Feedback tone="error">{errorMessage(mutation.error)}</Feedback>}
+      {mutation.isError && (
+        <Feedback tone="error">
+          {saveStage === 'image' ? (
+            <>
+              <strong>El producto se guardó, pero el cambio de imagen no terminó.</strong>{' '}
+              {errorMessage(mutation.error)} Puedes volver a intentarlo sin perder los datos.
+            </>
+          ) : (
+            errorMessage(mutation.error)
+          )}
+        </Feedback>
+      )}
       <form
         className="product-form"
         onSubmit={(event) => void form.handleSubmit((data) => mutation.mutate(data))(event)}
@@ -579,7 +649,10 @@ function ProductFormModal({
             />
             <label className="field">
               <span className="field__label">Categoría *</span>
-              <select className="field__control" {...form.register('categoria_id', { valueAsNumber: true })}>
+              <select
+                className="field__control"
+                {...form.register('categoria_id', { valueAsNumber: true })}
+              >
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.nombre}
@@ -659,32 +732,94 @@ function ProductFormModal({
               error={form.formState.errors.alergenos?.message}
               registration={form.register('alergenos')}
             />
-            <div className="form-grid__wide product-image-editor">
-              <Field
-                label="URL de la imagen"
-                type="url"
-                inputMode="url"
-                placeholder="https://…"
-                hint="Opcional. Por ahora se acepta una imagen pública HTTPS."
-                error={form.formState.errors.imagen_url?.message}
-                {...form.register('imagen_url')}
-              />
-              <div className="product-image-preview">
-                {imageUrl && /^https?:\/\//i.test(imageUrl) ? (
-                  <>
-                    <ImageIcon aria-hidden="true" />
-                    <img
-                      src={imageUrl}
-                      alt="Vista previa del producto"
-                      onError={(event) => {
-                        event.currentTarget.hidden = true;
-                      }}
-                    />
-                  </>
+            <div className="form-grid__wide product-image-uploader">
+              <div className="product-image-uploader__copy">
+                <span className="field__label">Imagen del producto</span>
+                <p id={`${imageInputId}-hint`}>
+                  Opcional. Usa JPG, PNG o WebP de hasta 5 MB. La guardaremos en Vaiinilla.
+                </p>
+                <div className="product-image-uploader__actions">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => imageInputRef.current?.click()}
+                  >
+                    <UploadCloud aria-hidden="true" className="size-4" />
+                    {previewUrl ? 'Cambiar imagen' : 'Elegir imagen'}
+                  </Button>
+                  <input
+                    ref={imageInputRef}
+                    id={imageInputId}
+                    className="sr-only"
+                    type="file"
+                    aria-label="Elegir imagen"
+                    accept="image/jpeg,image/png,image/webp"
+                    aria-describedby={`${imageInputId}-hint${imageError ? ` ${imageInputId}-error` : ''}`}
+                    onChange={(event) => {
+                      chooseImage(event.currentTarget.files?.[0]);
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                  {previewUrl && (
+                    <Button type="button" variant="ghost" onClick={removeImage}>
+                      <Trash2 aria-hidden="true" className="size-4" /> Quitar imagen
+                    </Button>
+                  )}
+                  {removeExistingImage && !selectedImage && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setRemoveExistingImage(false)}
+                    >
+                      <RotateCcw aria-hidden="true" className="size-4" /> Conservar actual
+                    </Button>
+                  )}
+                </div>
+                {selectedImage && (
+                  <p className="product-image-uploader__file" role="status">
+                    <strong>{selectedImage.name}</strong>
+                    <span>{formatFileSize(selectedImage.size)}</span>
+                  </p>
+                )}
+                {removeExistingImage && !selectedImage && (
+                  <p className="product-image-uploader__file" role="status">
+                    La imagen actual se quitará al guardar.
+                  </p>
+                )}
+                {imageError && (
+                  <p id={`${imageInputId}-error`} className="field__error" role="alert">
+                    {imageError}
+                  </p>
+                )}
+              </div>
+              <div
+                className={`product-image-dropzone ${isDraggingImage ? 'product-image-dropzone--active' : ''}`}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  setIsDraggingImage(true);
+                }}
+                onDragOver={(event) => event.preventDefault()}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setIsDraggingImage(false);
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setIsDraggingImage(false);
+                  chooseImage(event.dataTransfer.files[0]);
+                }}
+              >
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt={`Vista previa de ${form.getValues('nombre') || 'producto'}`}
+                  />
                 ) : (
                   <>
                     <ImageIcon aria-hidden="true" />
-                    <span>Vista previa</span>
+                    <strong>Arrastra una imagen aquí</strong>
+                    <span>o usa el botón para elegirla</span>
                   </>
                 )}
               </div>
@@ -750,7 +885,11 @@ function ProductFormModal({
             Cancelar
           </Button>
           <Button type="submit" loading={mutation.isPending}>
-            {editing ? 'Guardar producto' : 'Crear producto'}
+            {mutation.isPending && saveStage === 'image'
+              ? 'Subiendo imagen…'
+              : editing
+                ? 'Guardar producto'
+                : 'Crear producto'}
           </Button>
         </div>
       </form>
@@ -946,7 +1085,6 @@ function productDefaults(product: CatalogProduct | null, fallbackCategoryId: num
       tiempo_estimado_min: 5,
       precio_mostrador: '',
       disponible: true,
-      imagen_url: '',
       grupos_opcion: [],
     };
   }
@@ -960,7 +1098,6 @@ function productDefaults(product: CatalogProduct | null, fallbackCategoryId: num
     tiempo_estimado_min: product.tiempo_estimado_min,
     precio_mostrador: product.precio_mostrador,
     disponible: product.disponible,
-    imagen_url: product.imagen_url ?? '',
     grupos_opcion: product.grupos_opcion.map((group) => ({
       id: group.id,
       nombre: group.nombre,
@@ -981,7 +1118,6 @@ function toProductInput(form: ProductForm): CatalogProductInput {
     descripcion: form.descripcion || null,
     ingredientes: form.ingredientes || null,
     alergenos: form.alergenos || null,
-    imagen_url: form.imagen_url || null,
     grupos_opcion: form.grupos_opcion.map((group) => ({
       ...(group.id === undefined ? {} : { id: group.id }),
       nombre: group.nombre,
@@ -994,4 +1130,9 @@ function toProductInput(form: ProductForm): CatalogProductInput {
       })),
     })),
   };
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

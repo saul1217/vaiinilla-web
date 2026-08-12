@@ -117,7 +117,9 @@ describe('Vaiinilla API client', () => {
   it('solicita recuperación sin exponer si la cuenta existe', async () => {
     server.use(
       http.post(`${baseUrl}/publico/correos/recuperacion`, async ({ request }) => {
-        await expect(request.json()).resolves.toEqual({ email: 'ana@ejemplo.com' });
+        await expect(request.json()).resolves.toEqual({
+          email: 'ana@ejemplo.com',
+        });
         return HttpResponse.json(
           { data: { aceptado: true }, meta: {}, error: null },
           { status: 202 },
@@ -136,7 +138,9 @@ describe('Vaiinilla API client', () => {
           /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
         );
         expect(request.url).not.toContain('token-invitacion');
-        await expect(request.json()).resolves.toEqual({ token: 'token-invitacion' });
+        await expect(request.json()).resolves.toEqual({
+          token: 'token-invitacion',
+        });
         return HttpResponse.json({
           data: {
             invitacion_id: '3d196e4d-9082-4b5d-aa7a-65f0e21ac654',
@@ -195,7 +199,10 @@ describe('Vaiinilla API client', () => {
         expect(request.headers.get('Idempotency-Key')).toMatch(
           /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
         );
-        await expect(request.json()).resolves.toEqual({ email: 'caja@ejemplo.com', rol: 'cajero' });
+        await expect(request.json()).resolves.toEqual({
+          email: 'caja@ejemplo.com',
+          rol: 'cajero',
+        });
         return HttpResponse.json(
           {
             data: {
@@ -256,7 +263,10 @@ describe('Vaiinilla API client', () => {
       recibiendo_pedidos: true,
     });
     await expect(
-      api.listOrders('tenant-token', { estado: ['por_cobrar', 'listo'], limit: 20 }),
+      api.listOrders('tenant-token', {
+        estado: ['por_cobrar', 'listo'],
+        limit: 20,
+      }),
     ).resolves.toMatchObject({ orders: [{ folio: 42 }], cursor: 'next-page' });
   });
 
@@ -289,7 +299,11 @@ describe('Vaiinilla API client', () => {
           qr_token: 'qr-opaco',
         });
         return HttpResponse.json(
-          { data: { ...orderFixture, estado: 'entregado', version: 4 }, meta: {}, error: null },
+          {
+            data: { ...orderFixture, estado: 'entregado', version: 4 },
+            meta: {},
+            error: null,
+          },
           { status: 201 },
         );
       }),
@@ -309,9 +323,7 @@ describe('Vaiinilla API client', () => {
     await expect(
       api.deliverOrder('tenant-token', orderFixture.id, 3, 'qr-opaco'),
     ).resolves.toMatchObject({ estado: 'entregado' });
-    await expect(
-      api.heartbeat('tenant-token', 'web-caja-01', 'cajero'),
-    ).resolves.toBeUndefined();
+    await expect(api.heartbeat('tenant-token', 'web-caja-01', 'cajero')).resolves.toBeUndefined();
   });
 
   it('administra el catálogo sin enviar el precio digital', async () => {
@@ -325,10 +337,14 @@ describe('Vaiinilla API client', () => {
       tiempo_estimado_min: 5,
       precio_mostrador: '20.00',
       disponible: true,
-      imagen_url: null,
       grupos_opcion: [],
     };
-    const product = { id: 101, ...input, precio_digital: '26.00' };
+    const product = {
+      id: 101,
+      ...input,
+      precio_digital: '26.00',
+      imagen_url: null,
+    };
 
     server.use(
       http.get(`${baseUrl}/catalogo`, ({ request }) => {
@@ -351,9 +367,16 @@ describe('Vaiinilla API client', () => {
       }),
       http.post(`${baseUrl}/catalogo/categorias`, async ({ request }) => {
         expect(request.headers.get('Idempotency-Key')).toBeTruthy();
-        await expect(request.json()).resolves.toEqual({ nombre: 'Postres', orden: 20 });
+        await expect(request.json()).resolves.toEqual({
+          nombre: 'Postres',
+          orden: 20,
+        });
         return HttpResponse.json(
-          { data: { id: 30, nombre: 'Postres', orden: 20 }, meta: {}, error: null },
+          {
+            data: { id: 30, nombre: 'Postres', orden: 20 },
+            meta: {},
+            error: null,
+          },
           { status: 201 },
         );
       }),
@@ -382,6 +405,20 @@ describe('Vaiinilla API client', () => {
           error: null,
         });
       }),
+      http.put(`${baseUrl}/catalogo/productos/101/imagen`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        expect(request.headers.get('Content-Type')).toContain('multipart/form-data');
+        expect((await request.arrayBuffer()).byteLength).toBeGreaterThan(0);
+        return HttpResponse.json({
+          data: { ...product, imagen_url: 'https://cdn.test/producto.png' },
+          meta: {},
+          error: null,
+        });
+      }),
+      http.delete(`${baseUrl}/catalogo/productos/101/imagen`, ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        return HttpResponse.json({ data: product, meta: {}, error: null });
+      }),
     );
 
     await expect(api.catalog('tenant-token')).resolves.toMatchObject({
@@ -397,9 +434,20 @@ describe('Vaiinilla API client', () => {
     await expect(api.updateProduct('tenant-token', 101, input)).resolves.toMatchObject({
       id: 101,
     });
-    await expect(
-      api.changeProductAvailability('tenant-token', 101, false),
-    ).resolves.toMatchObject({ disponible: false });
+    await expect(api.changeProductAvailability('tenant-token', 101, false)).resolves.toMatchObject({
+      disponible: false,
+    });
+    const image = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+      'producto.png',
+      { type: 'image/png' },
+    );
+    await expect(api.uploadProductImage('tenant-token', 101, image)).resolves.toMatchObject({
+      imagen_url: 'https://cdn.test/producto.png',
+    });
+    await expect(api.deleteProductImage('tenant-token', 101)).resolves.toMatchObject({
+      imagen_url: null,
+    });
   });
 
   it('convierte errores de dominio en mensajes claros', async () => {
@@ -409,7 +457,10 @@ describe('Vaiinilla API client', () => {
           {
             data: null,
             meta: {},
-            error: { code: 'MFA_REQUIRED', message: 'Segundo factor requerido.' },
+            error: {
+              code: 'MFA_REQUIRED',
+              message: 'Segundo factor requerido.',
+            },
           },
           { status: 401 },
         ),
@@ -418,6 +469,9 @@ describe('Vaiinilla API client', () => {
 
     const promise = api.platformSummary('platform-token');
     await expect(promise).rejects.toBeInstanceOf(VaiinillaApiError);
-    await expect(promise).rejects.toMatchObject({ code: 'MFA_REQUIRED', status: 401 });
+    await expect(promise).rejects.toMatchObject({
+      code: 'MFA_REQUIRED',
+      status: 401,
+    });
   });
 });
