@@ -1,4 +1,4 @@
-import type { InvitationStatus } from '../types/api';
+import type { InvitationStatus, OrderStatus } from '../types/api';
 
 const invitationLabels: Record<InvitationStatus, string> = {
   pendiente: 'Pendiente',
@@ -18,4 +18,19 @@ export function EstablishmentStatusBadge({ status }: { status: 'activo' | 'suspe
       {status === 'activo' ? 'Activo' : 'Suspendido'}
     </span>
   );
+}
+
+const orderLabels: Record<OrderStatus, string> = {
+  por_cobrar: 'Por cobrar',
+  cobrado: 'Cobrado',
+  preparando: 'Preparando',
+  listo: 'Listo',
+  entregado: 'Entregado',
+  cancelado: 'Cancelado',
+  no_recogido: 'No recogido',
+  expirado: 'Expirado',
+};
+
+export function OrderStatusBadge({ status }: { status: OrderStatus }) {
+  return <span className={`status-badge status-badge--order-${status}`}>{orderLabels[status]}</span>;
 }

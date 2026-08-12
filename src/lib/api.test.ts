@@ -8,6 +8,37 @@ const baseUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
 
 const server = setupServer();
 
+const orderFixture = {
+  id: '3d196e4d-9082-4b5d-aa7a-65f0e21ac654',
+  folio: 42,
+  fecha_operativa: '2026-08-11',
+  estado: 'por_cobrar' as const,
+  metodo_pago: 'efectivo' as const,
+  destino: 'para_llevar' as const,
+  espacio: null,
+  subtotal: '26.00',
+  ahorro_combinado: '0.00',
+  cashback_otorgado: '0.00',
+  total: '26.00',
+  version: 1,
+  creado_en: '2026-08-11T12:00:00Z',
+  actualizado_en: '2026-08-11T12:00:00Z',
+  notas_cocina: null,
+  usuario: { nombre: 'Ana Pérez', matricula: 'A01234' },
+  items: [
+    {
+      id: 501,
+      producto_id: 101,
+      nombre_producto: 'Chocolate frío',
+      estacion_preparacion: 'caja' as const,
+      cantidad: 1,
+      precio_digital_unitario: '26.00',
+      subtotal: '26.00',
+      opciones: [],
+    },
+  ],
+};
+
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
@@ -189,6 +220,98 @@ describe('Vaiinilla API client', () => {
       rol: 'cajero',
     });
     expect(invitation.estado).toBe('pendiente');
+  });
+
+  it('consulta el estado y los pedidos operativos con el contexto del tenant', async () => {
+    server.use(
+      http.get(`${baseUrl}/estado-operativo`, ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        return HttpResponse.json({
+          data: {
+            recibiendo_pedidos: true,
+            sesion_caja_abierta: true,
+            caja_en_linea: true,
+            cocina_en_linea: true,
+            tiempo_estimado_min: 12,
+            consultado_en: '2026-08-11T12:00:00Z',
+          },
+          meta: {},
+          error: null,
+        });
+      }),
+      http.get(`${baseUrl}/pedidos`, ({ request }) => {
+        const url = new URL(request.url);
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        expect(url.searchParams.get('estado')).toBe('por_cobrar,listo');
+        expect(url.searchParams.get('limit')).toBe('20');
+        return HttpResponse.json({
+          data: [orderFixture],
+          meta: { cursor: 'next-page' },
+          error: null,
+        });
+      }),
+    );
+
+    await expect(api.operationalStatus('tenant-token')).resolves.toMatchObject({
+      recibiendo_pedidos: true,
+    });
+    await expect(
+      api.listOrders('tenant-token', { estado: ['por_cobrar', 'listo'], limit: 20 }),
+    ).resolves.toMatchObject({ orders: [{ folio: 42 }], cursor: 'next-page' });
+  });
+
+  it('cobra, entrega y registra el latido con los cuerpos aprobados', async () => {
+    server.use(
+      http.post(`${baseUrl}/pedidos/${orderFixture.id}/cobros-efectivo`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        await expect(request.json()).resolves.toEqual({
+          monto_recibido: '100.00',
+          version_esperada: 1,
+        });
+        return HttpResponse.json(
+          {
+            data: {
+              pedido: { ...orderFixture, estado: 'listo', version: 3 },
+              monto_recibido: '100.00',
+              cambio: '74.00',
+            },
+            meta: {},
+            error: null,
+          },
+          { status: 201 },
+        );
+      }),
+      http.post(`${baseUrl}/pedidos/${orderFixture.id}/transiciones`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        await expect(request.json()).resolves.toEqual({
+          estado_objetivo: 'entregado',
+          version_esperada: 3,
+          qr_token: 'qr-opaco',
+        });
+        return HttpResponse.json(
+          { data: { ...orderFixture, estado: 'entregado', version: 4 }, meta: {}, error: null },
+          { status: 201 },
+        );
+      }),
+      http.post(`${baseUrl}/latidos`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeNull();
+        await expect(request.json()).resolves.toEqual({
+          dispositivo: 'web-caja-01',
+          rol: 'cajero',
+        });
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    await expect(
+      api.collectCash('tenant-token', orderFixture.id, '100.00', 1),
+    ).resolves.toMatchObject({ cambio: '74.00' });
+    await expect(
+      api.deliverOrder('tenant-token', orderFixture.id, 3, 'qr-opaco'),
+    ).resolves.toMatchObject({ estado: 'entregado' });
+    await expect(
+      api.heartbeat('tenant-token', 'web-caja-01', 'cajero'),
+    ).resolves.toBeUndefined();
   });
 
   it('convierte errores de dominio en mensajes claros', async () => {

@@ -4,6 +4,7 @@ import type {
   ApiEnvelope,
   ApiErrorEnvelope,
   CashSession,
+  CashPaymentResult,
   EstablishmentInput,
   IdentityRegistration,
   IdentityRegistrationInput,
@@ -14,6 +15,10 @@ import type {
   PlatformEstablishment,
   PlatformSummary,
   LegalVersions,
+  OperationalRole,
+  OperationalStatus,
+  OrderDetail,
+  OrderStatus,
   SessionAccess,
   StaffInvitation,
   TenantContextResponse,
@@ -40,6 +45,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
+
+  if (response.ok && response.status === 204) {
+    return { data: undefined as T, meta: {}, error: null };
+  }
 
   const payload = (await response.json().catch(() => null)) as
     | ApiEnvelope<T>
@@ -204,6 +213,79 @@ export const api = {
         body: { monto_final: montoFinal },
       })
     ).data;
+  },
+
+  async operationalStatus(token: string): Promise<OperationalStatus> {
+    return (await request<OperationalStatus>('/estado-operativo', { token })).data;
+  },
+
+  async listOrders(
+    token: string,
+    options: {
+      estado?: OrderStatus[];
+      actualizadoDesde?: string;
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ): Promise<{ orders: OrderDetail[]; cursor: string | null }> {
+    const response = await request<OrderDetail[]>(
+      `/pedidos${params({
+        estado: options.estado?.join(','),
+        actualizado_desde: options.actualizadoDesde,
+        cursor: options.cursor,
+        limit: options.limit,
+      })}`,
+      { token },
+    );
+    return { orders: response.data, cursor: response.meta.cursor ?? null };
+  },
+
+  async getOrder(token: string, id: string): Promise<OrderDetail> {
+    return (await request<OrderDetail>(`/pedidos/${id}`, { token })).data;
+  },
+
+  async collectCash(
+    token: string,
+    id: string,
+    montoRecibido: string,
+    versionEsperada: number,
+  ): Promise<CashPaymentResult> {
+    return (
+      await request<CashPaymentResult>(`/pedidos/${id}/cobros-efectivo`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: { monto_recibido: montoRecibido, version_esperada: versionEsperada },
+      })
+    ).data;
+  },
+
+  async deliverOrder(
+    token: string,
+    id: string,
+    versionEsperada: number,
+    qrToken: string,
+  ): Promise<OrderDetail> {
+    return (
+      await request<OrderDetail>(`/pedidos/${id}/transiciones`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: {
+          estado_objetivo: 'entregado',
+          version_esperada: versionEsperada,
+          qr_token: qrToken,
+        },
+      })
+    ).data;
+  },
+
+  async heartbeat(token: string, dispositivo: string, rol: OperationalRole): Promise<void> {
+    await request<void>('/latidos', {
+      method: 'POST',
+      token,
+      body: { dispositivo, rol },
+    });
   },
 
   async createPlatformContext(firebaseToken: string): Promise<PlatformContextResponse> {

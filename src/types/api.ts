@@ -1,5 +1,16 @@
 export type OperationalRole = 'cliente' | 'cajero' | 'cocina' | 'admin' | 'mesero';
 export type InvitationRole = Exclude<OperationalRole, 'cliente'>;
+export type OrderStatus =
+  | 'por_cobrar'
+  | 'cobrado'
+  | 'preparando'
+  | 'listo'
+  | 'entregado'
+  | 'cancelado'
+  | 'no_recogido'
+  | 'expirado';
+export type PaymentMethod = 'stripe' | 'efectivo' | 'saldo';
+export type OrderDestination = 'para_llevar' | 'en_espacio';
 export type InvitationStatus =
   | 'pendiente'
   | 'aceptada'
@@ -110,6 +121,67 @@ export interface CashSession {
   abierta_en: string;
   cerrada_en: string | null;
   cierre_automatico: boolean;
+}
+
+export interface OperationalStatus {
+  recibiendo_pedidos: boolean;
+  sesion_caja_abierta: boolean;
+  caja_en_linea: boolean;
+  cocina_en_linea: boolean;
+  tiempo_estimado_min: number | null;
+  consultado_en: string;
+}
+
+export interface OrderSpace {
+  id: number;
+  nombre: string;
+  tipo: 'mesa' | 'cancha' | 'drive_thru';
+}
+
+export interface OrderItemOption {
+  opcion_id: number;
+  nombre: string;
+  precio_extra: string;
+}
+
+export interface OrderItem {
+  id: number;
+  producto_id: number;
+  nombre_producto: string;
+  estacion_preparacion: 'cocina' | 'caja';
+  cantidad: number;
+  precio_digital_unitario: string;
+  subtotal: string;
+  opciones: OrderItemOption[];
+}
+
+export interface OrderDetail {
+  id: string;
+  folio: number;
+  fecha_operativa: string;
+  estado: OrderStatus;
+  metodo_pago: PaymentMethod;
+  destino: OrderDestination;
+  espacio: OrderSpace | null;
+  subtotal: string;
+  ahorro_combinado: string;
+  cashback_otorgado: string;
+  total: string;
+  version: number;
+  creado_en: string;
+  actualizado_en: string;
+  notas_cocina: string | null;
+  usuario: {
+    nombre: string;
+    matricula: string | null;
+  } | null;
+  items: OrderItem[];
+}
+
+export interface CashPaymentResult {
+  pedido: OrderDetail;
+  monto_recibido: string;
+  cambio: string;
 }
 
 export interface PlatformContextResponse {

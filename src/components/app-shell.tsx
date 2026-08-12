@@ -1,5 +1,6 @@
 import {
   Building2,
+  ClipboardList,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -26,6 +27,7 @@ interface NavItem {
 
 const adminNavigation: NavItem[] = [
   { to: '/app', label: 'Resumen', icon: LayoutDashboard, end: true },
+  { to: '/app/pedidos', label: 'Pedidos e historial', icon: ClipboardList },
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
   { to: '/app/pos', label: 'Caja / POS', icon: WalletCards },
 ];

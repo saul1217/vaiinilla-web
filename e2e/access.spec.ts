@@ -7,6 +7,12 @@ test('muestra el acceso de Administración y POS sin selector público de roles'
   await expect(page.getByRole('link', { name: 'Acceso restringido de plataforma' })).toHaveCount(0);
 });
 
+test('protege el historial de pedidos con la sesión administrativa', async ({ page }) => {
+  await page.goto('/app/pedidos');
+  await expect(page).toHaveURL(/\/acceso$/);
+  await expect(page.getByRole('heading', { name: 'Administración y POS' })).toBeVisible();
+});
+
 test('mantiene Super Admin en una superficie separada', async ({ page }) => {
   await page.goto('/plataforma/acceso');
   await expect(page.getByRole('heading', { name: 'Super Admin' })).toBeVisible();

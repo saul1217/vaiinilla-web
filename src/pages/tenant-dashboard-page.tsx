@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Clock3, ShieldCheck, UserPlus, WalletCards } from 'lucide-react';
+import { ArrowRight, ClipboardList, ShieldCheck, UserPlus, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
@@ -8,6 +9,7 @@ import { api } from '../lib/api';
 export function TenantDashboardPage() {
   const { tenant } = useSessions();
   const token = tenant?.token ?? '';
+  const scopeId = tenant?.context.establecimiento_id ?? '';
 
   const pendingInvitations = useQuery({
     queryKey: ['invitations', 'pendiente', 'summary'],
@@ -16,13 +18,24 @@ export function TenantDashboardPage() {
   });
 
   const cashSession = useQuery({
-    queryKey: ['cash-session'],
+    queryKey: ['cash-session', scopeId],
     enabled: Boolean(token),
     queryFn: () => api.activeCashSession(token),
   });
 
+  const activeOrders = useQuery({
+    queryKey: ['orders', 'admin', scopeId, 'summary'],
+    enabled: Boolean(token),
+    queryFn: () => api.listOrders(token, {
+      estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'],
+      limit: 100,
+    }),
+    refetchInterval: 10_000,
+  });
+
   const pendingCount = pendingInvitations.data?.invitations.length ?? 0;
   const activeSession = cashSession.data;
+  const activeOrderCount = activeOrders.data?.orders.length ?? 0;
 
   return (
     <div className="page-stack">
@@ -60,16 +73,26 @@ export function TenantDashboardPage() {
           <span className="stat-card__meta">Contrato POS vigente</span>
         </article>
         <article className="stat-card">
-          <span className="stat-card__icon"><Clock3 aria-hidden="true" /></span>
+          <span className="stat-card__icon"><ClipboardList aria-hidden="true" /></span>
           <div>
-            <p>Sesión Web</p>
-            <strong className="text-xl">15 minutos</strong>
+            <p>Pedidos activos</p>
+            <strong>{activeOrders.isPending ? '—' : `${activeOrderCount}${activeOrders.data?.cursor ? '+' : ''}`}</strong>
           </div>
-          <span className="stat-card__meta">Token solo en memoria</span>
+          <span className="stat-card__meta">Actualización cada 10 segundos</span>
         </article>
       </section>
 
-      <section className="dashboard-grid">
+      <OperationalStatusPanel />
+
+      <section className="dashboard-grid dashboard-grid--three">
+        <Link to="/app/pedidos" className="dashboard-card">
+          <div className="dashboard-card__top">
+            <span className="dashboard-card__icon"><ClipboardList aria-hidden="true" /></span>
+            <ArrowRight aria-hidden="true" />
+          </div>
+          <h2>Pedidos e historial</h2>
+          <p>Revisa pedidos activos, entregados e incidencias con su detalle completo.</p>
+        </Link>
         <Link to="/app/invitaciones" className="dashboard-card">
           <div className="dashboard-card__top">
             <span className="dashboard-card__icon"><UserPlus aria-hidden="true" /></span>

@@ -2,7 +2,7 @@
 
 Panel Web de Vaiinilla para dos superficies independientes:
 
-- **VAI-31:** Administración/POS, selección de acceso, invitaciones de personal y sesiones de caja.
+- **VAI-31:** Administración/POS, selección de acceso, invitaciones, estado operativo, historial de pedidos, cobros en efectivo y entregas con QR.
 - **VAI-32:** Super Admin Web, con autenticación reforzada, resumen global y administración de establecimientos.
 
 La aplicación consume el backend de Vaiinilla; no se conecta directamente a Supabase.
@@ -47,7 +47,8 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 | `/accesos` | Accesos autorizados devueltos por el backend |
 | `/app` | Resumen administrativo |
 | `/app/invitaciones` | Crear, consultar, revocar y reenviar invitaciones |
-| `/app/pos` | Consultar, abrir y cerrar la sesión de caja |
+| `/app/pedidos` | Consultar pedidos activos, entregados e incidencias |
+| `/app/pos` | Abrir/cerrar Caja; para el rol Caja, cobrar efectivo y entregar con QR |
 | `/invitaciones/aceptar` | Confirmar identidad y aceptar una invitación recibida por correo |
 | `/acceso/verificar` | Procesar el enlace de verificación de correo de Firebase |
 | `/acceso/recuperar` | Definir una contraseña nueva desde un enlace de recuperación |
@@ -62,7 +63,9 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 - Firebase conserva únicamente la sesión de identidad del navegador.
 - Los tokens de contexto de establecimiento y plataforma viven solo en memoria y se eliminan al cambiar de usuario, cerrar sesión o vencer.
 - Administración/POS y Super Admin abren contextos diferentes en el backend; la Web no inventa permisos ni permite elegir roles públicos.
+- Administración puede consultar los pedidos y controlar la sesión; los cobros y entregas quedan reservados al rol Caja.
 - Las operaciones mutables usan `Idempotency-Key`.
+- Una sesión Web de Caja registra su latido operativo cada cinco segundos. El lector QR pide acceso a la cámara solo cuando la persona pulsa el botón y siempre permite captura manual.
 - Super Admin exige que Firebase complete el segundo factor TOTP antes de solicitar el contexto de plataforma.
 - `/plataforma/acceso` puede preparar una cuenta Firebase existente: verifica correo, registra identidad y enrola TOTP. No crea cuentas, no permite elegir roles y no concede autoridad.
 - El token de invitación se retira inmediatamente de la URL, vive como máximo dos horas en la pestaña actual y se elimina al activar el acceso.
@@ -116,5 +119,5 @@ Las pruebas E2E usan Playwright. Si es la primera ejecución, instala Chromium c
    `published: true`.
 5. Configura `APP_PUBLIC_URL=https://app.vaiinilla.app` y agrega el dominio a
    `CORS_ORIGINS` del backend en Railway.
-6. Comprueba los flujos reales de alta, acceso, invitaciones, caja, recuperación y TOTP
+6. Comprueba los flujos reales de alta, acceso, invitaciones, apertura/cierre de Caja, cobro, cambio, entrega con QR, recuperación y TOTP
    con cuentas de prueba antes de abrir el dominio a usuarios.
