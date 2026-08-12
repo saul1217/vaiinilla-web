@@ -46,6 +46,7 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 | `/acceso` | Inicio de sesión de Administración/POS |
 | `/accesos` | Accesos autorizados devueltos por el backend |
 | `/app` | Resumen administrativo |
+| `/app/menu` | Crear categorías y productos, configurar variantes y controlar disponibilidad |
 | `/app/invitaciones` | Crear, consultar, revocar y reenviar invitaciones |
 | `/app/pedidos` | Consultar pedidos activos, entregados e incidencias |
 | `/app/pos` | Abrir/cerrar Caja; para el rol Caja, cobrar efectivo y entregar con QR |
@@ -65,6 +66,8 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 - Administración/POS y Super Admin abren contextos diferentes en el backend; la Web no inventa permisos ni permite elegir roles públicos.
 - Administración puede consultar los pedidos y controlar la sesión; los cobros y entregas quedan reservados al rol Caja.
 - Las operaciones mutables usan `Idempotency-Key`.
+- El panel de Menú solo envía el precio de mostrador. Muestra una vista previa, pero el backend calcula y guarda el precio digital oficial.
+- Los grupos u opciones retirados se desactivan para pedidos nuevos y se conservan en el historial. En esta primera versión la imagen del producto usa una URL HTTP(S) pública opcional.
 - Una sesión Web de Caja registra su latido operativo cada cinco segundos. El lector QR pide acceso a la cámara solo cuando la persona pulsa el botón y siempre permite captura manual.
 - Super Admin exige que Firebase complete el segundo factor TOTP antes de solicitar el contexto de plataforma.
 - `/plataforma/acceso` puede preparar una cuenta Firebase existente: verifica correo, registra identidad y enrola TOTP. No crea cuentas, no permite elegir roles y no concede autoridad.

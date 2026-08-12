@@ -13,6 +13,12 @@ test('protege el historial de pedidos con la sesión administrativa', async ({ p
   await expect(page.getByRole('heading', { name: 'Administración y POS' })).toBeVisible();
 });
 
+test('protege la administración del menú con la sesión administrativa', async ({ page }) => {
+  await page.goto('/app/menu');
+  await expect(page).toHaveURL(/\/acceso$/);
+  await expect(page.getByRole('heading', { name: 'Administración y POS' })).toBeVisible();
+});
+
 test('mantiene Super Admin en una superficie separada', async ({ page }) => {
   await page.goto('/plataforma/acceso');
   await expect(page.getByRole('heading', { name: 'Super Admin' })).toBeVisible();

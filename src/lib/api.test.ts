@@ -314,6 +314,94 @@ describe('Vaiinilla API client', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('administra el catálogo sin enviar el precio digital', async () => {
+    const input = {
+      categoria_id: 10,
+      estacion_preparacion: 'caja' as const,
+      nombre: 'Chocolate frío',
+      descripcion: null,
+      ingredientes: null,
+      alergenos: null,
+      tiempo_estimado_min: 5,
+      precio_mostrador: '20.00',
+      disponible: true,
+      imagen_url: null,
+      grupos_opcion: [],
+    };
+    const product = { id: 101, ...input, precio_digital: '26.00' };
+
+    server.use(
+      http.get(`${baseUrl}/catalogo`, ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        return HttpResponse.json({
+          data: {
+            categorias: [{ id: 10, nombre: 'Bebidas', orden: 0 }],
+            productos: [product],
+          },
+          meta: {},
+          error: null,
+        });
+      }),
+      http.post(`${baseUrl}/catalogo/productos`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        const body = await request.json();
+        expect(body).toEqual(input);
+        expect(body).not.toHaveProperty('precio_digital');
+        return HttpResponse.json({ data: product, meta: {}, error: null }, { status: 201 });
+      }),
+      http.post(`${baseUrl}/catalogo/categorias`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        await expect(request.json()).resolves.toEqual({ nombre: 'Postres', orden: 20 });
+        return HttpResponse.json(
+          { data: { id: 30, nombre: 'Postres', orden: 20 }, meta: {}, error: null },
+          { status: 201 },
+        );
+      }),
+      http.patch(`${baseUrl}/catalogo/categorias/30`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        await expect(request.json()).resolves.toEqual({ orden: 15 });
+        return HttpResponse.json({
+          data: { id: 30, nombre: 'Postres', orden: 15 },
+          meta: {},
+          error: null,
+        });
+      }),
+      http.put(`${baseUrl}/catalogo/productos/101`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        const body = await request.json();
+        expect(body).toEqual(input);
+        expect(body).not.toHaveProperty('precio_digital');
+        return HttpResponse.json({ data: product, meta: {}, error: null });
+      }),
+      http.post(`${baseUrl}/catalogo/productos/101/disponibilidad`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        await expect(request.json()).resolves.toEqual({ disponible: false });
+        return HttpResponse.json({
+          data: { ...product, disponible: false },
+          meta: {},
+          error: null,
+        });
+      }),
+    );
+
+    await expect(api.catalog('tenant-token')).resolves.toMatchObject({
+      productos: [{ precio_digital: '26.00' }],
+    });
+    await expect(api.createProduct('tenant-token', input)).resolves.toMatchObject({ id: 101 });
+    await expect(
+      api.createCategory('tenant-token', { nombre: 'Postres', orden: 20 }),
+    ).resolves.toMatchObject({ id: 30 });
+    await expect(api.updateCategory('tenant-token', 30, { orden: 15 })).resolves.toMatchObject({
+      orden: 15,
+    });
+    await expect(api.updateProduct('tenant-token', 101, input)).resolves.toMatchObject({
+      id: 101,
+    });
+    await expect(
+      api.changeProductAvailability('tenant-token', 101, false),
+    ).resolves.toMatchObject({ disponible: false });
+  });
+
   it('convierte errores de dominio en mensajes claros', async () => {
     server.use(
       http.get(`${baseUrl}/plataforma/resumen`, () =>

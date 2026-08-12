@@ -10,6 +10,7 @@ const TenantDashboardPage = lazy(() => import('../pages/tenant-dashboard-page').
 const InvitationsPage = lazy(() => import('../pages/invitations-page').then((module) => ({ default: module.InvitationsPage })));
 const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({ default: module.OrdersPage })));
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
+const MenuPage = lazy(() => import('../pages/menu-page').then((module) => ({ default: module.MenuPage })));
 const PlatformDashboardPage = lazy(() => import('../pages/platform-dashboard-page').then((module) => ({ default: module.PlatformDashboardPage })));
 const EstablishmentsPage = lazy(() => import('../pages/establishments-page').then((module) => ({ default: module.EstablishmentsPage })));
 const NotFoundPage = lazy(() => import('../pages/not-found-page').then((module) => ({ default: module.NotFoundPage })));
@@ -48,6 +49,11 @@ function TenantArea() {
           <Route path="/app/pedidos">
             <RoleGuard allowed={['admin']}>
               <OrdersPage />
+            </RoleGuard>
+          </Route>
+          <Route path="/app/menu">
+            <RoleGuard allowed={['admin']}>
+              <MenuPage />
             </RoleGuard>
           </Route>
           <Route path="/app/pos"><PosPage /></Route>

@@ -1,5 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, ClipboardList, ShieldCheck, UserPlus, WalletCards } from 'lucide-react';
+import {
+  ArrowRight,
+  ClipboardList,
+  NotebookTabs,
+  ShieldCheck,
+  UserPlus,
+  WalletCards,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { PageHeader } from '../components/ui';
@@ -84,7 +91,15 @@ export function TenantDashboardPage() {
 
       <OperationalStatusPanel />
 
-      <section className="dashboard-grid dashboard-grid--three">
+      <section className="dashboard-grid">
+        <Link to="/app/menu" className="dashboard-card">
+          <div className="dashboard-card__top">
+            <span className="dashboard-card__icon"><NotebookTabs aria-hidden="true" /></span>
+            <ArrowRight aria-hidden="true" />
+          </div>
+          <h2>Menú</h2>
+          <p>Crea categorías y productos, configura extras y controla qué está disponible.</p>
+        </Link>
         <Link to="/app/pedidos" className="dashboard-card">
           <div className="dashboard-card__top">
             <span className="dashboard-card__icon"><ClipboardList aria-hidden="true" /></span>

@@ -223,3 +223,77 @@ export interface EstablishmentInput {
   identificador_cliente_etiqueta: string;
   identificador_cliente_obligatorio: boolean;
 }
+
+export interface CatalogCategory {
+  id: number;
+  nombre: string;
+  orden: number;
+}
+
+export interface CatalogOption {
+  id: number;
+  nombre: string;
+  precio_extra: string;
+}
+
+export interface CatalogOptionGroup {
+  id: number;
+  nombre: string;
+  min_selecciones: number;
+  max_selecciones: number;
+  opciones: CatalogOption[];
+}
+
+export interface CatalogProduct {
+  id: number;
+  categoria_id: number;
+  estacion_preparacion: 'cocina' | 'caja';
+  nombre: string;
+  descripcion: string | null;
+  ingredientes: string | null;
+  alergenos: string | null;
+  tiempo_estimado_min: number;
+  precio_mostrador: string;
+  precio_digital: string;
+  disponible: boolean;
+  imagen_url: string | null;
+  grupos_opcion: CatalogOptionGroup[];
+}
+
+export interface CatalogResponse {
+  categorias: CatalogCategory[];
+  productos: CatalogProduct[];
+}
+
+export interface CatalogOptionInput {
+  id?: number;
+  nombre: string;
+  precio_extra: string;
+}
+
+export interface CatalogOptionGroupInput {
+  id?: number;
+  nombre: string;
+  min_selecciones: number;
+  max_selecciones: number;
+  opciones: CatalogOptionInput[];
+}
+
+export interface CatalogProductInput {
+  categoria_id: number;
+  estacion_preparacion: 'cocina' | 'caja';
+  nombre: string;
+  descripcion: string | null;
+  ingredientes: string | null;
+  alergenos: string | null;
+  tiempo_estimado_min: number;
+  precio_mostrador: string;
+  disponible: boolean;
+  imagen_url: string | null;
+  grupos_opcion: CatalogOptionGroupInput[];
+}
+
+export interface CatalogCategoryInput {
+  nombre: string;
+  orden: number;
+}

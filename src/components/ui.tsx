@@ -89,18 +89,20 @@ export function Modal({
   title,
   description,
   children,
+  contentClassName = '',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
   children: ReactNode;
+  contentClassName?: string;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content">
+        <Dialog.Content className={`dialog-content ${contentClassName}`}>
           <div className="pr-10">
             <Dialog.Title className="text-xl font-bold text-ink">{title}</Dialog.Title>
             {description && (

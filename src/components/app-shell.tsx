@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  NotebookTabs,
   ShieldCheck,
   Store,
   UserPlus,
@@ -27,6 +28,7 @@ interface NavItem {
 
 const adminNavigation: NavItem[] = [
   { to: '/app', label: 'Resumen', icon: LayoutDashboard, end: true },
+  { to: '/app/menu', label: 'Menú', icon: NotebookTabs },
   { to: '/app/pedidos', label: 'Pedidos e historial', icon: ClipboardList },
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
   { to: '/app/pos', label: 'Caja / POS', icon: WalletCards },

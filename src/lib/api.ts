@@ -5,6 +5,11 @@ import type {
   ApiErrorEnvelope,
   CashSession,
   CashPaymentResult,
+  CatalogCategory,
+  CatalogCategoryInput,
+  CatalogProduct,
+  CatalogProductInput,
+  CatalogResponse,
   EstablishmentInput,
   IdentityRegistration,
   IdentityRegistrationInput,
@@ -286,6 +291,80 @@ export const api = {
       token,
       body: { dispositivo, rol },
     });
+  },
+
+  async catalog(token: string): Promise<CatalogResponse> {
+    return (await request<CatalogResponse>('/catalogo', { token })).data;
+  },
+
+  async createCategory(
+    token: string,
+    input: CatalogCategoryInput,
+  ): Promise<CatalogCategory> {
+    return (
+      await request<CatalogCategory>('/catalogo/categorias', {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: input,
+      })
+    ).data;
+  },
+
+  async updateCategory(
+    token: string,
+    id: number,
+    input: Partial<CatalogCategoryInput>,
+  ): Promise<CatalogCategory> {
+    return (
+      await request<CatalogCategory>(`/catalogo/categorias/${id}`, {
+        method: 'PATCH',
+        token,
+        idempotent: true,
+        body: input,
+      })
+    ).data;
+  },
+
+  async createProduct(token: string, input: CatalogProductInput): Promise<CatalogProduct> {
+    return (
+      await request<CatalogProduct>('/catalogo/productos', {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: input,
+      })
+    ).data;
+  },
+
+  async updateProduct(
+    token: string,
+    id: number,
+    input: CatalogProductInput,
+  ): Promise<CatalogProduct> {
+    return (
+      await request<CatalogProduct>(`/catalogo/productos/${id}`, {
+        method: 'PUT',
+        token,
+        idempotent: true,
+        body: input,
+      })
+    ).data;
+  },
+
+  async changeProductAvailability(
+    token: string,
+    id: number,
+    disponible: boolean,
+  ): Promise<CatalogProduct> {
+    return (
+      await request<CatalogProduct>(`/catalogo/productos/${id}/disponibilidad`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: { disponible },
+      })
+    ).data;
   },
 
   async createPlatformContext(firebaseToken: string): Promise<PlatformContextResponse> {

@@ -25,6 +25,11 @@ const friendlyMessages: Record<string, string> = {
   SESSION_INVALID_STATE: 'La sesión de Caja ya cambió de estado.',
   RATE_LIMITED: 'Se alcanzó el límite temporal. Espera antes de volver a intentar.',
   VALIDATION_ERROR: 'Revisa los datos capturados e inténtalo nuevamente.',
+  CATEGORY_NAME_CONFLICT: 'Ya existe una categoría con ese nombre.',
+  CATEGORY_NOT_FOUND: 'La categoría ya no está disponible. Actualiza el menú.',
+  PRODUCT_NOT_FOUND: 'El producto ya no está disponible. Actualiza el menú.',
+  CATALOG_VERSION_CONFLICT:
+    'El menú cambió en otra sesión. Actualiza la página antes de volver a guardar.',
 };
 
 export class VaiinillaApiError extends Error {
