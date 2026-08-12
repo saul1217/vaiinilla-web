@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Building2, LogOut, ShieldAlert, Store } from 'lucide-react';
 import { useState } from 'react';
 import { Redirect, useHistory } from 'react-router-dom';
-import { Logo } from '../components/brand-mark';
+import { Logo, Spinner } from '../components/brand-mark';
 import { Button, EmptyState, Feedback } from '../components/ui';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
@@ -14,7 +14,7 @@ const webRoles = new Set(['admin', 'cajero', 'cocina', 'mesero']);
 
 export function AccessSelectionPage() {
   const { user, ready, signOut } = useAuth();
-  const { tenant, openTenantSession, clearAll } = useSessions();
+  const { tenant, tenantReady, openTenantSession, clearAll } = useSessions();
   const history = useHistory();
   const [opening, setOpening] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +28,15 @@ export function AccessSelectionPage() {
     },
   });
 
-  if (!ready) return null;
+  if (!ready || !tenantReady) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-cream text-ink" role="status">
+        <span className="inline-flex items-center gap-3 font-semibold">
+          <Spinner /> Recuperando tu espacio de trabajo…
+        </span>
+      </div>
+    );
+  }
   if (!user) return <Redirect to="/acceso" />;
   if (tenant) return <Redirect to="/app" />;
 

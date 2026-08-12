@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { Link, Redirect, useHistory } from 'react-router-dom';
 import { z } from 'zod';
 import type { MultiFactorResolver, User } from 'firebase/auth';
-import { Logo } from '../components/brand-mark';
+import { Logo, Spinner } from '../components/brand-mark';
 import { PlatformAccountPreparation } from '../components/platform-account-preparation';
 import { Button, Feedback, Field } from '../components/ui';
 import { useAuth } from '../context/auth-context';
@@ -27,7 +27,7 @@ type Credentials = z.infer<typeof credentialsSchema>;
 
 export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
   const { user, ready, configured, signOut } = useAuth();
-  const { tenant, platform, openPlatformSession } = useSessions();
+  const { tenant, tenantReady, platform, openPlatformSession } = useSessions();
   const history = useHistory();
   const [resolver, setResolver] = useState<MultiFactorResolver | null>(null);
   const [totpCode, setTotpCode] = useState('');
@@ -47,7 +47,15 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
     defaultValues: { email: user?.email ?? '', password: '' },
   });
 
-  if (!ready) return null;
+  if (!ready || (surface === 'tenant' && !tenantReady)) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-cream text-ink" role="status">
+        <span className="inline-flex items-center gap-3 font-semibold">
+          <Spinner /> Validando sesión…
+        </span>
+      </div>
+    );
+  }
   if (surface === 'tenant' && tenant) return <Redirect to="/app" />;
   if (surface === 'platform' && platform) return <Redirect to="/plataforma" />;
 

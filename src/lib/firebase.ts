@@ -21,6 +21,11 @@ import {
   type TotpSecret,
   type User,
 } from 'firebase/auth';
+import {
+  beginBrowserSession,
+  endBrowserSession,
+  hasBrowserSession,
+} from './browser-session';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -81,7 +86,12 @@ export async function passwordSignIn(
   requireFreshSession = false,
 ): Promise<PasswordSignInResult> {
   const auth = await readyAuth();
-  if (requireFreshSession && auth.currentUser) await signOut(auth);
+  const hadBrowserSession = hasBrowserSession();
+  if (requireFreshSession && auth.currentUser) {
+    endBrowserSession();
+    await signOut(auth);
+  }
+  beginBrowserSession();
 
   try {
     const credential = await signInWithEmailAndPassword(auth, email, password);
@@ -90,6 +100,7 @@ export async function passwordSignIn(
     if (error instanceof FirebaseError && error.code === 'auth/multi-factor-auth-required') {
       return { mfaResolver: getMultiFactorResolver(auth, error as MultiFactorError) };
     }
+    if (!hadBrowserSession || requireFreshSession) endBrowserSession();
     throw error;
   }
 }
@@ -99,8 +110,17 @@ export async function createPasswordAccount(
   password: string,
 ): Promise<User> {
   const auth = await readyAuth();
-  if (auth.currentUser) await signOut(auth);
-  return (await createUserWithEmailAndPassword(auth, email, password)).user;
+  if (auth.currentUser) {
+    endBrowserSession();
+    await signOut(auth);
+  }
+  beginBrowserSession();
+  try {
+    return (await createUserWithEmailAndPassword(auth, email, password)).user;
+  } catch (error) {
+    endBrowserSession();
+    throw error;
+  }
 }
 
 export async function applyEmailVerificationCode(code: string): Promise<void> {
@@ -127,6 +147,7 @@ export async function completeTotpSignIn(
   resolver: MultiFactorResolver,
   verificationCode: string,
 ): Promise<User> {
+  beginBrowserSession();
   const totpHint = resolver.hints.find(
     (hint) => hint.factorId === TotpMultiFactorGenerator.FACTOR_ID,
   );
@@ -178,6 +199,7 @@ export function hasTotpEnrollment(user: User): boolean {
 }
 
 export async function firebaseSignOut(): Promise<void> {
+  endBrowserSession();
   if (!firebaseConfigured) return;
   const auth = await readyAuth();
   await signOut(auth);

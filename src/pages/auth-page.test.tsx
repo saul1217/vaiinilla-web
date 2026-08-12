@@ -27,6 +27,7 @@ vi.mock('../context/auth-context', () => ({
 vi.mock('../context/session-context', () => ({
   useSessions: () => ({
     tenant: null,
+    tenantReady: true,
     platform: null,
     openPlatformSession: mocks.openPlatformSession,
   }),

@@ -17,10 +17,10 @@ function LoadingScreen() {
 
 export function TenantGuard({ children }: { children: ReactNode }) {
   const { ready, user } = useAuth();
-  const { tenant } = useSessions();
+  const { tenant, tenantReady } = useSessions();
   const location = useLocation();
 
-  if (!ready) return <LoadingScreen />;
+  if (!ready || !tenantReady) return <LoadingScreen />;
   if (!user) return <Redirect to={{ pathname: '/acceso', state: { from: location.pathname } }} />;
   if (!tenant) return <Redirect to="/accesos" />;
   return children;

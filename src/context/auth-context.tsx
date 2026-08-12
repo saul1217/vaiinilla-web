@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { User } from 'firebase/auth';
 import { firebaseConfigured, firebaseSignOut, observeAuth } from '../lib/firebase';
+import { hasBrowserSession } from '../lib/browser-session';
 
 interface AuthContextValue {
   user: User | null;
@@ -24,10 +25,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(!firebaseConfigured);
 
   useEffect(() => {
-    return observeAuth((nextUser) => {
+    let active = true;
+    const unsubscribe = observeAuth((nextUser) => {
+      if (nextUser && !hasBrowserSession()) {
+        setUser(null);
+        void firebaseSignOut().finally(() => {
+          if (active) setReady(true);
+        });
+        return;
+      }
       setUser(nextUser);
       setReady(true);
     });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const value = useMemo<AuthContextValue>(

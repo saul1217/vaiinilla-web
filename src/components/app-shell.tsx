@@ -185,7 +185,7 @@ function Shell({
           <p className="mt-3 px-2 text-xs leading-5 text-muted">
             {surface === 'platform'
               ? 'Sesión global separada · 10 minutos'
-              : 'Sesión autorizada · 15 minutos'}
+              : 'Sesión activa en este navegador'}
           </p>
         </div>
       </aside>
