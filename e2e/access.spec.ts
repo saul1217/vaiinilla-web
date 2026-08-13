@@ -41,6 +41,14 @@ test('rechaza de forma clara un enlace de verificación incompleto', async ({ pa
   await expect(page.getByRole('link', { name: 'Volver y solicitar otro correo' })).toBeVisible();
 });
 
+test('confirma una verificación que Firebase ya procesó', async ({ page }) => {
+  await page.goto('/acceso/verificar?resultado=confirmado');
+  await expect(page).toHaveURL(/\/acceso\/verificar$/);
+  await expect(page.getByRole('heading', { name: 'Correo confirmado' })).toBeVisible();
+  await expect(page.getByText('Tu correo quedó verificado correctamente.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Ir al acceso' })).toBeVisible();
+});
+
 test('publica rutas legales sin simular un consentimiento inexistente', async ({ page }) => {
   await page.goto('/legal/terminos/2026-07');
   await expect(page.getByRole('heading', { name: 'Términos y condiciones' })).toBeVisible();

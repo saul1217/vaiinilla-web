@@ -11,18 +11,16 @@ type VerificationState = 'checking' | 'success' | 'error';
 interface EmailAction {
   code: string | null;
   mode: string | null;
+  result: string | null;
 }
 
 function captureEmailAction(): EmailAction {
   const url = new URL(window.location.href);
-  const action = {
+  return {
     code: url.searchParams.get('oobCode')?.trim() || null,
     mode: url.searchParams.get('mode')?.trim() || null,
+    result: url.searchParams.get('resultado')?.trim() || null,
   };
-  if (url.search) {
-    window.history.replaceState(window.history.state, '', url.pathname);
-  }
-  return action;
 }
 
 export function EmailVerificationPage() {
@@ -32,9 +30,19 @@ export function EmailVerificationPage() {
   const hasPendingInvitation = Boolean(readPendingInvitation());
 
   useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.search) {
+      window.history.replaceState(window.history.state, '', url.pathname);
+    }
+
     let active = true;
 
     async function verify() {
+      if (action.result === 'confirmado') {
+        setState('success');
+        setMessage('Tu correo quedó verificado correctamente. Ya puedes iniciar sesión.');
+        return;
+      }
       if (!firebaseConfigured) {
         setState('error');
         setMessage('Firebase no está configurado en esta Web.');
@@ -114,7 +122,8 @@ function verificationMessage(error: unknown): string {
   return (
     {
       'auth/expired-action-code': 'El enlace ya expiró. Solicita un correo de verificación nuevo.',
-      'auth/invalid-action-code': 'El enlace no es válido o ya fue utilizado.',
+      'auth/invalid-action-code':
+        'El enlace ya fue utilizado o no es válido. Si ya verificaste tu correo, vuelve al acceso e inicia sesión.',
       'auth/user-disabled': 'Esta cuenta está deshabilitada.',
       'auth/user-not-found': 'La cuenta vinculada con el enlace ya no existe.',
       'auth/network-request-failed': 'No fue posible contactar Firebase. Revisa tu conexión.',
