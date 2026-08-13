@@ -38,7 +38,7 @@ const adminNavigation: NavItem[] = [
 ];
 
 const posNavigation: NavItem[] = [{ to: '/app/pos', label: 'Caja / POS', icon: WalletCards }];
-const kitchenNavigation: NavItem[] = [{ to: '/app/pos', label: 'Cocina', icon: ChefHat }];
+const kitchenNavigation: NavItem[] = [{ to: '/app/cocina', label: 'Cocina', icon: ChefHat }];
 const waiterNavigation: NavItem[] = [{ to: '/app/pos', label: 'Servicio en mesa', icon: ConciergeBell }];
 
 const platformNavigation: NavItem[] = [

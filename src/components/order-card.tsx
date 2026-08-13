@@ -4,7 +4,15 @@ import { formatMoney } from '../lib/money';
 import type { OrderDetail } from '../types/api';
 import { OrderStatusBadge } from './status-badge';
 
-export function OrderCard({ order, actions }: { order: OrderDetail; actions?: ReactNode }) {
+export function OrderCard({
+  order,
+  actions,
+  showKitchenNotes = false,
+}: {
+  order: OrderDetail;
+  actions?: ReactNode;
+  showKitchenNotes?: boolean;
+}) {
   return (
     <article className="order-card">
       <header className="order-card__header">
@@ -24,6 +32,13 @@ export function OrderCard({ order, actions }: { order: OrderDetail; actions?: Re
       </div>
 
       <OrderItems order={order} />
+
+      {showKitchenNotes && order.notas_cocina && (
+        <div className="order-note order-note--compact">
+          <strong>Notas de cocina</strong>
+          <p>{order.notas_cocina}</p>
+        </div>
+      )}
 
       <div className="order-card__destination">
         <MapPin aria-hidden="true" />

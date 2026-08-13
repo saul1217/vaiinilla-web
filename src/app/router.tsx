@@ -10,6 +10,7 @@ const TenantDashboardPage = lazy(() => import('../pages/tenant-dashboard-page').
 const InvitationsPage = lazy(() => import('../pages/invitations-page').then((module) => ({ default: module.InvitationsPage })));
 const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({ default: module.OrdersPage })));
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
+const KitchenPage = lazy(() => import('../pages/kitchen-page').then((module) => ({ default: module.KitchenPage })));
 const MenuPage = lazy(() => import('../pages/menu-page').then((module) => ({ default: module.MenuPage })));
 const PlatformDashboardPage = lazy(() => import('../pages/platform-dashboard-page').then((module) => ({ default: module.PlatformDashboardPage })));
 const EstablishmentsPage = lazy(() => import('../pages/establishments-page').then((module) => ({ default: module.EstablishmentsPage })));
@@ -56,7 +57,16 @@ function TenantArea() {
               <MenuPage />
             </RoleGuard>
           </Route>
-          <Route path="/app/pos"><PosPage /></Route>
+          <Route path="/app/cocina">
+            <RoleGuard allowed={['cocina']}>
+              <KitchenPage />
+            </RoleGuard>
+          </Route>
+          <Route path="/app/pos">
+            <RoleGuard allowed={['admin', 'cajero', 'mesero']}>
+              <PosPage />
+            </RoleGuard>
+          </Route>
           <Redirect to="/app" />
         </Switch>
       </TenantShell>

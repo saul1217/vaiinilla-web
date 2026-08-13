@@ -23,6 +23,8 @@ const friendlyMessages: Record<string, string> = {
   LEGAL_CONSENT_REQUIRED:
     'Debes aceptar las versiones vigentes de Términos y Privacidad para continuar.',
   SESSION_INVALID_STATE: 'La sesión de Caja ya cambió de estado.',
+  ORDER_INVALID_STATE: 'El pedido ya cambió de estado. Actualizamos el tablero.',
+  ORDER_VERSION_CONFLICT: 'El pedido fue actualizado en otro dispositivo. Actualizamos el tablero.',
   RATE_LIMITED: 'Se alcanzó el límite temporal. Espera antes de volver a intentar.',
   VALIDATION_ERROR: 'Revisa los datos capturados e inténtalo nuevamente.',
   CATEGORY_NAME_CONFLICT: 'Ya existe una categoría con ese nombre.',

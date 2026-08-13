@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Redirect, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
+import { tenantHomePath } from '../lib/tenant-route';
 import type { OperationalRole } from '../types/api';
 import { Spinner } from './brand-mark';
 
@@ -35,7 +36,7 @@ export function RoleGuard({
 }) {
   const { tenant } = useSessions();
   if (!tenant || !allowed.includes(tenant.context.rol)) {
-    return <Redirect to="/app/pos" />;
+    return <Redirect to={tenant ? tenantHomePath(tenant.context.rol) : '/accesos'} />;
   }
   return children;
 }

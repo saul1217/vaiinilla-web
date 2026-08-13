@@ -8,6 +8,7 @@ import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
+import { tenantHomePath } from '../lib/tenant-route';
 import type { SessionAccess } from '../types/api';
 
 const webRoles = new Set(['admin', 'cajero', 'cocina', 'mesero']);
@@ -48,7 +49,7 @@ export function AccessSelectionPage() {
     setError(null);
     try {
       const session = await openTenantSession(user, access);
-      history.replace(session.context.rol === 'admin' ? '/app' : '/app/pos');
+      history.replace(tenantHomePath(session.context.rol));
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {

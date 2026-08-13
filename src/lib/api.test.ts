@@ -326,6 +326,31 @@ describe('Vaiinilla API client', () => {
     await expect(api.heartbeat('tenant-token', 'web-caja-01', 'cajero')).resolves.toBeUndefined();
   });
 
+  it('avanza Cocina con versión esperada e idempotencia', async () => {
+    server.use(
+      http.post(`${baseUrl}/pedidos/${orderFixture.id}/transiciones`, async ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        await expect(request.json()).resolves.toEqual({
+          estado_objetivo: 'preparando',
+          version_esperada: 2,
+        });
+        return HttpResponse.json(
+          {
+            data: { ...orderFixture, estado: 'preparando', version: 3 },
+            meta: {},
+            error: null,
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    await expect(
+      api.transitionOrder('tenant-token', orderFixture.id, 'preparando', 2),
+    ).resolves.toMatchObject({ estado: 'preparando', version: 3 });
+  });
+
   it('administra el catálogo sin enviar el precio digital', async () => {
     const input = {
       categoria_id: 10,

@@ -281,15 +281,25 @@ export const api = {
     versionEsperada: number,
     qrToken: string,
   ): Promise<OrderDetail> {
+    return api.transitionOrder(token, id, 'entregado', versionEsperada, qrToken);
+  },
+
+  async transitionOrder(
+    token: string,
+    id: string,
+    targetStatus: Extract<OrderStatus, 'preparando' | 'listo' | 'entregado'>,
+    expectedVersion: number,
+    pickupToken?: string,
+  ): Promise<OrderDetail> {
     return (
       await request<OrderDetail>(`/pedidos/${id}/transiciones`, {
         method: 'POST',
         token,
         idempotent: true,
         body: {
-          estado_objetivo: 'entregado',
-          version_esperada: versionEsperada,
-          qr_token: qrToken,
+          estado_objetivo: targetStatus,
+          version_esperada: expectedVersion,
+          ...(pickupToken ? { qr_token: pickupToken } : {}),
         },
       })
     ).data;
