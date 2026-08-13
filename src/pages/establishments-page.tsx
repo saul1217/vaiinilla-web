@@ -13,11 +13,39 @@ import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { EstablishmentStatusBadge } from '../components/status-badge';
-import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { Button, EmptyState, Feedback, Field, Modal, PageHeader, SelectField } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import type { PlatformEstablishment } from '../types/api';
+
+const MEXICO_TIME_ZONES = [
+  { value: 'America/Mexico_City', label: 'Ciudad de México y zona centro' },
+  { value: 'America/Bahia_Banderas', label: 'Bahía de Banderas, Nayarit' },
+  { value: 'America/Cancun', label: 'Cancún, Quintana Roo' },
+  { value: 'America/Chihuahua', label: 'Chihuahua' },
+  { value: 'America/Ciudad_Juarez', label: 'Ciudad Juárez, Chihuahua' },
+  { value: 'America/Hermosillo', label: 'Hermosillo, Sonora' },
+  { value: 'America/Matamoros', label: 'Matamoros y frontera de Tamaulipas' },
+  { value: 'America/Mazatlan', label: 'Mazatlán, Sinaloa' },
+  { value: 'America/Merida', label: 'Mérida, Yucatán' },
+  { value: 'America/Monterrey', label: 'Monterrey, Nuevo León' },
+  { value: 'America/Ojinaga', label: 'Ojinaga, Chihuahua' },
+  { value: 'America/Tijuana', label: 'Tijuana, Baja California' },
+] as const;
+
+const MEXICO_TIME_ZONE_VALUES = new Set<string>(
+  MEXICO_TIME_ZONES.map(({ value }) => value),
+);
+
+function isValidIanaTimeZone(value: string) {
+  try {
+    new Intl.DateTimeFormat('es-MX', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const establishmentSchema = z.object({
   nombre: z.string().trim().min(2, 'Captura el nombre del establecimiento.'),
@@ -26,7 +54,10 @@ const establishmentSchema = z.object({
     .trim()
     .min(2, 'Captura el identificador Web.')
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Usa minúsculas, números y guiones medios.'),
-  zona_horaria: z.string().trim().min(3, 'Captura una zona horaria IANA.'),
+  zona_horaria: z
+    .string()
+    .trim()
+    .refine(isValidIanaTimeZone, 'Selecciona una zona horaria válida.'),
   hora_cierre_forzado: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/, 'Usa el formato HH:mm:ss.'),
@@ -271,6 +302,10 @@ function EstablishmentFormModal({
       };
 
   const form = useForm<EstablishmentForm>({ resolver: zodResolver(establishmentSchema), values: defaults });
+  const currentTimeZone = establishment?.zona_horaria;
+  const hasTimeZoneOutsideMexicoList = Boolean(
+    currentTimeZone && !MEXICO_TIME_ZONE_VALUES.has(currentTimeZone),
+  );
   const mutation = useMutation({
     mutationFn: (input: EstablishmentForm) =>
       mode === 'create'
@@ -290,7 +325,23 @@ function EstablishmentFormModal({
       <form className="form-grid" onSubmit={(event) => void form.handleSubmit((data) => mutation.mutate(data))(event)}>
         <Field label="Nombre" error={form.formState.errors.nombre?.message} {...form.register('nombre')} />
         <Field label="Slug" hint="Ejemplo: cafeteria-centro" error={form.formState.errors.slug?.message} {...form.register('slug')} />
-        <Field label="Zona horaria" error={form.formState.errors.zona_horaria?.message} {...form.register('zona_horaria')} />
+        <SelectField
+          label="Zona horaria"
+          hint="Selecciona la ciudad más cercana; se usa para cierres, reportes y cashback."
+          error={form.formState.errors.zona_horaria?.message}
+          {...form.register('zona_horaria')}
+        >
+          {hasTimeZoneOutsideMexicoList && currentTimeZone && (
+            <optgroup label="Configuración actual">
+              <option value={currentTimeZone}>{currentTimeZone}</option>
+            </optgroup>
+          )}
+          <optgroup label="México">
+            {MEXICO_TIME_ZONES.map(({ value, label }) => (
+              <option key={value} value={value}>{label} — {value}</option>
+            ))}
+          </optgroup>
+        </SelectField>
         <Field label="Cierre forzado" inputMode="numeric" error={form.formState.errors.hora_cierre_forzado?.message} {...form.register('hora_cierre_forzado')} />
         <Field label="Etiqueta del identificador" error={form.formState.errors.identificador_cliente_etiqueta?.message} {...form.register('identificador_cliente_etiqueta')} />
         <label className="checkbox-field">

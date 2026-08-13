@@ -5,6 +5,7 @@ import {
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
+  type SelectHTMLAttributes,
 } from 'react';
 import { Spinner } from './brand-mark';
 
@@ -45,8 +46,8 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
   const fieldId = id ?? props.name;
   const descriptionId = `${fieldId}-description`;
   return (
-    <label className="field" htmlFor={fieldId}>
-      <span className="field__label">{label}</span>
+    <div className="field">
+      <label className="field__label" htmlFor={fieldId}>{label}</label>
       <input
         ref={ref}
         id={fieldId}
@@ -60,7 +61,41 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
           {error ?? hint}
         </span>
       )}
-    </label>
+    </div>
+  );
+});
+
+interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  label: string;
+  error?: string;
+  hint?: string;
+}
+
+export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(function SelectField(
+  { id, label, error, hint, className = '', children, ...props },
+  ref,
+) {
+  const fieldId = id ?? props.name;
+  const descriptionId = `${fieldId}-description`;
+  return (
+    <div className="field">
+      <label className="field__label" htmlFor={fieldId}>{label}</label>
+      <select
+        ref={ref}
+        id={fieldId}
+        className={`field__control ${error ? 'field__control--error' : ''} ${className}`}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error || hint ? descriptionId : undefined}
+        {...props}
+      >
+        {children}
+      </select>
+      {(error || hint) && (
+        <span id={descriptionId} className={error ? 'field__error' : 'field__hint'}>
+          {error ?? hint}
+        </span>
+      )}
+    </div>
   );
 });
 
