@@ -17,6 +17,7 @@ import type {
   InvitationRole,
   InvitationStatus,
   PlatformContextResponse,
+  PlatformAnalytics,
   PlatformEstablishment,
   PlatformSummary,
   LegalVersions,
@@ -27,6 +28,7 @@ import type {
   SessionAccess,
   StaffInvitation,
   TenantContextResponse,
+  TenantAnalytics,
 } from '../types/api';
 
 const fallbackApiUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
@@ -231,6 +233,17 @@ export const api = {
     return (await request<OperationalStatus>('/estado-operativo', { token })).data;
   },
 
+  async tenantAnalytics(
+    token: string,
+    period: { desde: string; hasta: string },
+  ): Promise<TenantAnalytics> {
+    return (
+      await request<TenantAnalytics>(`/reportes/resumen${params(period)}`, {
+        token,
+      })
+    ).data;
+  },
+
   async listOrders(
     token: string,
     options: {
@@ -418,6 +431,14 @@ export const api = {
 
   async platformSummary(token: string): Promise<PlatformSummary> {
     return (await request<PlatformSummary>('/plataforma/resumen', { token })).data;
+  },
+
+  async platformAnalytics(
+    token: string,
+    period: { desde: string; hasta: string },
+  ): Promise<PlatformAnalytics> {
+    return (await request<PlatformAnalytics>(`/plataforma/metricas${params(period)}`, { token }))
+      .data;
   },
 
   async listEstablishments(

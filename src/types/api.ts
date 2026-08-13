@@ -196,6 +196,79 @@ export interface PlatformSummary {
   calculado_en: string;
 }
 
+export interface AnalyticsPeriod {
+  desde: string;
+  hasta: string;
+}
+
+export interface AnalyticsSummary {
+  ventas_totales: string;
+  pedidos: number;
+  ticket_promedio: string;
+  productos_vendidos: number;
+  recargas: string;
+  comisiones: string;
+}
+
+export interface DailySalesMetric {
+  fecha: string;
+  ventas: string;
+  pedidos: number;
+}
+
+export interface PaymentMethodMetric {
+  metodo: PaymentMethod;
+  ventas: string;
+  pedidos: number;
+}
+
+export interface OrderStatusMetric {
+  estado: OrderStatus;
+  pedidos: number;
+}
+
+export interface ProductMetric {
+  producto_id: number;
+  nombre: string;
+  cantidad: number;
+}
+
+export interface TenantAnalytics {
+  periodo: AnalyticsPeriod;
+  resumen: AnalyticsSummary;
+  ventas_por_dia: DailySalesMetric[];
+  metodos_pago: PaymentMethodMetric[];
+  pedidos_por_estado: OrderStatusMetric[];
+  productos: ProductMetric[];
+  calculado_en: string;
+}
+
+export interface PlatformOperationMetrics {
+  establecimientos_activos: number;
+  establecimientos_suspendidos: number;
+  invitaciones_pendientes: number;
+  sesiones_caja_abiertas: number;
+  establecimientos_recibiendo: number;
+  establecimientos_sin_operacion: number;
+}
+
+export interface PlatformEstablishmentMetric {
+  id: string;
+  nombre: string;
+  slug: string;
+  estado: 'activo' | 'suspendido';
+  ventas: string;
+  pedidos: number;
+  ticket_promedio: string;
+  sesion_caja_abierta: boolean;
+  recibiendo_pedidos: boolean;
+}
+
+export interface PlatformAnalytics extends TenantAnalytics {
+  operacion: PlatformOperationMetrics;
+  establecimientos: PlatformEstablishmentMetric[];
+}
+
 export interface PlatformEstablishment {
   id: string;
   nombre: string;

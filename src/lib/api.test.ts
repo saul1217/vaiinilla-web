@@ -499,4 +499,51 @@ describe('Vaiinilla API client', () => {
       status: 401,
     });
   });
+
+  it('consulta métricas del tenant y de plataforma con el periodo seleccionado', async () => {
+    const report = {
+      periodo: { desde: '2026-08-01', hasta: '2026-08-12' },
+      resumen: {
+        ventas_totales: '200.00',
+        pedidos: 5,
+        ticket_promedio: '40.00',
+        productos_vendidos: 6,
+        recargas: '50.00',
+        comisiones: '10.00',
+      },
+      ventas_por_dia: [],
+      metodos_pago: [],
+      pedidos_por_estado: [],
+      productos: [],
+      calculado_en: '2026-08-12T20:00:00Z',
+    };
+    server.use(
+      http.get(`${baseUrl}/reportes/resumen`, ({ request }) => {
+        const url = new URL(request.url);
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        expect(url.searchParams.get('desde')).toBe('2026-08-01');
+        expect(url.searchParams.get('hasta')).toBe('2026-08-12');
+        return HttpResponse.json({ data: report, meta: {}, error: null });
+      }),
+      http.get(`${baseUrl}/plataforma/metricas`, ({ request }) => {
+        const url = new URL(request.url);
+        expect(request.headers.get('Authorization')).toBe('Bearer platform-token');
+        expect(url.searchParams.get('desde')).toBe('2026-08-01');
+        expect(url.searchParams.get('hasta')).toBe('2026-08-12');
+        return HttpResponse.json({
+          data: { ...report, operacion: {}, establecimientos: [] },
+          meta: {},
+          error: null,
+        });
+      }),
+    );
+
+    const period = { desde: '2026-08-01', hasta: '2026-08-12' };
+    await expect(api.tenantAnalytics('tenant-token', period)).resolves.toMatchObject({
+      resumen: { pedidos: 5 },
+    });
+    await expect(api.platformAnalytics('platform-token', period)).resolves.toMatchObject({
+      establecimientos: [],
+    });
+  });
 });
