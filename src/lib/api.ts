@@ -5,6 +5,8 @@ import type {
   ApiErrorEnvelope,
   CashSession,
   CashPaymentResult,
+  CashbackRule,
+  CashbackRuleInput,
   CatalogCategory,
   CatalogCategoryInput,
   CatalogProduct,
@@ -240,6 +242,21 @@ export const api = {
     return (
       await request<TenantAnalytics>(`/reportes/resumen${params(period)}`, {
         token,
+      })
+    ).data;
+  },
+
+  async cashbackRule(token: string): Promise<CashbackRule | null> {
+    return (await request<CashbackRule | null>('/wallets/reglas-cashback', { token })).data;
+  },
+
+  async configureCashback(token: string, input: CashbackRuleInput): Promise<CashbackRule> {
+    return (
+      await request<CashbackRule>('/wallets/reglas-cashback', {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: input,
       })
     ).data;
   },

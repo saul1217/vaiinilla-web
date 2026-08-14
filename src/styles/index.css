@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @theme {
   --color-cream: #f4f0e4;
@@ -10,7 +10,7 @@
   --color-lime-dark: #668c16;
   --color-white-warm: #fbf9f2;
   --color-muted: #6f695a;
-  --font-sans: 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 :root {
@@ -117,7 +117,7 @@ select:enabled {
   height: 2px;
   border-radius: 999px;
   background: #668c16;
-  content: '';
+  content: "";
 }
 
 .button {
@@ -362,7 +362,7 @@ select:enabled {
   position: absolute;
   border-radius: 50%;
   background: var(--color-lime);
-  content: '';
+  content: "";
   pointer-events: none;
 }
 
@@ -433,7 +433,7 @@ select:enabled {
   height: 0.36em;
   border-radius: 5px;
   background: var(--color-lime);
-  content: '';
+  content: "";
   transform: rotate(-1deg);
 }
 
@@ -551,7 +551,7 @@ select:enabled {
   left: -50%;
   height: 2px;
   background: var(--line);
-  content: '';
+  content: "";
 }
 
 .preparation-progress__step:first-child::before {
@@ -2097,7 +2097,7 @@ tbody tr:last-child td {
   border: 2px solid var(--color-lime);
   border-radius: 14px;
   box-shadow: 0 0 0 999px rgba(22, 21, 15, 0.28);
-  content: '';
+  content: "";
   pointer-events: none;
 }
 
@@ -2423,7 +2423,11 @@ tbody tr:last-child td {
   min-height: 100dvh;
   place-items: center;
   background:
-    radial-gradient(circle at 12% 12%, rgba(180, 224, 77, 0.25), transparent 28rem),
+    radial-gradient(
+      circle at 12% 12%,
+      rgba(180, 224, 77, 0.25),
+      transparent 28rem
+    ),
     var(--color-cream);
   padding: 24px;
 }
@@ -2523,7 +2527,7 @@ tbody tr:last-child td {
   width: 100%;
   height: 1px;
   background: var(--line);
-  content: '';
+  content: "";
 }
 
 .invitation-progress__step:first-child::before {
@@ -4426,7 +4430,436 @@ tbody tr:last-child td {
   .period-custom {
     flex-direction: column;
   }
+}
 
+.cashback-page {
+  max-width: 1440px;
+}
+
+.panel-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--color-white-warm);
+  box-shadow: var(--shadow-sm);
+}
+
+.cashback-context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #b7d875;
+  border-radius: 18px;
+  background: #f2f9e6;
+  padding: 15px 18px;
+}
+
+.cashback-context > span,
+.cashback-help__icon,
+.cashback-reconciliation__icon {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--color-lime);
+  color: var(--color-ink);
+}
+
+.cashback-context svg,
+.cashback-help__icon svg,
+.cashback-reconciliation__icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.cashback-context strong {
+  font-size: 0.9rem;
+}
+
+.cashback-context p {
+  margin-top: 2px;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.cashback-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.65fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.cashback-form,
+.cashback-help,
+.cashback-operations,
+.cashback-reconciliation {
+  padding: clamp(20px, 3vw, 30px);
+}
+
+.cashback-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.cashback-section-header h2,
+.cashback-help h2,
+.cashback-reconciliation h2 {
+  margin-top: 7px;
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+.cashback-section-header p:not(.eyebrow),
+.cashback-help > p:not(.eyebrow),
+.cashback-reconciliation p:not(.eyebrow) {
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.cashback-switch {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cashback-switch input,
+.cashback-days input {
+  width: 18px;
+  height: 18px;
+  accent-color: #739c1a;
+}
+
+.cashback-form > .feedback {
+  margin-top: 18px;
+}
+
+.cashback-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.cashback-fieldset {
+  margin-top: 24px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 22px 0 0;
+}
+
+.cashback-fieldset legend {
+  padding-right: 12px;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.cashback-fieldset > p {
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 0.74rem;
+}
+
+.cashback-fieldset .cashback-fields {
+  margin-top: 14px;
+}
+
+.cashback-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(54px, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.cashback-days label {
+  display: grid;
+  min-height: 52px;
+  cursor: pointer;
+  place-items: center;
+  gap: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--color-cream);
+  padding: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.cashback-days label:has(input:checked) {
+  border-color: #7faa28;
+  background: #eff8dc;
+}
+
+.cashback-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 26px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.cashback-audit-note {
+  margin-top: 14px;
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+.cashback-help {
+  position: sticky;
+  top: 24px;
+  background: var(--color-ink);
+  color: var(--color-white-warm);
+}
+
+.cashback-help__icon {
+  margin-bottom: 24px;
+}
+
+.cashback-help .eyebrow {
+  color: var(--color-lime);
+}
+
+.cashback-help > p:not(.eyebrow),
+.cashback-help ol {
+  color: #c8c2b5;
+}
+
+.cashback-help ol {
+  display: grid;
+  gap: 14px;
+  margin: 22px 0 0;
+  padding-left: 22px;
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.cashback-help .cashback-help__limit {
+  margin-top: 26px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  padding-top: 18px;
+}
+
+.cashback-report-heading {
+  margin-top: 10px;
+}
+
+.cashback-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.cashback-kpi {
+  display: grid;
+  min-width: 0;
+  min-height: 168px;
+  align-content: start;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--color-white-warm);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.cashback-kpi > span {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--color-lime);
+}
+
+.cashback-kpi svg {
+  width: 19px;
+  height: 19px;
+}
+
+.cashback-kpi p,
+.cashback-kpi small {
+  color: var(--color-muted);
+  font-size: 0.74rem;
+}
+
+.cashback-kpi p {
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+.cashback-kpi strong {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  letter-spacing: -0.04em;
+}
+
+.cashback-operations .field {
+  width: min(260px, 100%);
+}
+
+.cashback-movement-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.cashback-movement-list article {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--color-cream);
+  padding: 13px 16px;
+}
+
+.cashback-movement-list article div {
+  display: grid;
+  gap: 3px;
+}
+
+.cashback-movement-list article span {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}
+
+.cashback-movement-list article > strong {
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.cashback-loading,
+.cashback-empty {
+  margin-top: 22px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 16px;
+  padding: 28px 18px;
+  color: var(--color-muted);
+  text-align: center;
+  font-size: 0.78rem;
+}
+
+.cashback-reconciliation {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-color: #b7d875;
+  background: #f2f9e6;
+}
+
+.cashback-reconciliation--warning {
+  border-color: #efb9b1;
+  background: #fff2f0;
+}
+
+.cashback-reconciliation--warning .cashback-reconciliation__icon {
+  background: #f1c0b9;
+  color: #8e2f24;
+}
+
+.cashback-confirmation {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.cashback-confirmation > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-radius: 13px;
+  background: var(--color-cream);
+  padding: 12px 14px;
+}
+
+.cashback-confirmation span {
+  color: var(--color-muted);
+  font-size: 0.74rem;
+}
+
+.cashback-confirmation strong {
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.cashback-page .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 1100px) {
+  .cashback-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cashback-help {
+    position: static;
+  }
+
+  .cashback-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .cashback-section-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cashback-switch {
+    align-self: flex-start;
+  }
+
+  .cashback-fields,
+  .cashback-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .cashback-days {
+    grid-template-columns: repeat(4, minmax(54px, 1fr));
+  }
+
+  .cashback-form-actions,
+  .cashback-page .modal-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .cashback-form-actions .button,
+  .cashback-page .modal-actions .button {
+    width: 100%;
+  }
+
+  .cashback-movement-list article,
+  .cashback-confirmation > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cashback-confirmation strong {
+    text-align: left;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

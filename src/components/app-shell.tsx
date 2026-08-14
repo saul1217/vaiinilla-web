@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  BadgePercent,
   Building2,
   ChefHat,
   ClipboardList,
@@ -33,6 +34,7 @@ const adminNavigation: NavItem[] = [
   { to: '/app', label: 'Resumen', icon: LayoutDashboard, end: true },
   { to: '/app/menu', label: 'Menú', icon: NotebookTabs },
   { to: '/app/pedidos', label: 'Pedidos e historial', icon: ClipboardList },
+  { to: '/app/cashback', label: 'Cashback y wallet', icon: BadgePercent },
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
   { to: '/app/pos', label: 'Caja / POS', icon: WalletCards },
 ];

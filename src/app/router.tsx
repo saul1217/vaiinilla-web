@@ -12,6 +12,7 @@ const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
 const KitchenPage = lazy(() => import('../pages/kitchen-page').then((module) => ({ default: module.KitchenPage })));
 const MenuPage = lazy(() => import('../pages/menu-page').then((module) => ({ default: module.MenuPage })));
+const CashbackPage = lazy(() => import('../pages/cashback-page').then((module) => ({ default: module.CashbackPage })));
 const PlatformDashboardPage = lazy(() => import('../pages/platform-dashboard-page').then((module) => ({ default: module.PlatformDashboardPage })));
 const EstablishmentsPage = lazy(() => import('../pages/establishments-page').then((module) => ({ default: module.EstablishmentsPage })));
 const NotFoundPage = lazy(() => import('../pages/not-found-page').then((module) => ({ default: module.NotFoundPage })));
@@ -55,6 +56,11 @@ function TenantArea() {
           <Route path="/app/menu">
             <RoleGuard allowed={['admin']}>
               <MenuPage />
+            </RoleGuard>
+          </Route>
+          <Route path="/app/cashback">
+            <RoleGuard allowed={['admin']}>
+              <CashbackPage />
             </RoleGuard>
           </Route>
           <Route path="/app/cocina">

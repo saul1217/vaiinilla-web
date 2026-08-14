@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
+  BadgePercent,
   Banknote,
   ClipboardList,
   NotebookTabs,
@@ -293,6 +294,16 @@ export function TenantDashboardPage() {
           </div>
           <h2>Personal e invitaciones</h2>
           <p>Invita por correo, revisa estados y controla reenvíos o revocaciones.</p>
+        </Link>
+        <Link to="/app/cashback" className="dashboard-card">
+          <div className="dashboard-card__top">
+            <span className="dashboard-card__icon">
+              <BadgePercent aria-hidden="true" />
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </div>
+          <h2>Cashback y wallet</h2>
+          <p>Configura el beneficio y consulta recargas, compras, devoluciones y conciliación.</p>
         </Link>
         <Link to="/app/pos" className="dashboard-card dashboard-card--dark">
           <div className="dashboard-card__top">

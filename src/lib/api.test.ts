@@ -546,4 +546,57 @@ describe('Vaiinilla API client', () => {
       establecimientos: [],
     });
   });
+
+  it('consulta y configura cashback con contexto e idempotencia', async () => {
+    const rule = {
+      id: '3d196e4d-9082-4b5d-aa7a-65f0e21ac654',
+      nombre: 'Happy hour',
+      porcentaje: '5.00',
+      hora_inicio: '16:00:00',
+      hora_fin: '19:00:00',
+      dias_activos: [1, 2, 3, 4, 5],
+      vigencia_inicio: '2026-08-01',
+      vigencia_fin: '2026-08-31',
+      activa: true,
+      creado_en: '2026-08-13T12:00:00Z',
+      actualizado_en: '2026-08-13T12:00:00Z',
+    };
+    server.use(
+      http.get(`${baseUrl}/wallets/reglas-cashback`, ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        return HttpResponse.json({ data: rule, meta: {}, error: null });
+      }),
+      http.post(`${baseUrl}/wallets/reglas-cashback`, async ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        await expect(request.json()).resolves.toEqual({
+          nombre: 'Happy hour',
+          porcentaje: '5.00',
+          hora_inicio: '16:00',
+          hora_fin: '19:00',
+          dias_activos: [1, 2, 3, 4, 5],
+          vigencia_inicio: '2026-08-01',
+          vigencia_fin: '2026-08-31',
+          activa: true,
+        });
+        return HttpResponse.json({ data: rule, meta: {}, error: null }, { status: 201 });
+      }),
+    );
+
+    await expect(api.cashbackRule('tenant-token')).resolves.toMatchObject({
+      porcentaje: '5.00',
+    });
+    await expect(
+      api.configureCashback('tenant-token', {
+        nombre: 'Happy hour',
+        porcentaje: '5.00',
+        hora_inicio: '16:00',
+        hora_fin: '19:00',
+        dias_activos: [1, 2, 3, 4, 5],
+        vigencia_inicio: '2026-08-01',
+        vigencia_fin: '2026-08-31',
+        activa: true,
+      }),
+    ).resolves.toMatchObject({ activa: true });
+  });
 });

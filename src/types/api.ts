@@ -207,7 +207,55 @@ export interface AnalyticsSummary {
   ticket_promedio: string;
   productos_vendidos: number;
   recargas: string;
+  compras_saldo?: string;
+  cashback_otorgado?: string;
+  cancelaciones_wallet?: string;
+  pedidos_cancelados?: number;
   comisiones: string;
+}
+
+export type WalletMovementType =
+  'recarga_efectivo' | 'compra' | 'cashback' | 'cancelacion' | 'ajuste';
+
+export interface WalletMovementMetric {
+  tipo: WalletMovementType;
+  monto: string;
+  operaciones: number;
+}
+
+export interface WalletReconciliationMetric {
+  wallets_revisadas: number;
+  alertas: number;
+}
+
+export interface WalletAnalytics {
+  movimientos: WalletMovementMetric[];
+  conciliacion: WalletReconciliationMetric;
+}
+
+export interface CashbackRule {
+  id: string;
+  nombre: string;
+  porcentaje: string;
+  hora_inicio: string | null;
+  hora_fin: string | null;
+  dias_activos: number[] | null;
+  vigencia_inicio: string | null;
+  vigencia_fin: string | null;
+  activa: boolean;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface CashbackRuleInput {
+  nombre: string;
+  porcentaje: string;
+  hora_inicio: string | null;
+  hora_fin: string | null;
+  dias_activos: number[] | null;
+  vigencia_inicio: string | null;
+  vigencia_fin: string | null;
+  activa: boolean;
 }
 
 export interface DailySalesMetric {
@@ -240,6 +288,7 @@ export interface TenantAnalytics {
   metodos_pago: PaymentMethodMetric[];
   pedidos_por_estado: OrderStatusMetric[];
   productos: ProductMetric[];
+  wallet?: WalletAnalytics;
   calculado_en: string;
 }
 
