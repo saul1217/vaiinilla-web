@@ -114,6 +114,30 @@ describe('Vaiinilla API client', () => {
     expect(result.usuario.nombre).toBe('Ana Pérez');
   });
 
+  it('elimina la cuenta propia con token reciente y llave idempotente estable', async () => {
+    const deletionKey = 'f5538f5a-ddea-40cb-a992-beb6ea4a91cd';
+    server.use(
+      http.delete(`${baseUrl}/identidad/cuenta`, async ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer firebase-token-reciente');
+        expect(request.headers.get('Idempotency-Key')).toBe(deletionKey);
+        await expect(request.json()).resolves.toEqual({ confirmacion: 'ELIMINAR' });
+        return HttpResponse.json({
+          data: {
+            solicitud_id: '8a79bc4b-ffb9-44d1-a4a2-92dd8af08ef4',
+            estado: 'eliminada',
+            eliminada_en: '2026-08-18T12:00:00.000Z',
+          },
+          meta: {},
+          error: null,
+        });
+      }),
+    );
+
+    await expect(
+      api.deleteOwnAccount('firebase-token-reciente', deletionKey),
+    ).resolves.toMatchObject({ estado: 'eliminada' });
+  });
+
   it('solicita recuperación sin exponer si la cuenta existe', async () => {
     server.use(
       http.post(`${baseUrl}/publico/correos/recuperacion`, async ({ request }) => {

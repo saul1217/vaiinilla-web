@@ -32,6 +32,14 @@ const friendlyMessages: Record<string, string> = {
   PRODUCT_NOT_FOUND: 'El producto ya no está disponible. Actualiza el menú.',
   CATALOG_VERSION_CONFLICT:
     'El menú cambió en otra sesión. Actualiza la página antes de volver a guardar.',
+  REAUTHENTICATION_REQUIRED:
+    'Por seguridad debes volver a iniciar sesión antes de eliminar la cuenta.',
+  ACCOUNT_DELETION_CONFIRMATION_REQUIRED:
+    'Escribe ELIMINAR exactamente para confirmar la eliminación definitiva.',
+  ACCOUNT_DELETION_ALREADY_REQUESTED:
+    'Esta cuenta ya tiene una solicitud de eliminación incompatible.',
+  ACCOUNT_DELETION_FAILED:
+    'No fue posible completar la eliminación. Tu sesión sigue activa; inténtalo nuevamente.',
 };
 
 export class VaiinillaApiError extends Error {

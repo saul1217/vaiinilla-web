@@ -253,11 +253,11 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
             </form>
           )}
 
-          {isPlatform && (
-            <div className="auth-card__switch">
-              <Link to="/acceso">Volver a Administración y POS</Link>
-            </div>
-          )}
+          <div className="auth-card__switch">
+            <Link to={isPlatform ? '/acceso' : '/eliminar-cuenta'}>
+              {isPlatform ? 'Volver a Administración y POS' : 'Solicitar eliminación de cuenta'}
+            </Link>
+          </div>
             </>
           )}
         </div>

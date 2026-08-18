@@ -20,6 +20,7 @@ const InvitationAcceptancePage = lazy(() => import('../pages/invitation-acceptan
 const EmailVerificationPage = lazy(() => import('../pages/email-verification-page').then((module) => ({ default: module.EmailVerificationPage })));
 const PasswordRecoveryPage = lazy(() => import('../pages/password-recovery-page').then((module) => ({ default: module.PasswordRecoveryPage })));
 const LegalDocumentPage = lazy(() => import('../pages/legal-document-page').then((module) => ({ default: module.LegalDocumentPage })));
+const AccountDeletionPage = lazy(() => import('../pages/account-deletion-page').then((module) => ({ default: module.AccountDeletionPage })));
 
 function LoadingRoute() {
   return (
@@ -107,6 +108,7 @@ export function AppRouter() {
           <Route exact path="/acceso/recuperar"><PasswordRecoveryPage /></Route>
           <Route exact path="/legal/terminos/:version"><LegalDocumentPage kind="terminos" /></Route>
           <Route exact path="/legal/privacidad/:version"><LegalDocumentPage kind="privacidad" /></Route>
+          <Route exact path="/eliminar-cuenta"><AccountDeletionPage /></Route>
           <Route path="/app"><TenantArea /></Route>
           <Route exact path="/plataforma/acceso"><AuthPage surface="platform" /></Route>
           <Route path="/plataforma"><PlatformArea /></Route>

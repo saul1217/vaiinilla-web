@@ -108,6 +108,12 @@ export interface IdentityRegistration {
   };
 }
 
+export interface AccountDeletion {
+  solicitud_id: string;
+  estado: 'eliminada';
+  eliminada_en: string;
+}
+
 export interface CashSession {
   id: string;
   fecha_operativa: string;

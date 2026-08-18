@@ -3,6 +3,7 @@ import { createIdempotencyKey } from './idempotency';
 import type {
   ApiEnvelope,
   ApiErrorEnvelope,
+  AccountDeletion,
   CashSession,
   CashPaymentResult,
   CashbackRule,
@@ -40,16 +41,18 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   token?: string;
   body?: unknown;
   idempotent?: boolean;
+  idempotencyKey?: string;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
-  const { token, body, idempotent, ...requestOptions } = options;
+  const { token, body, idempotent, idempotencyKey, ...requestOptions } = options;
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
   const isFormData = body instanceof FormData;
   if (body !== undefined && !isFormData) headers.set('Content-Type', 'application/json');
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
+  if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
+  else if (idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
 
   const response = await fetch(`${apiUrl}${path}`, {
     ...requestOptions,
@@ -114,6 +117,20 @@ export const api = {
         token: firebaseToken,
         idempotent: true,
         body: input,
+      })
+    ).data;
+  },
+
+  async deleteOwnAccount(
+    firebaseToken: string,
+    idempotencyKey: string,
+  ): Promise<AccountDeletion> {
+    return (
+      await request<AccountDeletion>('/identidad/cuenta', {
+        method: 'DELETE',
+        token: firebaseToken,
+        idempotencyKey,
+        body: { confirmacion: 'ELIMINAR' },
       })
     ).data;
   },
