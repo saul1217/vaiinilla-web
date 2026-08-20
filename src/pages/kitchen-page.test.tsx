@@ -84,9 +84,14 @@ describe('tablero de Cocina', () => {
     render(<KitchenPage />, { wrapper: TestProvider });
 
     expect(await screen.findByText('Chocolate caliente')).toBeVisible();
-    expect(screen.getByText('2×')).toBeVisible();
+    expect(screen.getByLabelText('2 unidades')).toBeVisible();
     expect(screen.getByText('Leche deslactosada')).toBeVisible();
     expect(screen.getByText('Sin azúcar')).toBeVisible();
+    expect(screen.getByText('Para llevar')).toBeVisible();
+    expect(screen.getByText('Ana Pérez')).toBeVisible();
+    expect(screen.getByText('A01234')).toBeVisible();
+    expect(screen.getByText('2 piezas')).toBeVisible();
+    expect(screen.getByText('1 producto')).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Pendientes' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'En preparación' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Listos' })).toBeVisible();
@@ -95,6 +100,16 @@ describe('tablero de Cocina', () => {
       cursor: undefined,
       limit: 50,
     });
+  });
+
+  it('permite solicitar una actualización manual además del refresco automático', async () => {
+    const user = userEvent.setup();
+    render(<KitchenPage />, { wrapper: TestProvider });
+
+    await screen.findByText('Chocolate caliente');
+    await user.click(screen.getByRole('button', { name: 'Actualizar comandas ahora' }));
+
+    await waitFor(() => expect(apiMock.listOrders).toHaveBeenCalledTimes(2));
   });
 
   it('inicia la preparación con la versión vigente del pedido', async () => {
