@@ -59,6 +59,22 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 | `/plataforma` | Resumen global de la plataforma |
 | `/plataforma/establecimientos` | Crear, configurar, suspender y reactivar establecimientos |
 
+## Onboarding Stripe Connect
+
+Desde `/plataforma/establecimientos`, Super Admin puede iniciar o continuar el onboarding
+Express de una cafetería. La Web solo consume el backend y nunca recibe claves secretas ni
+crea PaymentIntents:
+
+- `POST /api/v1/plataforma/establecimientos/:id/stripe/onboarding` crea o reutiliza la cuenta y devuelve un Account Link de un solo uso.
+- `GET /api/v1/plataforma/establecimientos/:id/stripe` consulta el estado actualizado por `account.updated`.
+- `PATCH /api/v1/plataforma/establecimientos/:id/stripe/configuracion` activa Stripe únicamente cuando el backend confirma `charges_enabled`, `payouts_enabled` y requisitos sin bloqueo.
+
+Los estados visibles son `Sin conectar`, `Continuar configuración`, `En revisión`, `Revisar
+requisitos`, `Lista para activar` y `Stripe conectado`. Si la sesión global expira, la Web
+regresa a `/plataforma/acceso`, conserva el establecimiento seleccionado en la pestaña y
+vuelve a `/plataforma/establecimientos` después de autenticar de nuevo. Efectivo, saldo,
+wallet y cashback siguen siendo flujos separados.
+
 ## Seguridad
 
 - Firebase conserva únicamente la sesión de identidad del navegador.

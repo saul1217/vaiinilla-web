@@ -3,7 +3,7 @@ import { FirebaseError } from 'firebase/app';
 import { KeyRound, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, Redirect, useHistory } from 'react-router-dom';
+import { Link, Redirect, useHistory, useLocation } from 'react-router-dom';
 import { z } from 'zod';
 import type { MultiFactorResolver, User } from 'firebase/auth';
 import { Logo, Spinner } from '../components/brand-mark';
@@ -29,6 +29,7 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
   const { user, ready, configured, signOut } = useAuth();
   const { tenant, tenantReady, platform, openPlatformSession } = useSessions();
   const history = useHistory();
+  const location = useLocation<{ from?: unknown }>();
   const [resolver, setResolver] = useState<MultiFactorResolver | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
         return;
       }
       await openPlatformSession(userResult);
-      history.replace('/plataforma');
+      history.replace(platformReturnPath(location.state));
     } else {
       history.replace('/accesos');
     }
@@ -277,4 +278,11 @@ function authErrorMessage(error: unknown): string {
       'auth/network-request-failed': 'No fue posible contactar Firebase. Revisa tu conexión.',
     }[error.code] ?? 'No fue posible iniciar sesión. Intenta nuevamente.'
   );
+}
+
+function platformReturnPath(state: unknown): string {
+  if (!state || typeof state !== 'object') return '/plataforma';
+  const from = (state as { from?: unknown }).from;
+  if (typeof from !== 'string') return '/plataforma';
+  return from === '/plataforma' || from.startsWith('/plataforma/') ? from : '/plataforma';
 }

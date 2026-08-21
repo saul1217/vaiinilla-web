@@ -23,6 +23,8 @@ import type {
   PlatformAnalytics,
   PlatformEstablishment,
   PlatformSummary,
+  StripeOnboarding,
+  StripePlatformConfiguration,
   LegalVersions,
   OperationalRole,
   OperationalStatus,
@@ -551,6 +553,54 @@ export const api = {
           token,
           idempotent: true,
           body: { email },
+        },
+      )
+    ).data;
+  },
+
+  async createPlatformStripeOnboarding(
+    token: string,
+    id: string,
+    idempotencyKey: string,
+  ): Promise<StripeOnboarding> {
+    return (
+      await request<StripeOnboarding>(
+        `/plataforma/establecimientos/${id}/stripe/onboarding`,
+        {
+          method: 'POST',
+          token,
+          idempotencyKey,
+        },
+      )
+    ).data;
+  },
+
+  async getPlatformStripeConfiguration(
+    token: string,
+    id: string,
+  ): Promise<StripePlatformConfiguration | null> {
+    return (
+      await request<StripePlatformConfiguration | null>(
+        `/plataforma/establecimientos/${id}/stripe`,
+        { token },
+      )
+    ).data;
+  },
+
+  async configurePlatformStripe(
+    token: string,
+    id: string,
+    stripeEnabled: boolean,
+    idempotencyKey: string,
+  ): Promise<StripePlatformConfiguration> {
+    return (
+      await request<StripePlatformConfiguration>(
+        `/plataforma/establecimientos/${id}/stripe/configuracion`,
+        {
+          method: 'PATCH',
+          token,
+          idempotencyKey,
+          body: { stripe_enabled: stripeEnabled },
         },
       )
     ).data;

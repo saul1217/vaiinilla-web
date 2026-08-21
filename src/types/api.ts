@@ -324,6 +324,43 @@ export interface PlatformAnalytics extends TenantAnalytics {
   establecimientos: PlatformEstablishmentMetric[];
 }
 
+export type StripeOnboardingStatus =
+  | 'pendiente'
+  | 'en_revision'
+  | 'habilitada'
+  | 'restringida'
+  | 'deshabilitada';
+
+export interface PlatformStripeSummary {
+  stripe_account_id: string;
+  stripe_enabled: boolean;
+  estado_onboarding: StripeOnboardingStatus;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+  details_submitted: boolean;
+  requisitos_actuales: Record<string, unknown>;
+  capacidades: Record<string, unknown>;
+  razon_deshabilitacion: string | null;
+  livemode: boolean;
+}
+
+export interface StripeOnboarding {
+  stripe_account_id: string;
+  account_link_url: string;
+  account_link_expires_at: number;
+  estado_onboarding: StripeOnboardingStatus;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+}
+
+export interface StripePlatformConfiguration {
+  stripe_enabled: boolean;
+  stripe_account_id: string;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+  estado_onboarding: StripeOnboardingStatus;
+}
+
 export interface PlatformEstablishment {
   id: string;
   nombre: string;
@@ -336,6 +373,7 @@ export interface PlatformEstablishment {
   suspendido_en: string | null;
   motivo_suspension: string | null;
   creado_en: string;
+  stripe?: PlatformStripeSummary | null;
 }
 
 export interface EstablishmentInput {

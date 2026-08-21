@@ -623,4 +623,68 @@ describe('Vaiinilla API client', () => {
       }),
     ).resolves.toMatchObject({ activa: true });
   });
+
+  it('administra el onboarding Stripe de plataforma con las tres rutas reales', async () => {
+    const establishmentId = '3d196e4d-9082-4b5d-aa7a-65f0e21ac654';
+    const onboardingKey = 'onboarding-key-001';
+    const configurationKey = 'configuration-key-001';
+    const account = {
+      stripe_account_id: 'acct_test_demo',
+      account_link_url: 'https://connect.stripe.test/setup/demo',
+      account_link_expires_at: 1780000000,
+      estado_onboarding: 'pendiente' as const,
+      charges_enabled: false,
+      payouts_enabled: false,
+    };
+    const configuration = {
+      stripe_enabled: true,
+      stripe_account_id: account.stripe_account_id,
+      charges_enabled: true,
+      payouts_enabled: true,
+      estado_onboarding: 'habilitada' as const,
+    };
+
+    server.use(
+      http.post(
+        `${baseUrl}/plataforma/establecimientos/${establishmentId}/stripe/onboarding`,
+        async ({ request }) => {
+          expect(request.headers.get('Authorization')).toBe('Bearer platform-token');
+          expect(request.headers.get('Idempotency-Key')).toBe(onboardingKey);
+          expect(await request.text()).toBe('');
+          return HttpResponse.json({ data: account, meta: {}, error: null }, { status: 201 });
+        },
+      ),
+      http.get(
+        `${baseUrl}/plataforma/establecimientos/${establishmentId}/stripe`,
+        ({ request }) => {
+          expect(request.headers.get('Authorization')).toBe('Bearer platform-token');
+          return HttpResponse.json({ data: configuration, meta: {}, error: null });
+        },
+      ),
+      http.patch(
+        `${baseUrl}/plataforma/establecimientos/${establishmentId}/stripe/configuracion`,
+        async ({ request }) => {
+          expect(request.headers.get('Authorization')).toBe('Bearer platform-token');
+          expect(request.headers.get('Idempotency-Key')).toBe(configurationKey);
+          await expect(request.json()).resolves.toEqual({ stripe_enabled: true });
+          return HttpResponse.json({ data: configuration, meta: {}, error: null });
+        },
+      ),
+    );
+
+    await expect(
+      api.createPlatformStripeOnboarding('platform-token', establishmentId, onboardingKey),
+    ).resolves.toMatchObject({ account_link_url: account.account_link_url });
+    await expect(
+      api.getPlatformStripeConfiguration('platform-token', establishmentId),
+    ).resolves.toMatchObject({ stripe_account_id: account.stripe_account_id });
+    await expect(
+      api.configurePlatformStripe(
+        'platform-token',
+        establishmentId,
+        true,
+        configurationKey,
+      ),
+    ).resolves.toMatchObject({ stripe_enabled: true });
+  });
 });

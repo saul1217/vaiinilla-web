@@ -3057,6 +3057,11 @@ tbody tr:last-child td {
   box-shadow: var(--shadow-sm);
 }
 
+.establishment-card--highlighted {
+  border-color: var(--color-lime-dark);
+  box-shadow: 0 0 0 3px rgba(180, 224, 77, 0.24), var(--shadow-sm);
+}
+
 .establishment-card--skeleton {
   min-height: 345px;
 }
@@ -3120,6 +3125,159 @@ tbody tr:last-child td {
   color: #76251e;
   font-size: 0.72rem;
   line-height: 1.55;
+}
+
+.stripe-panel {
+  display: grid;
+  gap: 12px;
+  margin: 2px 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #faf8f0;
+  padding: 14px;
+}
+
+.stripe-panel--pending {
+  border-color: #d8cba3;
+  background: #fffaf0;
+}
+
+.stripe-panel--ready,
+.stripe-panel--connected {
+  border-color: #c6dda0;
+  background: #f4f9e9;
+}
+
+.stripe-panel--warning {
+  border-color: #e6b7b1;
+  background: #fff5f2;
+}
+
+.stripe-panel__header,
+.stripe-panel__title,
+.stripe-panel__actions {
+  display: flex;
+  align-items: center;
+}
+
+.stripe-panel__header {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stripe-panel__title {
+  min-width: 0;
+  gap: 10px;
+}
+
+.stripe-panel__icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--color-cream-2);
+  color: var(--color-ink-soft);
+}
+
+.stripe-panel--ready .stripe-panel__icon,
+.stripe-panel--connected .stripe-panel__icon {
+  background: var(--color-lime);
+}
+
+.stripe-panel--warning .stripe-panel__icon {
+  background: #f4d0ca;
+  color: #84251d;
+}
+
+.stripe-panel__icon svg {
+  width: 17px;
+}
+
+.stripe-panel__title p {
+  color: var(--color-muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stripe-panel__title strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.82rem;
+}
+
+.stripe-panel__account {
+  border-radius: 999px;
+  background: rgba(22, 21, 15, 0.07);
+  padding: 5px 8px;
+  color: var(--color-muted);
+  font-size: 0.62rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.stripe-panel__description {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.stripe-panel > .feedback {
+  margin: 0;
+  padding: 9px 10px;
+  font-size: 0.7rem;
+}
+
+.stripe-panel__actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stripe-panel__actions .button {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 0.68rem;
+}
+
+.stripe-panel__refresh,
+.stripe-panel__link {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--color-ink-soft);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.stripe-panel__refresh:hover,
+.stripe-panel__link:hover {
+  background: var(--color-cream-2);
+}
+
+.stripe-panel__refresh:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.stripe-panel__refresh svg,
+.stripe-panel__link svg {
+  width: 14px;
+}
+
+.stripe-panel__refresh .spin {
+  animation: stripe-spin 800ms linear infinite;
+}
+
+@keyframes stripe-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .establishment-card__actions {
