@@ -691,7 +691,7 @@ function ProductFormModal({
             <span>2</span>
             <div>
               <h3 id="product-price-heading">Precio</h3>
-              <p>Captura el precio de mostrador; el digital se calcula automáticamente.</p>
+              <p>Captura el precio base; el precio al cliente se calcula automáticamente.</p>
             </div>
           </div>
           <div className="price-editor">
@@ -704,7 +704,7 @@ function ProductFormModal({
               {...form.register('precio_mostrador')}
             />
             <div className="digital-price-preview" aria-live="polite">
-              <span>Precio digital estimado</span>
+              <span>Precio al cliente estimado</span>
               <strong>{digitalPrice ? formatMoney(digitalPrice) : '—'}</strong>
               <small>El backend confirmará y guardará el precio oficial.</small>
             </div>

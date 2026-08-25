@@ -37,7 +37,7 @@ const product = {
   alergenos: 'Leche',
   tiempo_estimado_min: 5,
   precio_mostrador: '20.00',
-  precio_digital: '26.00',
+  precio_digital: '22.00',
   disponible: true,
   imagen_url: null,
   grupos_opcion: [],
@@ -73,7 +73,7 @@ describe('administración del menú', () => {
     render(<MenuPage />, { wrapper: TestProvider });
 
     expect(await screen.findByRole('heading', { name: 'Chocolate frío' })).toBeVisible();
-    expect(screen.getByText('$26.00 MXN')).toBeVisible();
+    expect(screen.getByText('$22.00 MXN')).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Nuevo producto' }));
     const dialog = screen.getByRole('dialog');
@@ -89,7 +89,7 @@ describe('administración del menú', () => {
     );
     await user.upload(within(dialog).getByLabelText('Elegir imagen'), image);
 
-    expect(within(dialog).getByText('$26.00 MXN')).toBeVisible();
+    expect(within(dialog).getByText('$22.00 MXN')).toBeVisible();
     expect(within(dialog).getByText('latte.png')).toBeVisible();
     await user.click(within(dialog).getByRole('button', { name: 'Crear producto' }));
 
