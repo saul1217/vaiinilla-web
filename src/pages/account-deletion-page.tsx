@@ -131,7 +131,7 @@ export function AccountDeletionPage() {
     <main className="auth-page auth-page--deletion">
       <section className="auth-visual account-deletion-visual" aria-label="Control de privacidad de Vaiinilla">
         <Link to="/acceso" aria-label="Vaiinilla, volver al acceso">
-          <Logo />
+          <Logo theme="dark" variant="splash" />
         </Link>
 
         <div className="auth-visual__content">

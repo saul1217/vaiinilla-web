@@ -141,7 +141,7 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
     <main className={`auth-page ${isPlatform ? 'auth-page--platform' : ''}`}>
       <section className="auth-visual" aria-label="Vaiinilla para operación">
         <Link to="/acceso" aria-label="Vaiinilla, inicio">
-          <Logo />
+          <Logo theme={isPlatform ? 'dark' : 'light'} variant="splash" />
         </Link>
         <div className="auth-visual__content">
           <p className="eyebrow">{isPlatform ? 'Autoridad global' : 'Operación sin filas'}</p>

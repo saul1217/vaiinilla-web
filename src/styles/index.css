@@ -92,16 +92,47 @@ select:enabled {
   border: 0;
 }
 
-.brand-mark {
-  display: inline-grid;
-  width: 38px;
-  height: 38px;
+.brand-logo {
+  display: inline-flex;
+  width: 112px;
   flex: 0 0 auto;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.brand-logo__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.brand-logo--compact {
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
   border-radius: 13px;
   background: var(--color-lime);
-  color: var(--color-ink);
   box-shadow: var(--shadow-sm);
+}
+
+.brand-logo--compact .brand-logo__image {
+  width: 100%;
+  height: 100%;
+}
+
+.brand-logo--compact.brand-logo--dark {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-white-warm);
+}
+
+.brand-logo--full {
+  width: 112px;
+}
+
+.brand-logo--splash {
+  width: 148px;
 }
 
 .eyebrow {
@@ -961,7 +992,7 @@ select:enabled {
 .selection-header {
   display: flex;
   width: min(100% - 40px, 1160px);
-  min-height: 84px;
+  min-height: 112px;
   margin-inline: auto;
   align-items: center;
   justify-content: space-between;
@@ -1142,7 +1173,7 @@ select:enabled {
 
 .sidebar__brand {
   display: flex;
-  min-height: 46px;
+  min-height: 112px;
   align-items: center;
   justify-content: space-between;
   gap: 10px;

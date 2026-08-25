@@ -2,21 +2,33 @@ import type { SVGProps } from 'react';
 
 export function BrandMark({ className = '' }: { className?: string }) {
   return (
-    <span className={`brand-mark ${className}`} aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-        <path d="M6 3h6l-1.5 4.5H8L6 3Z" fill="currentColor" />
-        <rect x="7" y="8" width="7" height="13" rx="3" fill="currentColor" />
-        <path d="M15 9c2.2 0 3.5 1.4 3.5 3.4 0 2.6-2.3 3.8-3.5 4.2V9Z" fill="currentColor" />
-      </svg>
+    <span className={`brand-logo brand-logo--compact ${className}`}>
+      <img className="brand-logo__image" src="/brand/vaiinilla-mark.webp" alt="Vaiinilla" />
     </span>
   );
 }
 
-export function Logo({ compact = false }: { compact?: boolean }) {
+export function Logo({
+  compact = false,
+  theme = 'light',
+  variant = 'standard',
+}: {
+  compact?: boolean;
+  theme?: 'light' | 'dark';
+  variant?: 'standard' | 'splash';
+}) {
+  const source = compact
+    ? '/brand/vaiinilla-mark.webp'
+    : `/brand/vaiinilla-logo${variant === 'splash' ? '-splash' : ''}-${theme}.` +
+      (variant === 'splash' ? 'png' : 'webp');
+
   return (
-    <span className="inline-flex items-center gap-3 font-extrabold tracking-[-0.03em] text-ink">
-      <BrandMark />
-      {!compact && <span>Vaiinilla</span>}
+    <span
+      className={`brand-logo ${compact ? 'brand-logo--compact' : 'brand-logo--full'} ${
+        !compact && variant === 'splash' ? 'brand-logo--splash' : ''
+      } brand-logo--${theme}`}
+    >
+      <img className="brand-logo__image" src={source} alt="Vaiinilla" />
     </span>
   );
 }

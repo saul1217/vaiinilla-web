@@ -338,7 +338,7 @@ export function InvitationAcceptancePage() {
       <div className="invitation-shell">
         <section className="invitation-intro" aria-label="Invitación a Vaiinilla">
           <Link to="/acceso" aria-label="Vaiinilla, inicio">
-            <Logo />
+            <Logo theme="dark" variant="splash" />
           </Link>
           <div>
             <p className="eyebrow">Acceso protegido</p>

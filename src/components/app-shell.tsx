@@ -139,7 +139,7 @@ function Shell({
       </a>
 
       <header className="mobile-header">
-        <Logo />
+        <Logo compact theme={surface === 'platform' ? 'dark' : 'light'} />
         <button
           type="button"
           className="icon-button"
@@ -162,7 +162,7 @@ function Shell({
 
       <aside className={`sidebar ${mobileOpen ? 'sidebar--open' : ''}`}>
         <div className="sidebar__brand">
-          <Logo />
+          <Logo theme={surface === 'platform' ? 'dark' : 'light'} />
           {surface === 'platform' && <span className="platform-chip">Plataforma</span>}
         </div>
 
