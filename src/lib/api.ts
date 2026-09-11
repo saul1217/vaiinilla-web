@@ -36,7 +36,15 @@ import type {
   TenantAnalytics,
 } from '../types/api';
 
-const fallbackApiUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
+const developmentApiUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
+const productionApiUrl = 'https://vaiinillaback.up.railway.app/api/v1';
+const hostname = typeof window === 'undefined' ? '' : window.location.hostname;
+const usesDevelopmentFallback =
+  hostname === '' ||
+  hostname === 'dev.vaiinilla.app' ||
+  hostname === 'localhost' ||
+  hostname === '127.0.0.1';
+const fallbackApiUrl = usesDevelopmentFallback ? developmentApiUrl : productionApiUrl;
 const apiUrl = (import.meta.env.VITE_API_URL || fallbackApiUrl).replace(/\/$/, '');
 
 interface RequestOptions extends Omit<RequestInit, 'body'> {
