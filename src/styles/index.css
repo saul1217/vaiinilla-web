@@ -1063,10 +1063,13 @@ select:enabled {
   place-items: center;
   border-radius: 17px;
   background: var(--color-lime);
+  line-height: 0;
 }
 
 .access-card__icon svg {
   width: 23px;
+  height: 23px;
+  display: block;
 }
 
 .access-card strong,

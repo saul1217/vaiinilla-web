@@ -32,6 +32,8 @@ const friendlyMessages: Record<string, string> = {
   PRODUCT_NOT_FOUND: 'El producto ya no está disponible. Actualiza el menú.',
   CATALOG_VERSION_CONFLICT:
     'El menú cambió en otra sesión. Actualiza la página antes de volver a guardar.',
+  SPACE_NAME_CONFLICT: 'Ya existe un espacio con ese nombre.',
+  SPACE_NOT_FOUND: 'El espacio ya no está disponible. Actualiza la página.',
   REAUTHENTICATION_REQUIRED:
     'Por seguridad debes volver a iniciar sesión antes de eliminar la cuenta.',
   ACCOUNT_DELETION_CONFIRMATION_REQUIRED:

@@ -11,6 +11,7 @@ import {
   NotebookTabs,
   ShieldCheck,
   Store,
+  Table2,
   UserPlus,
   WalletCards,
   X,
@@ -35,6 +36,7 @@ const adminNavigation: NavItem[] = [
   { to: '/app/menu', label: 'Menú', icon: NotebookTabs },
   { to: '/app/pedidos', label: 'Pedidos e historial', icon: ClipboardList },
   { to: '/app/cashback', label: 'Cashback y wallet', icon: BadgePercent },
+  { to: '/app/espacios', label: 'Mesas y espacios', icon: Table2 },
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
   { to: '/app/pos', label: 'Caja / POS', icon: WalletCards },
 ];

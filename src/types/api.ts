@@ -136,7 +136,7 @@ export interface OperationalStatus {
 export interface OrderSpace {
   id: number;
   nombre: string;
-  tipo: 'mesa' | 'cancha' | 'drive_thru';
+  tipo: 'mesa' | 'barra' | 'cancha' | 'drive_thru';
 }
 
 export interface OrderItemOption {
@@ -322,6 +322,16 @@ export interface PlatformEstablishmentMetric {
 export interface PlatformAnalytics extends TenantAnalytics {
   operacion: PlatformOperationMetrics;
   establecimientos: PlatformEstablishmentMetric[];
+}
+
+export type SpaceType = 'mesa' | 'barra' | 'cancha' | 'drive_thru';
+
+export interface ManagedSpace {
+  id: number;
+  nombre: string;
+  tipo: SpaceType;
+  activo: boolean;
+  qr_url: string;
 }
 
 export type StripeOnboardingStatus =

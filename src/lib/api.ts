@@ -34,6 +34,8 @@ import type {
   StaffInvitation,
   TenantContextResponse,
   TenantAnalytics,
+  ManagedSpace,
+  SpaceType,
 } from '../types/api';
 
 const developmentApiUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
@@ -564,6 +566,22 @@ export const api = {
         },
       )
     ).data;
+  },
+
+  async listManagedSpaces(token: string): Promise<ManagedSpace[]> {
+    return (await request<ManagedSpace[]>('/espacios/administracion', { token })).data;
+  },
+
+  async createSpace(token: string, input: { nombre: string; tipo: SpaceType }): Promise<ManagedSpace> {
+    return (await request<ManagedSpace>('/espacios', { method: 'POST', token, idempotent: true, body: input })).data;
+  },
+
+  async updateSpace(token: string, id: number, input: { nombre?: string; tipo?: SpaceType; activo?: boolean }): Promise<ManagedSpace> {
+    return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, body: input })).data;
+  },
+
+  async rotateSpaceQr(token: string, id: number): Promise<ManagedSpace> {
+    return (await request<ManagedSpace>(`/espacios/${id}/rotar-token`, { method: 'POST', token, idempotent: true })).data;
   },
 
   async createPlatformStripeOnboarding(
