@@ -131,4 +131,37 @@ describe('preparación de una cuenta de plataforma existente', () => {
     expect(await screen.findByRole('heading', { name: 'Confirma tu identidad' })).toBeVisible();
     expect(mocks.openPlatformSession).toHaveBeenCalledWith(firebaseUser);
   });
+
+  it('abre preparación si el backend reporta autoridad inactiva en el primer acceso', async () => {
+    const firebaseUser = {
+      email: 'ramosmsaul30@gmail.com',
+      emailVerified: true,
+      displayName: null,
+      getIdToken: vi.fn().mockResolvedValue('firebase-token'),
+      reload: vi.fn(),
+    } as unknown as User;
+    mocks.passwordSignIn.mockResolvedValue({ mfaResolver: {} });
+    mocks.completeTotpSignIn.mockResolvedValue(firebaseUser);
+    mocks.openPlatformSession.mockRejectedValue(
+      new VaiinillaApiError(403, {
+        code: 'PLATFORM_AUTHORITY_INACTIVE',
+        message: 'La autoridad de plataforma está inactiva.',
+      }),
+    );
+
+    const actor = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/plataforma/acceso']}>
+        <AuthPage surface="platform" />
+      </MemoryRouter>,
+    );
+
+    await actor.type(screen.getByLabelText('Correo'), 'ramosmsaul30@gmail.com');
+    await actor.type(screen.getByLabelText('Contraseña'), 'contraseña-segura');
+    await actor.click(screen.getByRole('button', { name: 'Continuar con segundo factor' }));
+    await actor.type(screen.getByLabelText('Código de 6 dígitos'), '123456');
+    await actor.click(screen.getByRole('button', { name: 'Confirmar y entrar' }));
+
+    expect(await screen.findByRole('heading', { name: 'Confirma tu identidad' })).toBeVisible();
+  });
 });

@@ -107,7 +107,8 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
         if (
           surface === 'platform' &&
           caught instanceof VaiinillaApiError &&
-          caught.code === 'IDENTITY_NOT_REGISTERED'
+          (caught.code === 'IDENTITY_NOT_REGISTERED' ||
+            caught.code === 'PLATFORM_AUTHORITY_INACTIVE')
         ) {
           setResolver(null);
           setTotpCode('');
