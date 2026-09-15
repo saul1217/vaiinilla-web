@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'firebase/auth';
+import { VaiinillaApiError } from '../lib/api-error';
 import { AuthPage } from './auth-page';
 
 const mocks = vi.hoisted(() => ({
@@ -95,5 +96,39 @@ describe('preparación de una cuenta de plataforma existente', () => {
     expect(mocks.requestEmailVerification).toHaveBeenCalledWith('firebase-token');
     expect(await screen.findByText(/Enviamos el enlace de verificación/)).toBeVisible();
     expect(mocks.openPlatformSession).not.toHaveBeenCalled();
+  });
+
+  it('permite completar identidad después de TOTP cuando aún no está registrada', async () => {
+    const firebaseUser = {
+      email: 'jelm060716@gmail.com',
+      emailVerified: true,
+      displayName: 'Jesús Leos',
+      getIdToken: vi.fn().mockResolvedValue('firebase-token'),
+      reload: vi.fn(),
+    } as unknown as User;
+    mocks.passwordSignIn.mockResolvedValue({ mfaResolver: {} });
+    mocks.completeTotpSignIn.mockResolvedValue(firebaseUser);
+    mocks.openPlatformSession.mockRejectedValue(
+      new VaiinillaApiError(403, {
+        code: 'IDENTITY_NOT_REGISTERED',
+        message: 'La cuenta todavía no completó su registro de identidad.',
+      }),
+    );
+
+    const actor = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/plataforma/acceso']}>
+        <AuthPage surface="platform" />
+      </MemoryRouter>,
+    );
+
+    await actor.type(screen.getByLabelText('Correo'), 'jelm060716@gmail.com');
+    await actor.type(screen.getByLabelText('Contraseña'), 'contraseña-segura');
+    await actor.click(screen.getByRole('button', { name: 'Continuar con segundo factor' }));
+    await actor.type(screen.getByLabelText('Código de 6 dígitos'), '756441');
+    await actor.click(screen.getByRole('button', { name: 'Confirmar y entrar' }));
+
+    expect(await screen.findByRole('heading', { name: 'Confirma tu identidad' })).toBeVisible();
+    expect(mocks.openPlatformSession).toHaveBeenCalledWith(firebaseUser);
   });
 });

@@ -11,7 +11,7 @@ import { PlatformAccountPreparation } from '../components/platform-account-prepa
 import { Button, Feedback, Field } from '../components/ui';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
-import { errorMessage } from '../lib/api-error';
+import { errorMessage, VaiinillaApiError } from '../lib/api-error';
 import { api } from '../lib/api';
 import {
   completeTotpSignIn,
@@ -100,7 +100,22 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
     setSubmittingTotp(true);
     setError(null);
     try {
-      await finish(await completeTotpSignIn(resolver, totpCode), true);
+      const userResult = await completeTotpSignIn(resolver, totpCode);
+      try {
+        await finish(userResult, true);
+      } catch (caught) {
+        if (
+          surface === 'platform' &&
+          caught instanceof VaiinillaApiError &&
+          caught.code === 'IDENTITY_NOT_REGISTERED'
+        ) {
+          setResolver(null);
+          setTotpCode('');
+          setPlatformPreparationUser(userResult);
+          return;
+        }
+        throw caught;
+      }
     } catch (caught) {
       setError(authErrorMessage(caught));
     } finally {
