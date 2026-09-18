@@ -618,6 +618,24 @@ export const api = {
     ).data;
   },
 
+  async linkExistingPlatformStripe(
+    token: string,
+    id: string,
+    stripeAccountId?: string,
+  ): Promise<StripePlatformConfiguration> {
+    return (
+      await request<StripePlatformConfiguration>(
+        `/plataforma/establecimientos/${id}/stripe/vincular-existente`,
+        {
+          method: 'POST',
+          token,
+          idempotent: true,
+          body: stripeAccountId ? { stripe_account_id: stripeAccountId } : {},
+        },
+      )
+    ).data;
+  },
+
   async getPlatformStripeConfiguration(
     token: string,
     id: string,

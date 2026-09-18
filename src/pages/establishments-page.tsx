@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CreditCard,
   ExternalLink,
+  Link2,
   MailPlus,
   Pencil,
   PlayCircle,
@@ -109,7 +110,7 @@ function stripePresentation(stripe: PlatformStripeSummary | null | undefined): S
   if (!stripe) {
     return {
       label: 'Sin conectar',
-      description: 'Crea la cuenta Express y entrega al dueño un Account Link seguro.',
+      description: 'Puedes recuperar una cuenta Stripe ya creada o iniciar un registro nuevo.',
       action: 'onboarding',
       actionLabel: 'Conectar Stripe',
       tone: 'neutral',
@@ -457,6 +458,15 @@ function StripeStatusPanel({
       if (isUnauthorized(error)) onUnauthorized(establishment.id);
     },
   });
+  const linkExisting = useMutation({
+    mutationFn: () => api.linkExistingPlatformStripe(token, establishment.id),
+    onSuccess: () => {
+      void onChanged('La cuenta Stripe existente quedó vinculada. Cobros locales siguen apagados hasta activarlos.');
+    },
+    onError: (error) => {
+      if (isUnauthorized(error)) onUnauthorized(establishment.id);
+    },
+  });
   const refreshStatus = useMutation({
     mutationFn: () => api.getPlatformStripeConfiguration(token, establishment.id),
     onSuccess: () => {
@@ -482,7 +492,8 @@ function StripeStatusPanel({
     },
   });
 
-  const loading = onboarding.isPending || refreshStatus.isPending || configure.isPending;
+  const loading =
+    onboarding.isPending || linkExisting.isPending || refreshStatus.isPending || configure.isPending;
   const actionDisabled = suspended || loading;
   const actionLabel = suspended && presentation.action
     ? 'Reactiva el establecimiento'
@@ -515,12 +526,23 @@ function StripeStatusPanel({
         {account && <span className="stripe-panel__account">Cuenta vinculada</span>}
       </div>
       <p className="stripe-panel__description">{presentation.description}</p>
-      {(onboarding.isError || refreshStatus.isError || configure.isError) && (
+      {(onboarding.isError || linkExisting.isError || refreshStatus.isError || configure.isError) && (
         <Feedback tone="error">
-          {errorMessage(onboarding.error ?? refreshStatus.error ?? configure.error)}
+          {errorMessage(onboarding.error ?? linkExisting.error ?? refreshStatus.error ?? configure.error)}
         </Feedback>
       )}
       <div className="stripe-panel__actions">
+        {!account && (
+          <Button
+            type="button"
+            variant="primary"
+            loading={linkExisting.isPending}
+            disabled={actionDisabled}
+            onClick={() => linkExisting.mutate()}
+          >
+            <Link2 aria-hidden="true" /> Vincular cuenta existente
+          </Button>
+        )}
         {actionLabel && (
           <Button
             type="button"
