@@ -726,14 +726,14 @@ function InviteAdminModal({
       open={open}
       onOpenChange={(next) => { onOpenChange(next); if (!next) { form.reset(); mutation.reset(); } }}
       title="Invitar primer administrador"
-      description={`La invitación pertenecerá únicamente a ${establishment?.nombre ?? 'este establecimiento'}.`}
+      description={`La invitación pertenecerá únicamente a ${establishment?.nombre ?? 'este establecimiento'}. Si ya había una invitación, se invalidará y se enviará un enlace nuevo.`}
     >
       {mutation.isError && <Feedback tone="error">{errorMessage(mutation.error)}</Feedback>}
       <form className="space-y-5" onSubmit={(event) => void form.handleSubmit((data) => mutation.mutate(data))(event)}>
         <Field label="Correo del administrador" type="email" autoComplete="email" error={form.formState.errors.email?.message} {...form.register('email')} />
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" loading={mutation.isPending}>Enviar invitación</Button>
+          <Button type="submit" loading={mutation.isPending}>Enviar nueva invitación</Button>
         </div>
       </form>
     </Modal>
