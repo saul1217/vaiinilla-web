@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MailPlus, MoreHorizontal, RefreshCw, UserPlus, UserX } from 'lucide-react';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { MailPlus, MoreHorizontal, RefreshCw, UserPlus, UserX, Pencil } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -9,7 +9,7 @@ import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../compo
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
-import type { InvitationRole, InvitationStatus, StaffInvitation } from '../types/api';
+import type { InvitationRole, InvitationStatus, StaffInvitation, StaffMembership } from '../types/api';
 
 const invitationSchema = z.object({
   email: z.string().email('Captura un correo válido.'),
@@ -35,6 +35,9 @@ export function InvitationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState<StaffInvitation | null>(null);
   const [action, setAction] = useState<'revocar' | 'reenviar' | null>(null);
+  const [membershipAction, setMembershipAction] = useState<'editar' | 'desactivar' | null>(null);
+  const [selectedMembership, setSelectedMembership] = useState<StaffMembership | null>(null);
+  const [membershipRole, setMembershipRole] = useState<InvitationRole>('cajero');
   const [notice, setNotice] = useState<string | null>(null);
 
   const invitations = useInfiniteQuery({
@@ -55,6 +58,12 @@ export function InvitationsPage() {
     [invitations.data],
   );
 
+  const memberships = useQuery({
+    queryKey: ['staff-memberships'],
+    queryFn: () => api.listStaffMemberships(token),
+    enabled: Boolean(token),
+  });
+
   const actionMutation = useMutation({
     mutationFn: async () => {
       if (!selected || !action) throw new Error('Selecciona una invitación.');
@@ -67,6 +76,21 @@ export function InvitationsPage() {
       setSelected(null);
       setAction(null);
       await queryClient.invalidateQueries({ queryKey: ['invitations'] });
+    },
+  });
+
+  const membershipMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedMembership || !membershipAction) throw new Error('Selecciona un acceso.');
+      return membershipAction === 'editar'
+        ? api.updateStaffMembership(token, selectedMembership.id, membershipRole)
+        : api.deactivateStaffMembership(token, selectedMembership.id);
+    },
+    onSuccess: async () => {
+      setNotice(membershipAction === 'editar' ? 'Rol actualizado correctamente.' : 'Acceso desactivado correctamente.');
+      setSelectedMembership(null);
+      setMembershipAction(null);
+      await queryClient.invalidateQueries({ queryKey: ['staff-memberships'] });
     },
   });
 
@@ -153,6 +177,17 @@ export function InvitationsPage() {
         )}
       </section>
 
+      <section className="table-card" aria-label="Personal con acceso">
+        <div className="table-card__header">
+          <div><h2 className="text-xl font-bold text-ink">Accesos activos</h2><p className="text-sm text-muted">Edita el rol o desactiva el acceso de una persona.</p></div>
+        </div>
+        {memberships.isPending ? <div className="table-loading">Consultando accesos…</div> : memberships.isError ? <Feedback tone="error">{errorMessage(memberships.error)}</Feedback> : memberships.data?.length ? (
+          <div className="responsive-table"><table><thead><tr><th>Persona</th><th>Rol</th><th>Alta</th><th><span className="sr-only">Acciones</span></th></tr></thead><tbody>
+            {memberships.data.map((membership) => <StaffRow key={membership.id} membership={membership} onEdit={(item) => { setSelectedMembership(item); setMembershipRole(item.rol); setMembershipAction('editar'); membershipMutation.reset(); }} onDeactivate={(item) => { setSelectedMembership(item); setMembershipAction('desactivar'); membershipMutation.reset(); }} />)}
+          </tbody></table></div>
+        ) : <EmptyState icon={<UserPlus aria-hidden="true" />} title="No hay accesos activos" description="Las invitaciones aceptadas aparecerán aquí." />}
+      </section>
+
       <CreateInvitationModal
         open={createOpen}
         token={token}
@@ -189,8 +224,24 @@ export function InvitationsPage() {
           </Button>
         </div>
       </Modal>
+
+      <Modal
+        open={Boolean(selectedMembership && membershipAction)}
+        onOpenChange={(open) => { if (!open) { setSelectedMembership(null); setMembershipAction(null); } }}
+        title={membershipAction === 'editar' ? 'Editar acceso' : 'Desactivar acceso'}
+        description={membershipAction === 'editar' ? 'El cambio se aplicará inmediatamente en este establecimiento.' : 'La persona dejará de poder entrar a este establecimiento.'}
+      >
+        {membershipMutation.isError && <Feedback tone="error">{errorMessage(membershipMutation.error)}</Feedback>}
+        <p className="rounded-2xl bg-cream-2 p-4 text-sm font-semibold text-ink">{selectedMembership?.email}</p>
+        {membershipAction === 'editar' && <label className="field mt-5"><span className="field__label">Rol autorizado</span><select className="field__control" value={membershipRole} onChange={(event) => setMembershipRole(event.target.value as InvitationRole)}><option value="cajero">Caja</option><option value="cocina">Cocina</option><option value="mesero">Servicio en mesa</option><option value="admin">Administración</option></select></label>}
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button variant="ghost" onClick={() => { setSelectedMembership(null); setMembershipAction(null); }}>Cancelar</Button><Button variant={membershipAction === 'desactivar' ? 'danger' : 'primary'} loading={membershipMutation.isPending} onClick={() => membershipMutation.mutate()}>{membershipAction === 'editar' ? 'Guardar cambios' : 'Desactivar acceso'}</Button></div>
+      </Modal>
     </div>
   );
+}
+
+function StaffRow({ membership, onEdit, onDeactivate }: { membership: StaffMembership; onEdit: (membership: StaffMembership) => void; onDeactivate: (membership: StaffMembership) => void }) {
+  return <tr><td data-label="Persona"><strong className="font-semibold text-ink">{membership.email}</strong>{membership.nombre && <small className="block text-muted">{membership.nombre}</small>}</td><td data-label="Rol">{roleLabel(membership.rol)}</td><td data-label="Alta">{formatDate(membership.creado_en)}</td><td className="table-actions" data-label="Acciones"><button type="button" className="table-action" onClick={() => onEdit(membership)}><Pencil aria-hidden="true" /> Editar</button><button type="button" className="table-action table-action--danger" onClick={() => onDeactivate(membership)}><UserX aria-hidden="true" /> Desactivar</button></td></tr>;
 }
 
 function InvitationRow({

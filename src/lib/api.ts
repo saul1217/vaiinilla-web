@@ -32,6 +32,7 @@ import type {
   OrderStatus,
   SessionAccess,
   StaffInvitation,
+  StaffMembership,
   TenantContextResponse,
   TenantAnalytics,
   ManagedSpace,
@@ -228,6 +229,22 @@ export const api = {
         idempotent: true,
       })
     ).data;
+  },
+
+  async listStaffMemberships(token: string): Promise<StaffMembership[]> {
+    return (await request<StaffMembership[]>('/personal/invitaciones/membresias', { token })).data;
+  },
+
+  async updateStaffMembership(token: string, id: string, rol: InvitationRole): Promise<StaffMembership> {
+    return (await request<StaffMembership>(`/personal/invitaciones/membresias/${id}`, {
+      method: 'PATCH', token, idempotent: true, body: { rol },
+    })).data;
+  },
+
+  async deactivateStaffMembership(token: string, id: string): Promise<StaffMembership> {
+    return (await request<StaffMembership>(`/personal/invitaciones/membresias/${id}/desactivar`, {
+      method: 'POST', token, idempotent: true,
+    })).data;
   },
 
   async activeCashSession(token: string): Promise<CashSession | null> {

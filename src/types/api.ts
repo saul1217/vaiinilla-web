@@ -70,6 +70,16 @@ export interface StaffInvitation {
   reemplaza_invitacion_id: string | null;
 }
 
+export interface StaffMembership {
+  id: string;
+  usuario_id: string;
+  nombre: string;
+  email: string;
+  rol: InvitationRole;
+  activo: boolean;
+  creado_en: string;
+}
+
 export interface InvitationAcceptance {
   invitacion_id: string;
   membresia: {
