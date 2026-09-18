@@ -58,6 +58,7 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 | `/plataforma/acceso` | Inicio separado de Super Admin con MFA/TOTP |
 | `/plataforma` | Resumen global de la plataforma |
 | `/plataforma/establecimientos` | Crear, configurar, suspender y reactivar establecimientos |
+| `/stripe/onboarding/return` | Regreso seguro desde Stripe al panel de Super Admin |
 
 ## Onboarding Stripe Connect
 
