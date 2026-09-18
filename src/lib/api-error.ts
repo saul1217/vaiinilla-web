@@ -34,6 +34,12 @@ const friendlyMessages: Record<string, string> = {
     'El menú cambió en otra sesión. Actualiza la página antes de volver a guardar.',
   SPACE_NAME_CONFLICT: 'Ya existe un espacio con ese nombre.',
   SPACE_NOT_FOUND: 'El espacio ya no está disponible. Actualiza la página.',
+  SPACE_INACTIVE: 'Ese espacio está inactivo.',
+  SPACE_TOKEN_INVALID: 'El código QR de mesa no es válido.',
+  SPACE_TOKEN_REVOKED: 'Ese QR ya no sirve. Pide el código actualizado en Caja.',
+  PICKUP_QR_INVALID: 'El QR no corresponde a este pedido.',
+  QR_TOKEN_INVALID: 'El QR no corresponde a este pedido.',
+  ORDER_NOT_READY: 'El pedido todavía no está listo para entregar.',
   REAUTHENTICATION_REQUIRED:
     'Por seguridad debes volver a iniciar sesión antes de eliminar la cuenta.',
   ACCOUNT_DELETION_CONFIRMATION_REQUIRED:

@@ -151,5 +151,23 @@ describe('tablero de Cocina', () => {
       3,
     ));
     expect(await screen.findByText('Pedido 42 marcado como listo.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /entregar|validar qr/i })).not.toBeInTheDocument();
+    expect(apiMock.transitionOrder.mock.calls.every((call) => call[2] !== 'entregado')).toBe(true);
+  });
+
+  it('identifica pedidos de mesa y no ofrece entrega', async () => {
+    apiMock.listOrders.mockResolvedValue({
+      orders: [
+        {
+          ...pendingOrder,
+          destino: 'en_espacio',
+          espacio: { id: 4, nombre: 'Mesa 4', tipo: 'mesa' },
+        },
+      ],
+      cursor: null,
+    });
+    render(<KitchenPage />, { wrapper: TestProvider });
+    expect(await screen.findByText('Mesa 4')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /entregar|validar qr/i })).not.toBeInTheDocument();
   });
 });

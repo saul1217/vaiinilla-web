@@ -22,6 +22,7 @@ import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operation
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { calculateChange, formatMoney } from '../lib/money';
+import { isCashierCashOrder, isCashierDeliveryOrder } from '../lib/cashier-queue';
 import type { CashPaymentResult, OrderDetail } from '../types/api';
 
 const moneySchema = z.object({
@@ -128,13 +129,11 @@ export function PosPage() {
     [cashierQueue.data],
   );
   const cashOrders = useMemo(
-    () => queuedOrders.filter((order) => order.estado === 'por_cobrar'),
+    () => queuedOrders.filter(isCashierCashOrder),
     [queuedOrders],
   );
   const readyOrders = useMemo(
-    () => queuedOrders.filter(
-      (order) => order.estado === 'listo' && order.destino === 'para_llevar',
-    ),
+    () => queuedOrders.filter(isCashierDeliveryOrder),
     [queuedOrders],
   );
   const updateQrToken = useCallback((value: string) => setQrToken(value), []);
@@ -334,7 +333,7 @@ export function PosPage() {
 
               <QueueColumn
                 title="Listos para entregar"
-                description="Pedidos para llevar con QR"
+                description="Para llevar y mesa: valida el QR del cliente"
                 count={readyOrders.length}
                 icon={<ScanLine aria-hidden="true" />}
               >
@@ -352,7 +351,7 @@ export function PosPage() {
                   <EmptyState
                     icon={<ScanLine aria-hidden="true" />}
                     title="Sin entregas pendientes"
-                    description="Los pedidos para llevar aparecerán al quedar listos."
+                    description="Los pedidos listos, de mesa o para llevar, aparecerán aquí."
                   />
                 )}
               </QueueColumn>
@@ -480,7 +479,7 @@ function pageTitle(role: string | undefined): string {
 
 function pageDescription(role: string | undefined): string {
   if (role === 'cajero') {
-    return 'Cobra pedidos en efectivo, entrega pedidos para llevar mediante su QR y mantén la Caja en línea.';
+    return 'Cobra efectivo y entrega con QR (mesa o para llevar). Mantén la Caja en línea.';
   }
   if (role === 'cocina') {
     return 'Mantén esta ventana abierta para que el establecimiento detecte Cocina en línea.';
