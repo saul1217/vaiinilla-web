@@ -170,7 +170,15 @@ export function InvitationsPage() {
                       invitation={invitation}
                       membership={memberships.data?.find(
                         (item) => item.activo && item.email.toLowerCase() === invitation.email.toLowerCase(),
-                      )}
+                      ) ?? (invitation.estado === 'aceptada' && invitation.membresia_id ? {
+                        id: invitation.membresia_id,
+                        usuario_id: '',
+                        nombre: '',
+                        email: invitation.email,
+                        rol: invitation.rol,
+                        activo: true,
+                        creado_en: invitation.creado_en,
+                      } : undefined)}
                       onAction={confirm}
                       onEdit={editMembership}
                       onDeactivate={deactivateMembership}

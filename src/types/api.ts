@@ -68,6 +68,7 @@ export interface StaffInvitation {
   expira_en: string;
   creado_en: string;
   reemplaza_invitacion_id: string | null;
+  membresia_id: string | null;
 }
 
 export interface StaffMembership {
@@ -228,6 +229,31 @@ export interface AnalyticsSummary {
   cancelaciones_wallet?: string;
   pedidos_cancelados?: number;
   comisiones: string;
+  ventas_brutas_stripe?: string;
+  costo_procesamiento_stripe?: string;
+  impuesto_stripe?: string;
+  comision_vaiinilla?: string;
+  deducciones_totales?: string;
+  neto_establecimiento?: string;
+  ingreso_vaiinilla?: string;
+  diferencia_estimado_real?: string;
+}
+
+export interface StripeFinancialAnalytics {
+  ventas_brutas: string;
+  costo_procesamiento: string;
+  impuesto: string;
+  comision_vaiinilla: string;
+  deducciones_totales: string;
+  neto_establecimiento: string;
+  saldo_disponible_en_stripe: string | null;
+  saldo_pendiente_en_stripe: string | null;
+  saldo_total_en_stripe: string | null;
+  saldo_pendiente_periodo_estimado: string;
+  saldo_fuente: 'stripe_balance' | 'stripe_disabled' | 'account_unavailable' | 'currency_unavailable' | 'stripe_unavailable';
+  payout_enviado_banco: string;
+  diferencia_estimado_real: string;
+  conciliaciones_pendientes: number;
 }
 
 export type WalletMovementType =
@@ -305,6 +331,7 @@ export interface TenantAnalytics {
   pedidos_por_estado: OrderStatusMetric[];
   productos: ProductMetric[];
   wallet?: WalletAnalytics;
+  stripe?: StripeFinancialAnalytics;
   calculado_en: string;
 }
 
