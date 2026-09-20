@@ -101,6 +101,21 @@ export function InvitationsPage() {
     actionMutation.reset();
   }
 
+  function editMembership(membership: StaffMembership) {
+    setSelectedMembership(membership);
+    setMembershipRole(membership.rol);
+    setMembershipAction('editar');
+    setNotice(null);
+    membershipMutation.reset();
+  }
+
+  function deactivateMembership(membership: StaffMembership) {
+    setSelectedMembership(membership);
+    setMembershipAction('desactivar');
+    setNotice(null);
+    membershipMutation.reset();
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -150,7 +165,16 @@ export function InvitationsPage() {
                 </thead>
                 <tbody>
                   {rows.map((invitation) => (
-                    <InvitationRow key={invitation.id} invitation={invitation} onAction={confirm} />
+                    <InvitationRow
+                      key={invitation.id}
+                      invitation={invitation}
+                      membership={memberships.data?.find(
+                        (item) => item.activo && item.email.toLowerCase() === invitation.email.toLowerCase(),
+                      )}
+                      onAction={confirm}
+                      onEdit={editMembership}
+                      onDeactivate={deactivateMembership}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -183,7 +207,7 @@ export function InvitationsPage() {
         </div>
         {memberships.isPending ? <div className="table-loading">Consultando accesos…</div> : memberships.isError ? <Feedback tone="error">{errorMessage(memberships.error)}</Feedback> : memberships.data?.length ? (
           <div className="responsive-table"><table><thead><tr><th>Persona</th><th>Rol</th><th>Alta</th><th><span className="sr-only">Acciones</span></th></tr></thead><tbody>
-            {memberships.data.map((membership) => <StaffRow key={membership.id} membership={membership} onEdit={(item) => { setSelectedMembership(item); setMembershipRole(item.rol); setMembershipAction('editar'); membershipMutation.reset(); }} onDeactivate={(item) => { setSelectedMembership(item); setMembershipAction('desactivar'); membershipMutation.reset(); }} />)}
+            {memberships.data.map((membership) => <StaffRow key={membership.id} membership={membership} onEdit={editMembership} onDeactivate={deactivateMembership} />)}
           </tbody></table></div>
         ) : <EmptyState icon={<UserPlus aria-hidden="true" />} title="No hay accesos activos" description="Las invitaciones aceptadas aparecerán aquí." />}
       </section>
@@ -246,13 +270,21 @@ function StaffRow({ membership, onEdit, onDeactivate }: { membership: StaffMembe
 
 function InvitationRow({
   invitation,
+  membership,
   onAction,
+  onEdit,
+  onDeactivate,
 }: {
   invitation: StaffInvitation;
+  membership?: StaffMembership;
   onAction: (invitation: StaffInvitation, action: 'revocar' | 'reenviar') => void;
+  onEdit: (membership: StaffMembership) => void;
+  onDeactivate: (membership: StaffMembership) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const canRevoke = invitation.estado === 'pendiente';
   const canResend = ['pendiente', 'expirada', 'revocada'].includes(invitation.estado);
+  const canManage = invitation.estado === 'aceptada' && membership;
   return (
     <tr>
       <td data-label="Persona"><strong className="font-semibold text-ink">{invitation.email}</strong></td>
@@ -271,7 +303,32 @@ function InvitationRow({
             <UserX aria-hidden="true" /> Revocar
           </button>
         )}
-        {!canRevoke && !canResend && <MoreHorizontal aria-hidden="true" className="ml-auto size-5 text-muted" />}
+        {!canRevoke && !canResend && canManage && (
+          <div className="relative ml-auto">
+            <button
+              type="button"
+              className="table-action table-action--icon"
+              aria-label={`Opciones de ${invitation.email}`}
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              title="Opciones de acceso"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <MoreHorizontal aria-hidden="true" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full z-20 mt-2 min-w-44 rounded-2xl border border-line bg-cream-1 p-2 shadow-xl" role="menu">
+                <button type="button" className="table-action w-full" role="menuitem" onClick={() => { setMenuOpen(false); onEdit(membership); }}>
+                  <Pencil aria-hidden="true" /> Editar rol
+                </button>
+                <button type="button" className="table-action table-action--danger w-full" role="menuitem" onClick={() => { setMenuOpen(false); onDeactivate(membership); }}>
+                  <UserX aria-hidden="true" /> Desactivar acceso
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        {!canRevoke && !canResend && !canManage && <MoreHorizontal aria-hidden="true" className="ml-auto size-5 text-muted" />}
       </td>
     </tr>
   );
