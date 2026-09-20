@@ -64,6 +64,23 @@ export function InvitationsPage() {
     enabled: Boolean(token),
   });
 
+  const activeMemberships = useMemo(() => {
+    const current = memberships.data ?? [];
+    const knownIds = new Set(current.map((item) => item.id));
+    const linkedAccepted = rows
+      .filter((invitation) => invitation.estado === 'aceptada' && invitation.membresia_id && !knownIds.has(invitation.membresia_id))
+      .map((invitation) => ({
+        id: invitation.membresia_id as string,
+        usuario_id: '',
+        nombre: '',
+        email: invitation.email,
+        rol: invitation.rol,
+        activo: true,
+        creado_en: invitation.creado_en,
+      }));
+    return [...current, ...linkedAccepted];
+  }, [memberships.data, rows]);
+
   const actionMutation = useMutation({
     mutationFn: async () => {
       if (!selected || !action) throw new Error('Selecciona una invitación.');
@@ -213,9 +230,9 @@ export function InvitationsPage() {
         <div className="table-card__header">
           <div><h2 className="text-xl font-bold text-ink">Accesos activos</h2><p className="text-sm text-muted">Edita el rol o desactiva el acceso de una persona.</p></div>
         </div>
-        {memberships.isPending ? <div className="table-loading">Consultando accesos…</div> : memberships.isError ? <Feedback tone="error">{errorMessage(memberships.error)}</Feedback> : memberships.data?.length ? (
+        {memberships.isPending ? <div className="table-loading">Consultando accesos…</div> : memberships.isError ? <Feedback tone="error">{errorMessage(memberships.error)}</Feedback> : activeMemberships.length ? (
           <div className="responsive-table"><table><thead><tr><th>Persona</th><th>Rol</th><th>Alta</th><th><span className="sr-only">Acciones</span></th></tr></thead><tbody>
-            {memberships.data.map((membership) => <StaffRow key={membership.id} membership={membership} onEdit={editMembership} onDeactivate={deactivateMembership} />)}
+            {activeMemberships.map((membership) => <StaffRow key={membership.id} membership={membership} onEdit={editMembership} onDeactivate={deactivateMembership} />)}
           </tbody></table></div>
         ) : <EmptyState icon={<UserPlus aria-hidden="true" />} title="No hay accesos activos" description="Las invitaciones aceptadas aparecerán aquí." />}
       </section>
