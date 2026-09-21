@@ -1492,14 +1492,48 @@ select:enabled {
   box-shadow: var(--shadow-sm);
 }
 
+.table-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--line);
+  padding: 22px 24px 18px;
+}
+
+.table-card__header h2,
+.table-card__header p {
+  margin: 0;
+}
+
+.table-card__header h2 {
+  color: var(--color-ink);
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+
+.table-card__header p {
+  margin-top: 6px;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
 .responsive-table {
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
+}
+
+.table-card table {
+  min-width: 720px;
 }
 
 th,
@@ -1533,6 +1567,7 @@ tbody tr:last-child td {
 
 .table-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
 }
@@ -1547,6 +1582,7 @@ tbody tr:last-child td {
   color: #4f6c12;
   font-size: 0.7rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .table-action:hover {
@@ -3353,6 +3389,23 @@ tbody tr:last-child td {
   gap: 18px;
 }
 
+.form-section-heading {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.form-section-heading strong {
+  color: var(--ink);
+}
+
+.form-section-heading span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .checkbox-field {
   display: flex;
   min-height: 70px;
@@ -4235,6 +4288,55 @@ tbody tr:last-child td {
   grid-column: 1 / -1;
 }
 
+.location-field .field__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.location-field .field__label svg {
+  width: 16px;
+  color: #668c16;
+}
+
+.social-field__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.social-field__control > svg {
+  position: absolute;
+  left: 16px;
+  z-index: 1;
+  width: 18px;
+  color: var(--color-muted);
+  pointer-events: none;
+}
+
+.social-field__brand {
+  position: absolute;
+  left: 18px;
+  z-index: 1;
+  color: var(--color-muted);
+  font-size: 1.12rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.social-field__control .field__control {
+  padding-left: 48px;
+}
+
+.social-field__control:focus-within > svg {
+  color: #668c16;
+}
+
+.social-field__control:focus-within .social-field__brand {
+  color: #668c16;
+}
+
 .price-editor {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 0.8fr);
@@ -4708,6 +4810,14 @@ tbody tr:last-child td {
 
   .responsive-table {
     overflow: visible;
+  }
+
+  .table-card__header {
+    padding: 20px 18px 15px;
+  }
+
+  .table-card table {
+    min-width: 0;
   }
 
   table,

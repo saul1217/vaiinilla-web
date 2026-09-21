@@ -5,9 +5,15 @@ import {
   Building2,
   CheckCircle2,
   CreditCard,
+  Camera,
   ExternalLink,
+  Globe2,
+  ImagePlus,
   Link2,
   MailPlus,
+  MessageCircle,
+  MapPinned,
+  Music2,
   Pencil,
   PlayCircle,
   Plus,
@@ -15,7 +21,7 @@ import {
   Search,
   StopCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useHistory } from 'react-router-dom';
 import { z } from 'zod';
@@ -71,6 +77,21 @@ const establishmentSchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/, 'Usa el formato HH:mm:ss.'),
   identificador_cliente_etiqueta: z.string().trim().min(2, 'Captura la etiqueta visible.'),
   identificador_cliente_obligatorio: z.boolean(),
+  descripcion: z.string().trim().max(500, 'Usa máximo 500 caracteres.'),
+  imagen_url: z.string().trim(),
+  direccion: z.string().trim().max(240, 'Usa máximo 240 caracteres.'),
+  horario: z.string().trim().max(160, 'Usa máximo 160 caracteres.'),
+  latitud: z.string().trim().refine((value) => value === '' || (Number.isFinite(Number(value)) && Number(value) >= -90 && Number(value) <= 90), 'Usa una latitud entre -90 y 90.'),
+  longitud: z.string().trim().refine((value) => value === '' || (Number.isFinite(Number(value)) && Number(value) >= -180 && Number(value) <= 180), 'Usa una longitud entre -180 y 180.'),
+  instagram_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
+  facebook_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
+  tiktok_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
+  whatsapp_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
+  sitio_web_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
+}).superRefine((data, context) => {
+  if ((data.latitud === '') !== (data.longitud === '')) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['latitud'], message: 'Captura latitud y longitud juntas.' });
+  }
 });
 
 const reasonSchema = z.object({
@@ -82,6 +103,44 @@ const emailSchema = z.object({ email: z.string().email('Captura un correo válid
 type EstablishmentForm = z.infer<typeof establishmentSchema>;
 type ReasonForm = z.infer<typeof reasonSchema>;
 type EmailForm = z.infer<typeof emailSchema>;
+
+function profileInput(data: EstablishmentForm) {
+  const latitud = data.latitud === '' ? null : Number(data.latitud);
+  const longitud = data.longitud === '' ? null : Number(data.longitud);
+  return {
+    ...data,
+    descripcion: data.descripcion || null,
+    imagen_url: undefined,
+    direccion: data.direccion || null,
+    horario: data.horario || null,
+    latitud,
+    longitud,
+    instagram_url: data.instagram_url || null,
+    facebook_url: data.facebook_url || null,
+    tiktok_url: data.tiktok_url || null,
+    whatsapp_url: data.whatsapp_url || null,
+    sitio_web_url: data.sitio_web_url || null,
+  };
+}
+
+function locationLink(latitud: string, longitud: string): string {
+  return latitud && longitud
+    ? `https://www.google.com/maps/@${latitud},${longitud},16z`
+    : '';
+}
+
+function parseLocationCoordinates(value: string): { latitud: string; longitud: string } | null {
+  const match = value.trim().match(
+    /(?:@|[?&](?:q|query)=|^)(-?\d{1,3}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/i,
+  );
+  if (!match) return null;
+  const latitud = Number(match[1]);
+  const longitud = Number(match[2]);
+  if (!Number.isFinite(latitud) || !Number.isFinite(longitud) || latitud < -90 || latitud > 90 || longitud < -180 || longitud > 180) {
+    return null;
+  }
+  return { latitud: String(latitud), longitud: String(longitud) };
+}
 
 const PLATFORM_STRIPE_RETURN_KEY = 'vaiinilla_platform_stripe_return';
 
@@ -391,6 +450,7 @@ export function EstablishmentsPage() {
       )}
 
       <EstablishmentFormModal
+        key={`${formMode ?? 'closed'}-${selected?.id ?? 'new'}`}
         open={formMode !== null}
         mode={formMode ?? 'create'}
         token={token}
@@ -595,6 +655,15 @@ function EstablishmentFormModal({
   onOpenChange: (open: boolean) => void;
   onSaved: (mode: 'create' | 'edit') => Promise<void>;
 }) {
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(establishment?.imagen_url ?? null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [locationInput, setLocationInput] = useState(() =>
+    establishment ? locationLink(String(establishment.latitud ?? ''), String(establishment.longitud ?? '')) : '',
+  );
+  const [locationError, setLocationError] = useState<string | null>(null);
   const defaults: EstablishmentForm = establishment
     ? {
         nombre: establishment.nombre,
@@ -603,6 +672,17 @@ function EstablishmentFormModal({
         hora_cierre_forzado: establishment.hora_cierre_forzado,
         identificador_cliente_etiqueta: establishment.identificador_cliente_etiqueta,
         identificador_cliente_obligatorio: establishment.identificador_cliente_obligatorio,
+        descripcion: establishment.descripcion ?? '',
+        imagen_url: establishment.imagen_url ?? '',
+        direccion: establishment.direccion ?? '',
+        horario: establishment.horario ?? '',
+        latitud: establishment.latitud === null ? '' : String(establishment.latitud),
+        longitud: establishment.longitud === null ? '' : String(establishment.longitud),
+        instagram_url: establishment.instagram_url ?? '',
+        facebook_url: establishment.facebook_url ?? '',
+        tiktok_url: establishment.tiktok_url ?? '',
+        whatsapp_url: establishment.whatsapp_url ?? '',
+        sitio_web_url: establishment.sitio_web_url ?? '',
       }
     : {
         nombre: '',
@@ -611,6 +691,17 @@ function EstablishmentFormModal({
         hora_cierre_forzado: '18:00:00',
         identificador_cliente_etiqueta: 'Matrícula',
         identificador_cliente_obligatorio: true,
+        descripcion: '',
+        imagen_url: '',
+        direccion: '',
+        horario: '',
+        latitud: '',
+        longitud: '',
+        instagram_url: '',
+        facebook_url: '',
+        tiktok_url: '',
+        whatsapp_url: '',
+        sitio_web_url: '',
       };
 
   const form = useForm<EstablishmentForm>({ resolver: zodResolver(establishmentSchema), values: defaults });
@@ -621,20 +712,92 @@ function EstablishmentFormModal({
   const mutation = useMutation({
     mutationFn: (input: EstablishmentForm) =>
       mode === 'create'
-        ? api.createEstablishment(token, input)
-        : api.updateEstablishment(token, establishment?.id ?? '', input),
-    onSuccess: () => onSaved(mode),
+        ? api.createEstablishment(token, profileInput(input))
+        : api.updateEstablishment(token, establishment?.id ?? '', profileInput(input)),
+    onSuccess: async (saved) => {
+      if (selectedImage) {
+        setImageUploading(true);
+        setImageError(null);
+        try {
+          await api.uploadEstablishmentImage(token, saved.id, selectedImage);
+        } catch (error) {
+          setImageError(errorMessage(error));
+          return;
+        } finally {
+          setImageUploading(false);
+        }
+      }
+      await onSaved(mode);
+    },
   });
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  function chooseImage(file: File | undefined) {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setImageError('Elige una imagen JPG, PNG o WebP.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError('La imagen no puede pesar más de 5 MB.');
+      return;
+    }
+    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    setImageError(null);
+    setSelectedImage(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  }
+
+  function updateLocation(value: string) {
+    setLocationInput(value);
+    if (!value.trim()) {
+      setLocationError(null);
+      form.setValue('latitud', '');
+      form.setValue('longitud', '');
+      return;
+    }
+    const coordinates = parseLocationCoordinates(value);
+    if (!coordinates) {
+      setLocationError('Pega un enlace de Google Maps que incluya la ubicación o captura las coordenadas avanzadas.');
+      return;
+    }
+    setLocationError(null);
+    form.setValue('latitud', coordinates.latitud, { shouldValidate: true });
+    form.setValue('longitud', coordinates.longitud, { shouldValidate: true });
+  }
+
+  function submitForm(data: EstablishmentForm) {
+    if (locationInput.trim() && !parseLocationCoordinates(locationInput)) {
+      setLocationError('No pude leer las coordenadas de ese enlace. Usa un enlace completo de Google Maps.');
+      return;
+    }
+    mutation.mutate(data);
+  }
 
   return (
     <Modal
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(next) => {
+        if (!next) {
+          if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+          setSelectedImage(null);
+          setImageError(null);
+          setPreviewUrl(establishment?.imagen_url ?? null);
+        } else {
+          setPreviewUrl(establishment?.imagen_url ?? null);
+        }
+        onOpenChange(next);
+      }}
       title={mode === 'create' ? 'Crear establecimiento' : 'Configurar establecimiento'}
       description="El estado no se modifica desde este formulario. Suspender o reactivar requiere una confirmación y un motivo separados."
     >
       {mutation.isError && <Feedback tone="error">{errorMessage(mutation.error)}</Feedback>}
-      <form className="form-grid" onSubmit={(event) => void form.handleSubmit((data) => mutation.mutate(data))(event)}>
+      <form className="form-grid" onSubmit={(event) => void form.handleSubmit(submitForm)(event)}>
         <Field label="Nombre" error={form.formState.errors.nombre?.message} {...form.register('nombre')} />
         <Field label="Slug" hint="Ejemplo: cafeteria-centro" error={form.formState.errors.slug?.message} {...form.register('slug')} />
         <SelectField
@@ -660,9 +823,91 @@ function EstablishmentFormModal({
           <input type="checkbox" {...form.register('identificador_cliente_obligatorio')} />
           <span><strong>Identificador obligatorio</strong><small>El cliente deberá capturarlo para completar su contexto.</small></span>
         </label>
+        <div className="form-section-heading form-grid__wide">
+          <strong>Perfil que verá el comprador</strong>
+          <span>Esta información aparecerá al descubrir el establecimiento en Vaiinilla.</span>
+        </div>
+        <div className="form-grid__wide product-image-uploader establishment-image-uploader">
+          <div className="product-image-uploader__copy">
+            <strong>Foto del establecimiento</strong>
+            <p>Selecciona una imagen JPG, PNG o WebP de hasta 5 MB. Se guardará en el almacenamiento seguro de Vaiinilla.</p>
+            <div className="product-image-uploader__actions">
+              <button className="button button--secondary" type="button" onClick={() => imageInputRef.current?.click()}>
+                <ImagePlus aria-hidden="true" /> {previewUrl ? 'Cambiar imagen' : 'Elegir imagen'}
+              </button>
+              <input
+                ref={imageInputRef}
+                className="sr-only"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                aria-label="Elegir imagen del establecimiento"
+                onChange={(event) => chooseImage(event.target.files?.[0])}
+              />
+            </div>
+            {selectedImage && <p className="product-image-uploader__file" role="status"><strong>{selectedImage.name}</strong><span>{Math.ceil(selectedImage.size / 1024)} KB</span></p>}
+            {imageError && <p className="field__error" role="alert">{imageError}</p>}
+          </div>
+          <div className="product-image-dropzone" aria-label="Vista previa de la imagen del establecimiento">
+            {previewUrl ? <img src={previewUrl} alt="Vista previa del establecimiento" /> : <><ImagePlus aria-hidden="true" /><strong>Aquí aparecerá la foto</strong><span>La imagen ayuda a reconocer el lugar.</span></>}
+          </div>
+        </div>
+        <label className="field form-grid__wide">
+          <span className="field__label">Descripción</span>
+          <textarea className="field__control" rows={3} {...form.register('descripcion')} />
+          {form.formState.errors.descripcion?.message && <span className="field__error">{form.formState.errors.descripcion.message}</span>}
+        </label>
+        <Field label="Dirección o zona" error={form.formState.errors.direccion?.message} {...form.register('direccion')} />
+        <Field label="Horario visible" hint="Ejemplo: Lun–Vie · 8:00 a.m.–8:00 p.m." error={form.formState.errors.horario?.message} {...form.register('horario')} />
+        <label className="field form-grid__wide location-field">
+          <span className="field__label"><MapPinned aria-hidden="true" /> Ubicación en el mapa</span>
+          <input
+            className={`field__control ${locationError ? 'field__control--error' : ''}`}
+            type="url"
+            inputMode="url"
+            value={locationInput}
+            onChange={(event) => updateLocation(event.target.value)}
+            placeholder="Pega un enlace de Google Maps"
+            aria-invalid={Boolean(locationError)}
+            aria-describedby="establishment-location-description"
+          />
+          <span id="establishment-location-description" className={locationError ? 'field__error' : 'field__hint'}>
+            {locationError ?? 'Abre Google Maps, busca el establecimiento y pega aquí el enlace. Se guardará la ubicación para ordenar por cercanía.'}
+          </span>
+          <input className="sr-only" tabIndex={-1} aria-hidden="true" {...form.register('latitud')} />
+          <input className="sr-only" tabIndex={-1} aria-hidden="true" {...form.register('longitud')} />
+        </label>
+        <div className="form-section-heading form-grid__wide">
+          <strong>Redes y contacto público</strong>
+          <span>Agrega solo los perfiles que quieras mostrar. Usa URLs HTTPS reales del establecimiento.</span>
+        </div>
+        <label className="field social-field">
+          <span className="field__label">Instagram</span>
+          <span className="social-field__control"><Camera aria-hidden="true" /><input className={`field__control ${form.formState.errors.instagram_url ? 'field__control--error' : ''}`} placeholder="https://instagram.com/tu-cafeteria" {...form.register('instagram_url')} /></span>
+          {form.formState.errors.instagram_url?.message && <span className="field__error">{form.formState.errors.instagram_url.message}</span>}
+        </label>
+        <label className="field social-field">
+          <span className="field__label">Facebook</span>
+          <span className="social-field__control"><span className="social-field__brand" aria-hidden="true">f</span><input className={`field__control ${form.formState.errors.facebook_url ? 'field__control--error' : ''}`} placeholder="https://facebook.com/tu-cafeteria" {...form.register('facebook_url')} /></span>
+          {form.formState.errors.facebook_url?.message && <span className="field__error">{form.formState.errors.facebook_url.message}</span>}
+        </label>
+        <label className="field social-field">
+          <span className="field__label">TikTok</span>
+          <span className="social-field__control"><Music2 aria-hidden="true" /><input className={`field__control ${form.formState.errors.tiktok_url ? 'field__control--error' : ''}`} placeholder="https://tiktok.com/@tu-cafeteria" {...form.register('tiktok_url')} /></span>
+          {form.formState.errors.tiktok_url?.message && <span className="field__error">{form.formState.errors.tiktok_url.message}</span>}
+        </label>
+        <label className="field social-field">
+          <span className="field__label">WhatsApp</span>
+          <span className="social-field__control"><MessageCircle aria-hidden="true" /><input className={`field__control ${form.formState.errors.whatsapp_url ? 'field__control--error' : ''}`} placeholder="https://wa.me/521..." {...form.register('whatsapp_url')} /></span>
+          {form.formState.errors.whatsapp_url?.message && <span className="field__error">{form.formState.errors.whatsapp_url.message}</span>}
+        </label>
+        <label className="field social-field">
+          <span className="field__label">Sitio web</span>
+          <span className="social-field__control"><Globe2 aria-hidden="true" /><input className={`field__control ${form.formState.errors.sitio_web_url ? 'field__control--error' : ''}`} placeholder="https://tusitio.com" {...form.register('sitio_web_url')} /></span>
+          {form.formState.errors.sitio_web_url?.message && <span className="field__error">{form.formState.errors.sitio_web_url.message}</span>}
+        </label>
         <div className="form-actions">
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" loading={mutation.isPending}>{mode === 'create' ? 'Crear' : 'Guardar cambios'}</Button>
+          <Button type="submit" loading={mutation.isPending || imageUploading}>{mode === 'create' ? 'Crear' : 'Guardar cambios'}</Button>
         </div>
       </form>
     </Modal>
