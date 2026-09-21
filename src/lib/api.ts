@@ -635,6 +635,16 @@ export const api = {
     ).data;
   },
 
+  async resolveMapsLink(token: string, url: string): Promise<{ latitud: number; longitud: number }> {
+    return (
+      await request<{ latitud: number; longitud: number }>('/plataforma/establecimientos/resolver-maps', {
+        method: 'POST',
+        token,
+        body: { url },
+      })
+    ).data;
+  },
+
   async linkExistingPlatformStripe(
     token: string,
     id: string,

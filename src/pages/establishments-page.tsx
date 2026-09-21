@@ -753,7 +753,7 @@ function EstablishmentFormModal({
     setPreviewUrl(URL.createObjectURL(file));
   }
 
-  function updateLocation(value: string) {
+  async function updateLocation(value: string) {
     setLocationInput(value);
     if (!value.trim()) {
       setLocationError(null);
@@ -763,7 +763,19 @@ function EstablishmentFormModal({
     }
     const coordinates = parseLocationCoordinates(value);
     if (!coordinates) {
-      setLocationError('Pega un enlace de Google Maps que incluya la ubicación o captura las coordenadas avanzadas.');
+      if (!/^https:\/\/(?:maps\.app\.goo\.gl|goo\.gl|(?:www\.)?google\.com)\//i.test(value.trim())) {
+        setLocationError('Pega un enlace HTTPS de Google Maps o captura las coordenadas avanzadas.');
+        return;
+      }
+      setLocationError('Resolviendo ubicación de Google Maps…');
+      try {
+        const resolved = await api.resolveMapsLink(token, value.trim());
+        form.setValue('latitud', String(resolved.latitud), { shouldValidate: true });
+        form.setValue('longitud', String(resolved.longitud), { shouldValidate: true });
+        setLocationError(null);
+      } catch {
+        setLocationError('No pude resolver ese enlace. Usa Compartir > Copiar enlace en Google Maps, o captura las coordenadas.');
+      }
       return;
     }
     setLocationError(null);
@@ -772,8 +784,8 @@ function EstablishmentFormModal({
   }
 
   function submitForm(data: EstablishmentForm) {
-    if (locationInput.trim() && !parseLocationCoordinates(locationInput)) {
-      setLocationError('No pude leer las coordenadas de ese enlace. Usa un enlace completo de Google Maps.');
+    if (locationInput.trim() && !parseLocationCoordinates(locationInput) && (!form.getValues('latitud') || !form.getValues('longitud'))) {
+      setLocationError('Espera a que termine la resolución del enlace de Google Maps o captura las coordenadas.');
       return;
     }
     mutation.mutate(data);
