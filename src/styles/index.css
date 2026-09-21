@@ -3143,6 +3143,35 @@ tbody tr:last-child td {
   gap: 12px;
 }
 
+.establishment-card__media {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border-radius: 18px;
+  background: var(--color-lime);
+}
+
+.establishment-card__media .establishment-card__icon,
+.establishment-card__media img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.establishment-card__media .establishment-card__icon {
+  display: grid;
+  place-items: center;
+}
+
+.establishment-card__media img {
+  z-index: 1;
+  display: block;
+  object-fit: cover;
+}
+
 .establishment-card__icon {
   background: var(--color-lime);
 }

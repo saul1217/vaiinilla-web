@@ -386,7 +386,16 @@ export function EstablishmentsPage() {
               key={establishment.id}
             >
               <div className="establishment-card__header">
-                <span className="establishment-card__icon"><Building2 aria-hidden="true" /></span>
+                <div className="establishment-card__media">
+                  <span className="establishment-card__icon"><Building2 aria-hidden="true" /></span>
+                  {establishment.imagen_url && (
+                    <img
+                      src={establishment.imagen_url}
+                      alt={`Imagen de ${establishment.nombre}`}
+                      onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                    />
+                  )}
+                </div>
                 <EstablishmentStatusBadge status={establishment.estado} />
               </div>
               <h2>{establishment.nombre}</h2>
