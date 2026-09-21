@@ -188,6 +188,8 @@ export interface OrderDetail {
     matricula: string | null;
   } | null;
   items: OrderItem[];
+  vence_operacion_en?: string | null;
+  motivo_pendiente_operativo?: 'caja_inactiva' | 'cocina_inactiva' | null;
 }
 
 export interface CashPaymentResult {
@@ -416,6 +418,17 @@ export interface PlatformEstablishment {
   hora_cierre_forzado: string;
   identificador_cliente_etiqueta: string;
   identificador_cliente_obligatorio: boolean;
+  descripcion?: string | null;
+  imagen_url?: string | null;
+  direccion?: string | null;
+  horario?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
+  instagram_url?: string | null;
+  facebook_url?: string | null;
+  tiktok_url?: string | null;
+  whatsapp_url?: string | null;
+  sitio_web_url?: string | null;
   estado: 'activo' | 'suspendido';
   suspendido_en: string | null;
   motivo_suspension: string | null;
@@ -430,6 +443,17 @@ export interface EstablishmentInput {
   hora_cierre_forzado: string;
   identificador_cliente_etiqueta: string;
   identificador_cliente_obligatorio: boolean;
+  descripcion?: string | null;
+  imagen_url?: string | null;
+  direccion?: string | null;
+  horario?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
+  instagram_url?: string | null;
+  facebook_url?: string | null;
+  tiktok_url?: string | null;
+  whatsapp_url?: string | null;
+  sitio_web_url?: string | null;
 }
 
 export interface CatalogCategory {

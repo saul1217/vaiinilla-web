@@ -618,6 +618,23 @@ export const api = {
     ).data;
   },
 
+  async uploadEstablishmentImage(
+    token: string,
+    id: string,
+    file: File,
+  ): Promise<PlatformEstablishment> {
+    const body = new FormData();
+    body.append('imagen', file);
+    return (
+      await request<PlatformEstablishment>(`/plataforma/establecimientos/${id}/imagen`, {
+        method: 'PUT',
+        token,
+        idempotent: true,
+        body,
+      })
+    ).data;
+  },
+
   async linkExistingPlatformStripe(
     token: string,
     id: string,
