@@ -41,7 +41,7 @@ export function WaiterBoard({ token }: { token: string }) {
   const [openId, setOpenId] = useState<number | null>(null);
   const [delivering, setDelivering] = useState<BoardOrder | null>(null);
   const [qrToken, setQrToken] = useState('');
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -60,21 +60,30 @@ export function WaiterBoard({ token }: { token: string }) {
   const transition = useMutation({
     mutationFn: ({ call, target }: { call: TableCall; target: 'en_camino' | 'atendida' }) => client.transitionCall(call, target),
     onSuccess: async (_, variables) => {
-      setNotice(variables.target === 'en_camino' ? `Vas a ${variables.call.espacio.nombre}.` : `${variables.call.espacio.nombre} atendida.`);
+      setNotice({
+        tone: 'success',
+        text: variables.target === 'en_camino' ? `Vas a ${variables.call.espacio.nombre}.` : `${variables.call.espacio.nombre} atendida.`,
+      });
       if (variables.target === 'atendida') setOpenId(null);
       await queryClient.invalidateQueries({ queryKey: ['mesero-board'] });
     },
-    onError: (error) => setNotice(errorMessage(error)),
+    // Another waiter may have taken or closed the call (409): show why and reload the board.
+    onError: async (error) => {
+      setNotice({ tone: 'error', text: errorMessage(error) });
+      await queryClient.invalidateQueries({ queryKey: ['mesero-board'] });
+    },
   });
 
   const deliverMutation = useMutation({
     mutationFn: ({ order, qr }: { order: BoardOrder; qr: string }) => api.deliverOrder(token, order.id, order.version, qr),
     onSuccess: async (updated) => {
-      setNotice(`Pedido ${updated.folio} entregado.`);
+      setNotice({ tone: 'success', text: `Pedido ${updated.folio} entregado.` });
       setDelivering(null);
       setQrToken('');
       await queryClient.invalidateQueries({ queryKey: ['mesero-board'] });
     },
+    // A version conflict leaves `delivering` stale; the refetched board supplies the new version on retry.
+    onError: () => queryClient.invalidateQueries({ queryKey: ['mesero-board'] }),
   });
 
   const tables = useMemo(() => {
@@ -88,6 +97,9 @@ export function WaiterBoard({ token }: { token: string }) {
     return list;
   }, [board.data]);
 
+  const latestDelivering = delivering
+    ? tables.flatMap((table) => table.pedidos).find((order) => order.id === delivering.id) ?? delivering
+    : null;
   const open = tables.find((table) => table.espacio.id === openId) ?? null;
   const calling = tables.filter((table) => stateOf(table) === 'call').length;
   const ready = tables.reduce((sum, table) => sum + table.pedidos.filter((order) => order.estado === 'listo').length, 0);
@@ -126,7 +138,7 @@ export function WaiterBoard({ token }: { token: string }) {
         </Feedback>
       )}
       {board.isError && <Feedback tone="error">{errorMessage(board.error)}</Feedback>}
-      {notice && <Feedback tone="success">{notice}</Feedback>}
+      {notice && <Feedback tone={notice.tone}>{notice.text}</Feedback>}
 
       {board.isPending ? (
         <div className="mesero-grid" aria-hidden="true">
@@ -209,7 +221,7 @@ export function WaiterBoard({ token }: { token: string }) {
                     <p>{order.items_resumen}</p>
                   </div>
                   {order.estado === 'listo' ? (
-                    <Button variant="dark" onClick={() => { setDelivering(order); setQrToken(''); }}>
+                    <Button variant="dark" onClick={() => { deliverMutation.reset(); setDelivering(order); setQrToken(''); }}>
                       <ScanLine aria-hidden="true" className="size-5" /> Entregar
                     </Button>
                   ) : (
@@ -246,7 +258,7 @@ export function WaiterBoard({ token }: { token: string }) {
                 variant="dark"
                 loading={deliverMutation.isPending}
                 disabled={!qrToken.trim()}
-                onClick={() => deliverMutation.mutate({ order: delivering, qr: qrToken.trim() })}
+                onClick={() => latestDelivering && deliverMutation.mutate({ order: latestDelivering, qr: qrToken.trim() })}
               >
                 Confirmar entrega
               </Button>

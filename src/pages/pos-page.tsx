@@ -480,7 +480,7 @@ function QueueColumn({
 function pageTitle(role: string | undefined): string {
   if (role === 'cajero') return 'Caja y entrega de pedidos';
   if (role === 'cocina') return 'Conexión de Cocina';
-  if (role === 'mesero') return 'Conexión de Servicio en mesa';
+  if (role === 'mesero') return 'Servicio en mesa';
   return 'Sesión de Caja';
 }
 
@@ -492,7 +492,7 @@ function pageDescription(role: string | undefined): string {
     return 'Mantén esta ventana abierta para que el establecimiento detecte Cocina en línea.';
   }
   if (role === 'mesero') {
-    return 'Mantén esta ventana abierta para que el establecimiento detecte Servicio en mesa.';
+    return 'Atiende las mesas y entrega con QR los pedidos listos. Mantén esta ventana abierta.';
   }
   return 'Consulta, abre o cierra la sesión operativa del establecimiento.';
 }
