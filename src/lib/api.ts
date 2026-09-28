@@ -50,6 +50,9 @@ const usesDevelopmentFallback =
 const fallbackApiUrl = usesDevelopmentFallback ? developmentApiUrl : productionApiUrl;
 const apiUrl = (import.meta.env.VITE_API_URL || fallbackApiUrl).replace(/\/$/, '');
 
+/** Base URL of the backend API, for modules (e.g. mesero-api.ts) that need to fetch directly. */
+export { apiUrl };
+
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   token?: string;
   body?: unknown;

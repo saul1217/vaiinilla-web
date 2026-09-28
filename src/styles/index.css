@@ -6107,6 +6107,171 @@ tbody tr:last-child td {
   }
 }
 
+/* ---------- Mesero: tablero de mesas ---------- */
+.mesero-board {
+  display: grid;
+  gap: 18px;
+}
+
+.mesero-summary {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+}
+
+.mesero-summary__item,
+.mesero-summary__item--call,
+.mesero-summary__item--ready {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--color-white-warm);
+}
+
+.mesero-summary__item--call {
+  border-color: var(--color-danger);
+  color: var(--color-danger-dark);
+}
+
+.mesero-summary__item--ready {
+  border-color: var(--color-lime-dark);
+  color: var(--color-lime-dark);
+}
+
+.mesero-summary dt {
+  font-size: 0.8rem;
+  color: inherit;
+}
+
+.mesero-summary dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.mesero-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.mesero-tile {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  min-height: 96px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--color-white-warm);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+
+.mesero-tile:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.mesero-tile:active {
+  transform: scale(0.98);
+}
+
+.mesero-tile small {
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
+
+.mesero-tile--ready {
+  border-color: var(--color-lime-dark);
+  background: color-mix(in srgb, var(--color-lime) 22%, var(--color-white-warm));
+}
+
+.mesero-tile--active {
+  border-color: var(--line-strong);
+}
+
+.mesero-tile--call {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  animation: mesero-call 1.2s ease-in-out infinite;
+}
+
+.mesero-tile--skeleton {
+  background: linear-gradient(90deg, var(--color-cream-2) 25%, var(--color-cream-3) 37%, var(--color-cream-2) 63%);
+  background-size: 400% 100%;
+  animation: mesero-skeleton 1.4s ease infinite;
+  cursor: default;
+}
+
+@keyframes mesero-call {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(159, 47, 37, 0.28); }
+  50% { box-shadow: 0 0 0 8px rgba(159, 47, 37, 0); }
+}
+
+@keyframes mesero-skeleton {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.mesero-sheet {
+  display: grid;
+  gap: 16px;
+}
+
+.mesero-call {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.mesero-call--en_camino {
+  border-color: var(--line-strong);
+  background: var(--color-cream-2);
+}
+
+.mesero-call p {
+  margin: 2px 0 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.mesero-orders {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mesero-orders li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--color-white-warm);
+}
+
+.mesero-orders p {
+  margin: 2px 0 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.mesero-orders__empty {
+  color: var(--color-muted);
+  justify-content: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
