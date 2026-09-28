@@ -17,6 +17,7 @@ import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { OrderCard, OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { WaiterBoard } from '../components/waiter-board';
 import { useSessions } from '../context/session-context';
 import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
@@ -192,6 +193,10 @@ export function PosPage() {
         </section>
       )}
 
+      {role === 'mesero' && <WaiterBoard token={token} />}
+
+      {role !== 'mesero' && (
+      <>
       <section className={`cash-hero ${active ? 'cash-hero--open' : ''}`}>
         <div className="cash-hero__icon"><WalletCards aria-hidden="true" /></div>
         <div>
@@ -275,6 +280,8 @@ export function PosPage() {
             <Button type="submit" loading={openMutation.isPending}>Abrir Caja</Button>
           </form>
         </section>
+      )}
+      </>
       )}
 
       {role === 'admin' && (
@@ -473,7 +480,7 @@ function QueueColumn({
 function pageTitle(role: string | undefined): string {
   if (role === 'cajero') return 'Caja y entrega de pedidos';
   if (role === 'cocina') return 'Conexión de Cocina';
-  if (role === 'mesero') return 'Conexión de Servicio en mesa';
+  if (role === 'mesero') return 'Servicio en mesa';
   return 'Sesión de Caja';
 }
 
@@ -485,7 +492,7 @@ function pageDescription(role: string | undefined): string {
     return 'Mantén esta ventana abierta para que el establecimiento detecte Cocina en línea.';
   }
   if (role === 'mesero') {
-    return 'Mantén esta ventana abierta para que el establecimiento detecte Servicio en mesa.';
+    return 'Atiende las mesas y entrega con QR los pedidos listos. Mantén esta ventana abierta.';
   }
   return 'Consulta, abre o cierra la sesión operativa del establecimiento.';
 }
