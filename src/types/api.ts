@@ -442,8 +442,8 @@ export interface EstablishmentInput {
   slug: string;
   zona_horaria: string;
   hora_cierre_forzado: string;
-  identificador_cliente_etiqueta: string;
-  identificador_cliente_obligatorio: boolean;
+  identificador_cliente_etiqueta?: string;
+  identificador_cliente_obligatorio?: boolean;
   descripcion?: string | null;
   imagen_url?: string | null;
   direccion?: string | null;

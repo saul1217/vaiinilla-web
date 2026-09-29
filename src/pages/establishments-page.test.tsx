@@ -237,3 +237,31 @@ describe('onboarding Stripe en Super Admin', () => {
     });
   });
 });
+
+describe('crear establecimiento en Super Admin', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMock.getPlatformStripeConfiguration.mockResolvedValue(null);
+  });
+
+  it('elige el tipo y no pide ni envía el identificador del cliente', async () => {
+    const user = userEvent.setup();
+    apiMock.createEstablishment.mockResolvedValue({ ...establishment, tipo: 'padel' });
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Crear establecimiento/ }));
+    expect(screen.queryByLabelText('Etiqueta del identificador')).not.toBeInTheDocument();
+    expect(screen.queryByText('Identificador obligatorio')).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Nombre'), 'Pádel Norte');
+    await user.type(screen.getByLabelText(/Slug/), 'padel-norte');
+    await user.selectOptions(screen.getByLabelText('Tipo'), 'padel');
+    await user.click(screen.getByRole('button', { name: 'Crear' }));
+
+    await waitFor(() => expect(apiMock.createEstablishment).toHaveBeenCalledTimes(1));
+    const input = apiMock.createEstablishment.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(input).toMatchObject({ nombre: 'Pádel Norte', slug: 'padel-norte', tipo: 'padel' });
+    expect(input).not.toHaveProperty('identificador_cliente_etiqueta');
+    expect(input).not.toHaveProperty('identificador_cliente_obligatorio');
+  });
+});
