@@ -429,6 +429,7 @@ export interface PlatformEstablishment {
   tiktok_url?: string | null;
   whatsapp_url?: string | null;
   sitio_web_url?: string | null;
+  tipo?: EstablishmentType;
   estado: 'activo' | 'suspendido';
   suspendido_en: string | null;
   motivo_suspension: string | null;
@@ -454,7 +455,10 @@ export interface EstablishmentInput {
   tiktok_url?: string | null;
   whatsapp_url?: string | null;
   sitio_web_url?: string | null;
+  tipo?: EstablishmentType;
 }
+
+export type EstablishmentType = 'cafeteria' | 'restaurante' | 'padel';
 
 export interface CatalogCategory {
   id: number;
