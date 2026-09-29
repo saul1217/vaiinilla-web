@@ -134,6 +134,15 @@ function profileInput(data: EstablishmentForm) {
   };
 }
 
+// Al crear no se pide identificador del cliente: el backend usa los defaults
+// ('Identificador', no obligatorio). Se sigue pudiendo configurar después.
+function createInput(data: EstablishmentForm) {
+  const input = profileInput(data);
+  delete (input as Partial<typeof input>).identificador_cliente_etiqueta;
+  delete (input as Partial<typeof input>).identificador_cliente_obligatorio;
+  return input;
+}
+
 function locationLink(latitud: string, longitud: string): string {
   return latitud && longitud
     ? `https://www.google.com/maps/@${latitud},${longitud},16z`
@@ -711,8 +720,8 @@ function EstablishmentFormModal({
         slug: '',
         zona_horaria: 'America/Mexico_City',
         hora_cierre_forzado: '18:00:00',
-        identificador_cliente_etiqueta: 'Matrícula',
-        identificador_cliente_obligatorio: true,
+        identificador_cliente_etiqueta: 'Identificador',
+        identificador_cliente_obligatorio: false,
         descripcion: '',
         imagen_url: '',
         direccion: '',
@@ -735,7 +744,7 @@ function EstablishmentFormModal({
   const mutation = useMutation({
     mutationFn: (input: EstablishmentForm) =>
       mode === 'create'
-        ? api.createEstablishment(token, profileInput(input))
+        ? api.createEstablishment(token, createInput(input))
         : api.updateEstablishment(token, establishment?.id ?? '', profileInput(input)),
     onSuccess: async (saved) => {
       if (selectedImage) {
@@ -858,11 +867,15 @@ function EstablishmentFormModal({
           </optgroup>
         </SelectField>
         <Field label="Cierre forzado" inputMode="numeric" error={form.formState.errors.hora_cierre_forzado?.message} {...form.register('hora_cierre_forzado')} />
-        <Field label="Etiqueta del identificador" error={form.formState.errors.identificador_cliente_etiqueta?.message} {...form.register('identificador_cliente_etiqueta')} />
-        <label className="checkbox-field">
-          <input type="checkbox" {...form.register('identificador_cliente_obligatorio')} />
-          <span><strong>Identificador obligatorio</strong><small>El cliente deberá capturarlo para completar su contexto.</small></span>
-        </label>
+        {mode === 'edit' && (
+          <>
+            <Field label="Etiqueta del identificador" error={form.formState.errors.identificador_cliente_etiqueta?.message} {...form.register('identificador_cliente_etiqueta')} />
+            <label className="checkbox-field">
+              <input type="checkbox" {...form.register('identificador_cliente_obligatorio')} />
+              <span><strong>Identificador obligatorio</strong><small>El cliente deberá capturarlo para completar su contexto.</small></span>
+            </label>
+          </>
+        )}
         <div className="form-section-heading form-grid__wide">
           <strong>Perfil que verá el comprador</strong>
           <span>Esta información aparecerá al descubrir el establecimiento en Vaiinilla.</span>
