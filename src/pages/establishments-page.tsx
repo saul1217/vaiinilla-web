@@ -31,7 +31,7 @@ import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { VaiinillaApiError, errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
-import type { PlatformEstablishment, PlatformStripeSummary } from '../types/api';
+import type { EstablishmentType, PlatformEstablishment, PlatformStripeSummary } from '../types/api';
 
 const MEXICO_TIME_ZONES = [
   { value: 'America/Mexico_City', label: 'Ciudad de México y zona centro' },
@@ -88,6 +88,7 @@ const establishmentSchema = z.object({
   tiktok_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
   whatsapp_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
   sitio_web_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
+  tipo: z.enum(['cafeteria', 'restaurante', 'padel']),
 }).superRefine((data, context) => {
   if ((data.latitud === '') !== (data.longitud === '')) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['latitud'], message: 'Captura latitud y longitud juntas.' });
@@ -103,6 +104,16 @@ const emailSchema = z.object({ email: z.string().email('Captura un correo válid
 type EstablishmentForm = z.infer<typeof establishmentSchema>;
 type ReasonForm = z.infer<typeof reasonSchema>;
 type EmailForm = z.infer<typeof emailSchema>;
+
+const ESTABLISHMENT_TYPES: { value: EstablishmentType; label: string }[] = [
+  { value: 'cafeteria', label: 'Cafetería' },
+  { value: 'restaurante', label: 'Restaurante' },
+  { value: 'padel', label: 'Pádel' },
+];
+
+function establishmentTypeLabel(tipo: EstablishmentType | undefined): string {
+  return ESTABLISHMENT_TYPES.find(({ value }) => value === (tipo ?? 'cafeteria'))?.label ?? 'Cafetería';
+}
 
 function profileInput(data: EstablishmentForm) {
   const latitud = data.latitud === '' ? null : Number(data.latitud);
@@ -401,6 +412,7 @@ export function EstablishmentsPage() {
               <h2>{establishment.nombre}</h2>
               <p className="establishment-card__slug">/{establishment.slug}</p>
               <dl className="establishment-card__details">
+                <div><dt>Tipo</dt><dd>{establishmentTypeLabel(establishment.tipo)}</dd></div>
                 <div><dt>Zona horaria</dt><dd>{establishment.zona_horaria}</dd></div>
                 <div><dt>Cierre forzado</dt><dd>{establishment.hora_cierre_forzado}</dd></div>
                 <div><dt>Identificador</dt><dd>{establishment.identificador_cliente_etiqueta}{establishment.identificador_cliente_obligatorio ? ' · obligatorio' : ''}</dd></div>
@@ -692,6 +704,7 @@ function EstablishmentFormModal({
         tiktok_url: establishment.tiktok_url ?? '',
         whatsapp_url: establishment.whatsapp_url ?? '',
         sitio_web_url: establishment.sitio_web_url ?? '',
+        tipo: establishment.tipo ?? 'cafeteria',
       }
     : {
         nombre: '',
@@ -711,6 +724,7 @@ function EstablishmentFormModal({
         tiktok_url: '',
         whatsapp_url: '',
         sitio_web_url: '',
+        tipo: 'cafeteria',
       };
 
   const form = useForm<EstablishmentForm>({ resolver: zodResolver(establishmentSchema), values: defaults });
@@ -821,6 +835,11 @@ function EstablishmentFormModal({
       <form className="form-grid" onSubmit={(event) => void form.handleSubmit(submitForm)(event)}>
         <Field label="Nombre" error={form.formState.errors.nombre?.message} {...form.register('nombre')} />
         <Field label="Slug" hint="Ejemplo: cafeteria-centro" error={form.formState.errors.slug?.message} {...form.register('slug')} />
+        <SelectField label="Tipo" error={form.formState.errors.tipo?.message} {...form.register('tipo')}>
+          {ESTABLISHMENT_TYPES.map(({ value, label }) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </SelectField>
         <SelectField
           label="Zona horaria"
           hint="Selecciona la ciudad más cercana; se usa para cierres, reportes y cashback."
