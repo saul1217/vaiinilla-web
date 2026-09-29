@@ -9,5 +9,8 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: true,
+    env: {
+      VITE_API_URL: 'https://vaiinillaback-development.up.railway.app/api/v1',
+    },
   },
 });

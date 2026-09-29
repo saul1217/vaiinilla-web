@@ -39,16 +39,17 @@ import type {
   SpaceType,
 } from '../types/api';
 
-const developmentApiUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
-const productionApiUrl = 'https://vaiinillaback.up.railway.app/api/v1';
-const hostname = typeof window === 'undefined' ? '' : window.location.hostname;
-const usesDevelopmentFallback =
-  hostname === '' ||
-  hostname === 'dev.vaiinilla.app' ||
-  hostname === 'localhost' ||
-  hostname === '127.0.0.1';
-const fallbackApiUrl = usesDevelopmentFallback ? developmentApiUrl : productionApiUrl;
-const apiUrl = (import.meta.env.VITE_API_URL || fallbackApiUrl).replace(/\/$/, '');
+// La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
+// Vercel para cada ambiente (Production → app, Preview → dev.vaiinilla.app y PRs).
+export function resolveApiUrl(envUrl: string | undefined): string {
+  const url = envUrl?.trim().replace(/\/$/, '');
+  if (!url) {
+    throw new Error('Falta VITE_API_URL: configúrala en .env.development o en Vercel.');
+  }
+  return url;
+}
+
+const apiUrl = resolveApiUrl(import.meta.env.VITE_API_URL);
 
 /** Base URL of the backend API, for modules (e.g. mesero-api.ts) that need to fetch directly. */
 export { apiUrl };
