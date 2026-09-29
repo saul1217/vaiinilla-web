@@ -8,7 +8,7 @@ import { Button, EmptyState, Feedback, Modal } from './ui';
 import { OrderStatusBadge } from './status-badge';
 import { QrTokenField } from './qr-token-field';
 import { api } from '../lib/api';
-import { errorMessage } from '../lib/api-error';
+import { errorMessage, VaiinillaApiError } from '../lib/api-error';
 import {
   CALL_REASON_LABEL,
   createWaiterClient,
@@ -64,7 +64,12 @@ export function WaiterBoard({ token }: { token: string }) {
       if (variables.target === 'atendida') setOpenId(null);
       await queryClient.invalidateQueries({ queryKey: ['mesero-board'] });
     },
-    onError: (error) => setNotice(errorMessage(error)),
+    onError: async (error) => {
+      setNotice(errorMessage(error));
+      if (error instanceof VaiinillaApiError && error.code === 'VERSION_CONFLICT') {
+        await queryClient.invalidateQueries({ queryKey: ['mesero-board'] });
+      }
+    },
   });
 
   const deliverMutation = useMutation({
