@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Download, ExternalLink, Link2, Pencil, Plus, RefreshCw, RotateCw, Store, Table2 } from 'lucide-react';
+import { CalendarClock, Copy, Download, ExternalLink, Link2, Pencil, Plus, RefreshCw, RotateCw, Store, Table2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button, Feedback, Field, PageHeader, SelectField } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
-import type { ManagedSpace, SpaceType } from '../types/api';
+import { parseHourlyPrice } from '../lib/hourly-price';
+import type { BookingSettingsInput, ManagedSpace, SpaceType } from '../types/api';
 
 const typeLabels: Record<SpaceType, string> = {
   mesa: 'Mesa',
@@ -15,18 +16,150 @@ const typeLabels: Record<SpaceType, string> = {
   drive_thru: 'Drive-thru',
 };
 
+function HourlyPrice({ space, onSave }: { space: ManagedSpace; onSave: (price: string | null) => void }) {
+  const [edited, setEdited] = useState<string | null>(null);
+  const draft = edited ?? space.precio_hora ?? '';
+  const setDraft = setEdited;
+  const parsed = parseHourlyPrice(draft);
+  const changed = parsed !== undefined && parsed !== space.precio_hora;
+  return (
+    <form
+      className="grid gap-2 rounded-2xl bg-cream p-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (changed) onSave(parsed);
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+        <Field
+          label="Precio por hora (MXN)"
+          name={`precio-hora-${space.id}`}
+          inputMode="decimal"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Sin precio"
+          error={parsed === undefined ? 'Escribe un monto mayor a 0, por ejemplo 300 o 300.50.' : undefined}
+          hint={
+            space.precio_hora
+              ? 'Tus clientes y tu personal pueden rentar esta cancha. Déjalo vacío para dejar de rentarla.'
+              : 'Sin precio, la cancha no se renta: se abre y se cierra a mano, como antes.'
+          }
+        />
+        <Button type="submit" disabled={!changed}>
+          Guardar precio
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function BookingSettingsCard() {
+  const { tenant } = useSessions();
+  const token = tenant?.token ?? '';
+  const scopeId = tenant?.context.establecimiento_id ?? '';
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState<{ apertura: string; cierre: string; dias: string } | null>(null);
+  const [saved, setSaved] = useState(false);
+  const settings = useQuery({
+    queryKey: ['booking-settings', scopeId],
+    enabled: Boolean(token),
+    queryFn: () => api.bookingSettings(token),
+  });
+  const save = useMutation({
+    mutationFn: (input: BookingSettingsInput) => api.saveBookingSettings(token, input),
+    onSuccess: () => {
+      setDraft(null);
+      setSaved(true);
+      void queryClient.invalidateQueries({ queryKey: ['booking-settings', scopeId] });
+    },
+  });
+  const current = settings.data;
+  const values = draft ?? (current ? { apertura: current.apertura, cierre: current.cierre, dias: String(current.dias_adelanto) } : null);
+  const days = values ? Number(values.dias) : NaN;
+  const invalid = !values || values.cierre <= values.apertura || !Number.isInteger(days) || days < 0 || days > 60;
+  const changed =
+    Boolean(draft) && current !== undefined &&
+    (draft?.apertura !== current.apertura || draft?.cierre !== current.cierre || Number(draft?.dias) !== current.dias_adelanto);
+  return (
+    <section className="panel-card" aria-labelledby="booking-settings-title">
+      <div className="mb-5 flex items-start gap-3">
+        <span className="grid size-11 place-items-center rounded-2xl bg-ink text-white-warm">
+          <CalendarClock aria-hidden="true" />
+        </span>
+        <div>
+          <h2 id="booking-settings-title" className="text-xl font-extrabold text-ink">
+            Horario de reservas
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Las canchas con precio se rentan dentro de este horario{current ? ` (hora de ${current.zona_horaria})` : ''}.
+          </p>
+        </div>
+      </div>
+      {settings.isError && <Feedback tone="error">{errorMessage(settings.error)}</Feedback>}
+      {save.isError && <Feedback tone="error">{errorMessage(save.error)}</Feedback>}
+      {saved && !save.isError && <Feedback tone="success">Horario guardado.</Feedback>}
+      {values && (
+        <form
+          className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSaved(false);
+            if (!invalid && changed) save.mutate({ apertura: values.apertura, cierre: values.cierre, dias_adelanto: days });
+          }}
+        >
+          <Field
+            label="Abre"
+            name="booking-open"
+            type="time"
+            value={values.apertura}
+            onChange={(event) => setDraft({ ...values, apertura: event.target.value })}
+            required
+          />
+          <Field
+            label="Cierra"
+            name="booking-close"
+            type="time"
+            value={values.cierre}
+            onChange={(event) => setDraft({ ...values, cierre: event.target.value })}
+            error={values.cierre <= values.apertura ? 'Debe cerrar después de abrir.' : undefined}
+            required
+          />
+          <Field
+            label="Días de anticipación"
+            name="booking-days"
+            type="number"
+            min={0}
+            max={60}
+            value={values.dias}
+            onChange={(event) => setDraft({ ...values, dias: event.target.value })}
+            required
+          />
+          <Button type="submit" loading={save.isPending} disabled={invalid || !changed}>
+            Guardar horario
+          </Button>
+        </form>
+      )}
+      <p className="mt-3 text-xs leading-5 text-muted">
+        Días de anticipación: cuántos días adelante se puede reservar (de 0 a 60).
+      </p>
+    </section>
+  );
+}
+
 function SpaceCard({
   space,
   onToggle,
   onRotate,
   onRename,
   onChangeType,
+  onChangePrice,
 }: {
   space: ManagedSpace;
   onToggle: () => void;
   onRotate: () => void;
   onRename: (nombre: string) => void;
   onChangeType: (tipo: SpaceType) => void;
+  onChangePrice: (price: string | null) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
@@ -117,6 +250,7 @@ function SpaceCard({
         <option value="cancha">Cancha</option>
         <option value="drive_thru">Drive-thru</option>
       </SelectField>
+      {space.tipo === 'cancha' && <HourlyPrice key={space.precio_hora ?? ''} space={space} onSave={onChangePrice} />}
       <div className="flex items-center gap-4 rounded-2xl bg-cream p-4">
         {qr && <img src={qr} alt={`Código QR de ${space.nombre}`} width="96" height="96" className="size-24 rounded-xl" />}
         <div className="min-w-0 flex-1">
@@ -180,7 +314,7 @@ export function SpacesPage() {
     },
   });
   const update = useMutation({
-    mutationFn: ({ id, ...input }: { id: number; nombre?: string; tipo?: SpaceType; activo?: boolean }) =>
+    mutationFn: ({ id, ...input }: { id: number; nombre?: string; tipo?: SpaceType; activo?: boolean; precio_hora?: string | null }) =>
       api.updateSpace(token, id, input),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
   });
@@ -236,6 +370,7 @@ export function SpacesPage() {
           </Button>
         </form>
       </section>
+      {spaces.data?.some((space) => space.tipo === 'cancha') && <BookingSettingsCard />}
       <section className="space-y-4" aria-labelledby="spaces-list-title">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -268,6 +403,7 @@ export function SpacesPage() {
               onRotate={() => rotate.mutate(space.id)}
               onRename={(nombre) => update.mutate({ id: space.id, nombre })}
               onChangeType={(tipo) => update.mutate({ id: space.id, tipo })}
+              onChangePrice={(precio_hora) => update.mutate({ id: space.id, precio_hora })}
             />
           ))}
         </div>

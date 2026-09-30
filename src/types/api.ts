@@ -371,6 +371,21 @@ export interface ManagedSpace {
   tipo: SpaceType;
   activo: boolean;
   qr_url: string;
+  /** Precio por hora para rentar la cancha ("300.00"); null = no se renta. */
+  precio_hora: string | null;
+}
+
+export interface BookingSettings {
+  apertura: string;
+  cierre: string;
+  dias_adelanto: number;
+  zona_horaria: string;
+}
+
+export interface BookingSettingsInput {
+  apertura: string;
+  cierre: string;
+  dias_adelanto: number;
 }
 
 export type StripeOnboardingStatus =
