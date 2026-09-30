@@ -10,6 +10,8 @@ const apiMock = vi.hoisted(() => ({
   createSpace: vi.fn(),
   updateSpace: vi.fn(),
   rotateSpaceQr: vi.fn(),
+  uploadSpaceImage: vi.fn(),
+  deleteSpaceImage: vi.fn(),
   bookingSettings: vi.fn(),
   saveBookingSettings: vi.fn(),
 }));
@@ -22,7 +24,17 @@ vi.mock('../context/session-context', () => ({
 }));
 vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,AAAA') } }));
 
-const court = { id: 7, nombre: 'Cancha 1', tipo: 'cancha', activo: true, qr_url: 'https://vaiinilla.app/x/m/1', precio_hora: '300.00' };
+const court = {
+  id: 7,
+  nombre: 'Cancha 1',
+  tipo: 'cancha',
+  activo: true,
+  qr_url: 'https://vaiinilla.app/x/m/1',
+  precio_hora: '300.00',
+  descripcion: null,
+  imagen_url: null,
+  caracteristicas: ['Techada'],
+};
 const table = { id: 3, nombre: 'Mesa 1', tipo: 'mesa', activo: true, qr_url: 'https://vaiinilla.app/x/m/2', precio_hora: null };
 const settings = { apertura: '07:00', cierre: '23:00', dias_adelanto: 14, zona_horaria: 'America/Chihuahua' };
 
@@ -92,5 +104,41 @@ describe('reservas de canchas en el panel', () => {
     await screen.findByText('Mesa 1');
     expect(screen.queryByText('Horario de reservas')).not.toBeInTheDocument();
     expect(apiMock.bookingSettings).not.toHaveBeenCalled();
+  });
+
+  it('guarda la ficha de la cancha: descripción y características', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.type(await screen.findByLabelText('Descripción'), 'Cancha de vidrio');
+    await user.type(screen.getByLabelText('Nueva característica'), 'con luz{Enter}');
+    await user.type(screen.getByLabelText('Nueva característica'), 'techada{Enter}');
+    await user.click(screen.getByRole('button', { name: '+ Vidrio panorámico' }));
+    await user.click(screen.getByRole('button', { name: 'Quitar Techada' }));
+    await user.click(screen.getByRole('button', { name: 'Guardar ficha' }));
+    await waitFor(() =>
+      expect(apiMock.updateSpace).toHaveBeenCalledWith('tenant-token', 7, {
+        descripcion: 'Cancha de vidrio',
+        caracteristicas: ['con luz', 'Vidrio panorámico'],
+      }),
+    );
+  });
+
+  it('sube la foto de la cancha y rechaza formatos no permitidos', async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    apiMock.uploadSpaceImage.mockReset().mockResolvedValue({ ...court, imagen_url: 'https://x/foto.jpg' });
+    render(<SpacesPage />, { wrapper: TestProvider });
+    const input = await screen.findByLabelText('Elegir foto de Cancha 1');
+    await user.upload(input, new File(['gif'], 'foto.gif', { type: 'image/gif' }));
+    expect(await screen.findByText('La foto debe ser JPG, PNG o WebP.')).toBeInTheDocument();
+    const photo = new File(['jpg'], 'foto.jpg', { type: 'image/jpeg' });
+    await user.upload(input, photo);
+    await waitFor(() => expect(apiMock.uploadSpaceImage).toHaveBeenCalledWith('tenant-token', 7, photo));
+  });
+
+  it('una mesa no muestra la ficha', async () => {
+    apiMock.listManagedSpaces.mockResolvedValue([table]);
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await screen.findByText('Mesa 1');
+    expect(screen.queryByText('Ficha de la cancha')).not.toBeInTheDocument();
   });
 });

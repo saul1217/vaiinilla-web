@@ -373,6 +373,19 @@ export interface ManagedSpace {
   qr_url: string;
   /** Precio por hora para rentar la cancha ("300.00"); null = no se renta. */
   precio_hora: string | null;
+  /** Ficha que ven los clientes antes de rentar. Opcional: un backend anterior no la manda. */
+  descripcion?: string | null;
+  imagen_url?: string | null;
+  caracteristicas?: string[];
+}
+
+export interface SpaceUpdateInput {
+  nombre?: string;
+  tipo?: SpaceType;
+  activo?: boolean;
+  precio_hora?: string | null;
+  descripcion?: string | null;
+  caracteristicas?: string[];
 }
 
 export interface BookingSettings {
