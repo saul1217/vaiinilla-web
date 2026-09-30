@@ -35,6 +35,8 @@ import type {
   StaffMembership,
   TenantContextResponse,
   TenantAnalytics,
+  BookingSettings,
+  BookingSettingsInput,
   ManagedSpace,
   SpaceType,
 } from '../types/api';
@@ -597,8 +599,20 @@ export const api = {
     return (await request<ManagedSpace>('/espacios', { method: 'POST', token, idempotent: true, body: input })).data;
   },
 
-  async updateSpace(token: string, id: number, input: { nombre?: string; tipo?: SpaceType; activo?: boolean }): Promise<ManagedSpace> {
+  async updateSpace(
+    token: string,
+    id: number,
+    input: { nombre?: string; tipo?: SpaceType; activo?: boolean; precio_hora?: string | null },
+  ): Promise<ManagedSpace> {
     return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, body: input })).data;
+  },
+
+  async bookingSettings(token: string): Promise<BookingSettings> {
+    return (await request<BookingSettings>('/reservas/configuracion', { token })).data;
+  },
+
+  async saveBookingSettings(token: string, input: BookingSettingsInput): Promise<BookingSettings> {
+    return (await request<BookingSettings>('/reservas/configuracion', { method: 'PUT', token, idempotent: true, body: input })).data;
   },
 
   async rotateSpaceQr(token: string, id: number): Promise<ManagedSpace> {
