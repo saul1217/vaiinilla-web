@@ -27,10 +27,7 @@ function HourlyPrice({ space, onSave }: { space: ManagedSpace; onSave: (price: s
       className="grid gap-2 rounded-2xl bg-cream p-4"
       onSubmit={(event) => {
         event.preventDefault();
-        if (changed) {
-          onSave(parsed);
-          setEdited(null);
-        }
+        if (changed) onSave(parsed);
       }}
     >
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
@@ -253,7 +250,7 @@ function SpaceCard({
         <option value="cancha">Cancha</option>
         <option value="drive_thru">Drive-thru</option>
       </SelectField>
-      {space.tipo === 'cancha' && <HourlyPrice space={space} onSave={onChangePrice} />}
+      {space.tipo === 'cancha' && <HourlyPrice key={space.precio_hora ?? ''} space={space} onSave={onChangePrice} />}
       <div className="flex items-center gap-4 rounded-2xl bg-cream p-4">
         {qr && <img src={qr} alt={`Código QR de ${space.nombre}`} width="96" height="96" className="size-24 rounded-xl" />}
         <div className="min-w-0 flex-1">
