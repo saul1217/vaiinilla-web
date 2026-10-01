@@ -38,6 +38,8 @@ import type {
   BookingSettings,
   BookingSettingsInput,
   ManagedSpace,
+  BusinessSettings,
+  BusinessSettingsInput,
   SpaceType,
 } from '../types/api';
 
@@ -605,6 +607,14 @@ export const api = {
     input: { nombre?: string; tipo?: SpaceType; activo?: boolean; precio_hora?: string | null },
   ): Promise<ManagedSpace> {
     return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, body: input })).data;
+  },
+
+  async businessSettings(token: string): Promise<BusinessSettings> {
+    return (await request<BusinessSettings>('/establecimiento/configuracion', { token })).data;
+  },
+
+  async saveBusinessSettings(token: string, input: BusinessSettingsInput): Promise<BusinessSettings> {
+    return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
   },
 
   async bookingSettings(token: string): Promise<BookingSettings> {

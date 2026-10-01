@@ -375,6 +375,17 @@ export interface ManagedSpace {
   precio_hora: string | null;
 }
 
+/** Cómo funciona el negocio (guía "Flujo de mi tienda"). Solo la administración. */
+export interface BusinessSettings {
+  tipo: string;
+  entrega_requiere_qr: boolean;
+  permite_pago_al_final: boolean;
+  gracia_liberacion_min: number;
+  tipos_disponibles: string[];
+}
+
+export type BusinessSettingsInput = Partial<Omit<BusinessSettings, 'tipos_disponibles'>>;
+
 export interface BookingSettings {
   apertura: string;
   cierre: string;
