@@ -1,13 +1,38 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, Copy, Download, ExternalLink, Link2, Pencil, Plus, RefreshCw, RotateCw, Store, Table2 } from 'lucide-react';
+import {
+  CalendarClock,
+  Copy,
+  Download,
+  ExternalLink,
+  ImageIcon,
+  Link2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  RotateCw,
+  Store,
+  Table2,
+  Trash2,
+  UploadCloud,
+  X,
+} from 'lucide-react';
 import QRCode from 'qrcode';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button, Feedback, Field, PageHeader, SelectField } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { parseHourlyPrice } from '../lib/hourly-price';
-import type { BookingSettingsInput, ManagedSpace, SpaceType } from '../types/api';
+import {
+  addFeature,
+  COURT_FEATURE_SUGGESTIONS,
+  MAX_DESCRIPTION_LENGTH,
+  MAX_FEATURE_LENGTH,
+  MAX_FEATURES,
+  removeFeature,
+  sameFeatures,
+} from '../lib/space-features';
+import type { BookingSettingsInput, ManagedSpace, SpaceType, SpaceUpdateInput } from '../types/api';
 
 const typeLabels: Record<SpaceType, string> = {
   mesa: 'Mesa',
@@ -47,6 +72,173 @@ function HourlyPrice({ space, onSave }: { space: ManagedSpace; onSave: (price: s
         />
         <Button type="submit" disabled={!changed}>
           Guardar precio
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** Foto, descripción y características que ven los clientes antes de rentar la cancha. */
+function SpaceProfile({
+  space,
+  saving,
+  onSave,
+  onUploadImage,
+  onRemoveImage,
+}: {
+  space: ManagedSpace;
+  saving: boolean;
+  onSave: (input: { descripcion: string | null; caracteristicas: string[] }) => void;
+  onUploadImage: (file: File) => void;
+  onRemoveImage: () => void;
+}) {
+  const imageInput = useRef<HTMLInputElement>(null);
+  const [description, setDescription] = useState(space.descripcion ?? '');
+  const savedDescription = space.descripcion ?? null;
+  const savedFeatures = space.caracteristicas ?? [];
+  const [features, setFeatures] = useState(savedFeatures);
+  const [draftFeature, setDraftFeature] = useState('');
+  const [imageError, setImageError] = useState<string | null>(null);
+  const changed =
+    (description.trim() || null) !== savedDescription || !sameFeatures(features, savedFeatures);
+  const full = features.length >= MAX_FEATURES;
+  const suggestions = COURT_FEATURE_SUGGESTIONS.filter(
+    (suggestion) => !features.some((feature) => feature.toLocaleLowerCase('es') === suggestion.toLocaleLowerCase('es')),
+  );
+
+  function chooseImage(file: File | undefined) {
+    if (!file) return;
+    if (!IMAGE_TYPES.includes(file.type)) return setImageError('La foto debe ser JPG, PNG o WebP.');
+    if (file.size > MAX_IMAGE_BYTES) return setImageError('La foto no puede pesar más de 5 MB.');
+    setImageError(null);
+    onUploadImage(file);
+  }
+
+  function addDraftFeature() {
+    setFeatures((current) => addFeature(current, draftFeature));
+    setDraftFeature('');
+  }
+
+  return (
+    <form
+      className="grid gap-4 rounded-2xl bg-cream p-4"
+      aria-label={`Ficha de ${space.nombre}`}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (changed) onSave({ descripcion: description.trim() || null, caracteristicas: features });
+      }}
+    >
+      <div>
+        <p className="text-sm font-extrabold text-ink">Ficha de la cancha</p>
+        <p className="mt-1 text-xs leading-5 text-muted">Tus clientes la ven antes de rentar. Todo es opcional.</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="grid aspect-[4/3] w-40 place-items-center overflow-hidden rounded-xl bg-white-warm">
+          {space.imagen_url ? (
+            <img src={space.imagen_url} alt={`Foto de ${space.nombre}`} className="size-full object-cover" />
+          ) : (
+            <ImageIcon aria-hidden="true" className="size-8 text-muted" />
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={() => imageInput.current?.click()}>
+            <UploadCloud aria-hidden="true" className="size-4" />
+            {space.imagen_url ? 'Cambiar foto' : 'Subir foto'}
+          </Button>
+          <input
+            ref={imageInput}
+            className="sr-only"
+            type="file"
+            aria-label={`Elegir foto de ${space.nombre}`}
+            accept={IMAGE_TYPES.join(',')}
+            onChange={(event) => {
+              chooseImage(event.currentTarget.files?.[0]);
+              event.currentTarget.value = '';
+            }}
+          />
+          {space.imagen_url && (
+            <Button type="button" variant="ghost" onClick={onRemoveImage}>
+              <Trash2 aria-hidden="true" className="size-4" /> Quitar foto
+            </Button>
+          )}
+        </div>
+        {imageError && (
+          <p className="field__error w-full" role="alert">
+            {imageError}
+          </p>
+        )}
+      </div>
+      <label className="field">
+        <span className="field__label">Descripción</span>
+        <textarea
+          className="field__control min-h-20 resize-y"
+          name={`descripcion-${space.id}`}
+          maxLength={MAX_DESCRIPTION_LENGTH}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="Cancha techada de vidrio, a un lado de la barra."
+        />
+      </label>
+      <div className="grid gap-2">
+        <span className="field__label">Características</span>
+        {features.length > 0 && (
+          <ul className="flex flex-wrap gap-2" aria-label="Características">
+            {features.map((feature) => (
+              <li key={feature} className="flex items-center gap-1 rounded-full bg-lime px-3 py-1 text-sm font-bold text-ink">
+                {feature}
+                <button
+                  type="button"
+                  className="grid size-5 place-items-center rounded-full hover:bg-ink/10"
+                  aria-label={`Quitar ${feature}`}
+                  onClick={() => setFeatures((current) => removeFeature(current, feature))}
+                >
+                  <X aria-hidden="true" className="size-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <input
+            className="field__control min-w-40 flex-1"
+            aria-label="Nueva característica"
+            value={draftFeature}
+            maxLength={MAX_FEATURE_LENGTH}
+            disabled={full}
+            placeholder={full ? `Máximo ${MAX_FEATURES}` : 'Ej. Con luz'}
+            onChange={(event) => setDraftFeature(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ',') {
+                event.preventDefault();
+                addDraftFeature();
+              }
+            }}
+          />
+          <Button type="button" variant="ghost" disabled={full || !draftFeature.trim()} onClick={addDraftFeature}>
+            <Plus aria-hidden="true" className="size-4" /> Agregar
+          </Button>
+        </div>
+        {!full && suggestions.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                className="rounded-full border border-ink/15 px-3 py-1 text-xs font-bold text-muted hover:text-ink"
+                onClick={() => setFeatures((current) => addFeature(current, suggestion))}
+              >
+                + {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <Button type="submit" loading={saving} disabled={!changed}>
+          Guardar ficha
         </Button>
       </div>
     </form>
@@ -153,6 +345,10 @@ function SpaceCard({
   onRename,
   onChangeType,
   onChangePrice,
+  profileSaving,
+  onSaveProfile,
+  onUploadImage,
+  onRemoveImage,
 }: {
   space: ManagedSpace;
   onToggle: () => void;
@@ -160,6 +356,10 @@ function SpaceCard({
   onRename: (nombre: string) => void;
   onChangeType: (tipo: SpaceType) => void;
   onChangePrice: (price: string | null) => void;
+  profileSaving: boolean;
+  onSaveProfile: (input: { descripcion: string | null; caracteristicas: string[] }) => void;
+  onUploadImage: (file: File) => void;
+  onRemoveImage: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
@@ -251,6 +451,16 @@ function SpaceCard({
         <option value="drive_thru">Drive-thru</option>
       </SelectField>
       {space.tipo === 'cancha' && <HourlyPrice key={space.precio_hora ?? ''} space={space} onSave={onChangePrice} />}
+      {space.tipo === 'cancha' && (
+        <SpaceProfile
+          key={`${space.descripcion ?? ''}|${(space.caracteristicas ?? []).join('|')}`}
+          space={space}
+          saving={profileSaving}
+          onSave={onSaveProfile}
+          onUploadImage={onUploadImage}
+          onRemoveImage={onRemoveImage}
+        />
+      )}
       <div className="flex items-center gap-4 rounded-2xl bg-cream p-4">
         {qr && <img src={qr} alt={`Código QR de ${space.nombre}`} width="96" height="96" className="size-24 rounded-xl" />}
         <div className="min-w-0 flex-1">
@@ -314,16 +524,21 @@ export function SpacesPage() {
     },
   });
   const update = useMutation({
-    mutationFn: ({ id, ...input }: { id: number; nombre?: string; tipo?: SpaceType; activo?: boolean; precio_hora?: string | null }) =>
-      api.updateSpace(token, id, input),
+    mutationFn: ({ id, ...input }: { id: number } & SpaceUpdateInput) => api.updateSpace(token, id, input),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
+  });
+  const image = useMutation({
+    mutationFn: ({ id, file }: { id: number; file: File | null }) =>
+      file ? api.uploadSpaceImage(token, id, file) : api.deleteSpaceImage(token, id),
+    onSuccess: (_space, { file }) => setFeedback(file ? 'Foto guardada.' : 'Foto quitada.'),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
   });
   const rotate = useMutation({
     mutationFn: (id: number) => api.rotateSpaceQr(token, id),
     onSuccess: () => setFeedback('QR rotado. El enlace anterior dejó de resolver.'),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
   });
-  const mutationError = create.error || update.error || rotate.error;
+  const mutationError = create.error || update.error || rotate.error || image.error;
   function submit(event: FormEvent) {
     event.preventDefault();
     setFeedback(null);
@@ -404,6 +619,12 @@ export function SpacesPage() {
               onRename={(nombre) => update.mutate({ id: space.id, nombre })}
               onChangeType={(tipo) => update.mutate({ id: space.id, tipo })}
               onChangePrice={(precio_hora) => update.mutate({ id: space.id, precio_hora })}
+              profileSaving={update.isPending && update.variables?.id === space.id}
+              onSaveProfile={(input) =>
+                update.mutate({ id: space.id, ...input }, { onSuccess: () => setFeedback('Ficha guardada.') })
+              }
+              onUploadImage={(file) => image.mutate({ id: space.id, file })}
+              onRemoveImage={() => image.mutate({ id: space.id, file: null })}
             />
           ))}
         </div>
