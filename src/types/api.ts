@@ -190,6 +190,8 @@ export interface OrderDetail {
   items: OrderItem[];
   vence_operacion_en?: string | null;
   motivo_pendiente_operativo?: 'caja_inactiva' | 'cocina_inactiva' | null;
+  /** Drive-thru: cuándo el cliente avisó que llegó por su pedido; null si no ha avisado. */
+  llegada_en?: string | null;
 }
 
 export interface CashPaymentResult {
