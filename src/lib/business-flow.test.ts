@@ -74,9 +74,10 @@ describe('vista previa del flujo', () => {
   it('lo que todavía no existe sale como Próximamente; lo que ya existe, no', () => {
     const bar = buildFlow({ ...base, tipo: 'bar', permite_pago_al_final: true, entrega_requiere_qr: false });
     expect(bar.filter((s) => s.status === 'soon').map((s) => s.text)).toEqual([
-      'Prepara las bebidas en la barra',
       'Paga la cuenta con su saldo desde la app',
     ]);
+    // La barra ya existe: las bebidas de la estación "Barra / Bebidas" no pasan por cocina.
+    expect(bar.find((s) => s.role === 'Barra')).toMatchObject({ status: 'works' });
     // Cobrar con la terminal y avisar de quien se fue sin pagar ya existen.
     const texts = bar.filter((s) => s.status === 'works').map((s) => s.text);
     expect(texts).toContain('Cobra la cuenta en efectivo o con la terminal, completa o dividida por pedido');

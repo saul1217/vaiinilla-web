@@ -217,7 +217,11 @@ export function buildFlow(settings: FlowSettings): FlowStep[] {
       { role: 'Cliente', text: 'Paga la cuenta con su saldo desde la app', status: 'soon' },
     );
     if (tipo === 'bar') {
-      steps.splice(steps.length - 7, 0, { role: 'Barra', text: 'Prepara las bebidas en la barra', status: 'soon' });
+      steps.splice(steps.length - 7, 0, {
+        role: 'Barra',
+        text: 'Las bebidas de la estación Barra / Bebidas salen directo, sin pasar por cocina',
+        status: 'works',
+      });
     }
     return steps;
   }
