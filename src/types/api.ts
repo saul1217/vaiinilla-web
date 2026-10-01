@@ -147,7 +147,7 @@ export interface OperationalStatus {
 export interface OrderSpace {
   id: number;
   nombre: string;
-  tipo: 'mesa' | 'barra' | 'cancha' | 'drive_thru';
+  tipo: 'mesa' | 'barra' | 'cancha' | 'drive_thru' | 'asiento';
 }
 
 export interface OrderItemOption {
@@ -365,7 +365,15 @@ export interface PlatformAnalytics extends TenantAnalytics {
   establecimientos: PlatformEstablishmentMetric[];
 }
 
-export type SpaceType = 'mesa' | 'barra' | 'cancha' | 'drive_thru';
+export type SpaceType = 'mesa' | 'barra' | 'cancha' | 'drive_thru' | 'asiento';
+
+/** Resultado de crear espacios numerados en lote. */
+export interface SpaceBatchResult {
+  tipo: SpaceType;
+  solicitados: number;
+  creados: number;
+  omitidos: string[];
+}
 
 export interface ManagedSpace {
   id: number;
