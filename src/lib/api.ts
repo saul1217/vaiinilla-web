@@ -38,6 +38,7 @@ import type {
   BookingSettings,
   BookingSettingsInput,
   ManagedSpace,
+  SpaceUpdateInput,
   SpaceType,
 } from '../types/api';
 
@@ -602,9 +603,19 @@ export const api = {
   async updateSpace(
     token: string,
     id: number,
-    input: { nombre?: string; tipo?: SpaceType; activo?: boolean; precio_hora?: string | null },
+    input: SpaceUpdateInput,
   ): Promise<ManagedSpace> {
     return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, body: input })).data;
+  },
+
+  async uploadSpaceImage(token: string, id: number, file: File): Promise<ManagedSpace> {
+    const body = new FormData();
+    body.append('imagen', file);
+    return (await request<ManagedSpace>(`/espacios/${id}/imagen`, { method: 'PUT', token, idempotent: true, body })).data;
+  },
+
+  async deleteSpaceImage(token: string, id: number): Promise<ManagedSpace> {
+    return (await request<ManagedSpace>(`/espacios/${id}/imagen`, { method: 'DELETE', token, idempotent: true })).data;
   },
 
   async bookingSettings(token: string): Promise<BookingSettings> {
