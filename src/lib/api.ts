@@ -41,6 +41,7 @@ import type {
   BusinessSettings,
   BusinessSettingsInput,
   SpaceUpdateInput,
+  UnpaidAccounts,
   SpaceBatchResult,
   SpaceType,
 } from '../types/api';
@@ -597,6 +598,10 @@ export const api = {
 
   async listManagedSpaces(token: string): Promise<ManagedSpace[]> {
     return (await request<ManagedSpace[]>('/espacios/administracion', { token })).data;
+  },
+
+  async unpaidAccounts(token: string): Promise<UnpaidAccounts> {
+    return (await request<UnpaidAccounts>('/espacios/cuentas-sin-pagar', { token })).data;
   },
 
   async createSpaceBatch(

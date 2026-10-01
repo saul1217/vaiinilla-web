@@ -88,7 +88,13 @@ function operationalReason(status: {
   sesion_caja_abierta: boolean;
   caja_en_linea: boolean;
   cocina_en_linea: boolean;
+  dentro_de_franja?: boolean;
+  franjas_pedido?: { desde: string; hasta: string }[];
 }): string {
+  if (status.dentro_de_franja === false) {
+    const hours = (status.franjas_pedido ?? []).map((slot) => `${slot.desde} a ${slot.hasta}`).join(' y ');
+    return `Fuera del horario de pedidos${hours ? ` (${hours})` : ''}.`;
+  }
   const missing = [];
   if (!status.sesion_caja_abierta) missing.push('abrir la sesión de Caja');
   if (!status.caja_en_linea) missing.push('conectar Caja');
