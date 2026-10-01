@@ -142,6 +142,10 @@ export interface OperationalStatus {
   cocina_en_linea: boolean;
   tiempo_estimado_min: number | null;
   consultado_en: string;
+  /** Franjas en las que el negocio recibe pedidos; vacío = sin límite. */
+  franjas_pedido?: { desde: string; hasta: string }[];
+  /** false = ahora está fuera de esas franjas (por eso no recibe pedidos). */
+  dentro_de_franja?: boolean;
 }
 
 export interface OrderSpace {
@@ -398,6 +402,24 @@ export interface BusinessSettings {
 }
 
 export type BusinessSettingsInput = Partial<Omit<BusinessSettings, 'tipos_disponibles'>>;
+
+/** Una cuenta abierta (pagar al final) que nadie ha cobrado. */
+export interface UnpaidAccount {
+  espacio: { id: number; nombre: string; tipo: SpaceType };
+  pedidos: number;
+  total: string;
+  desde: string;
+  horas: number;
+  clientes: string[];
+  /** El espacio ya se liberó y la cuenta sigue sin pagar: alguien se fue sin pagar. */
+  abandonada: boolean;
+}
+
+export interface UnpaidAccounts {
+  cuentas: UnpaidAccount[];
+  total: string;
+  abandonadas: number;
+}
 
 export interface BookingSettings {
   apertura: string;

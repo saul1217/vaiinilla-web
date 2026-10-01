@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PeriodSelector, RankedBarChart, SalesTrendChart } from '../components/analytics-dashboard';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
+import { UnpaidAccountsCard } from '../components/unpaid-accounts-card';
 import { Feedback, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
@@ -263,6 +264,7 @@ export function TenantDashboardPage() {
       </section>
 
       <OperationalStatusPanel />
+      <UnpaidAccountsCard />
 
       <section className="dashboard-grid">
         <Link to="/app/menu" className="dashboard-card">
