@@ -6282,3 +6282,23 @@ tbody tr:last-child td {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Drive-thru: el cliente avisó que ya llegó por su pedido. */
+.kitchen-ticket__arrival,
+.order-card__arrival {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--color-lime, #bde063);
+  color: var(--color-ink, #16150f);
+  font-size: 0.875rem;
+}
+
+.kitchen-ticket__arrival svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}

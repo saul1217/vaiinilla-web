@@ -44,6 +44,11 @@ export function OrderCard({
         <MapPin aria-hidden="true" />
         {order.destino === 'en_espacio' ? order.espacio?.nombre ?? 'En espacio' : 'Para llevar'}
       </div>
+      {order.llegada_en && (
+        <p className="order-card__arrival" role="status">
+          <strong>Ya llegó</strong> a las {formatTime(order.llegada_en)}
+        </p>
+      )}
 
       <footer className="order-card__footer">
         <span><small>Total</small><strong>{formatMoney(order.total)}</strong></span>

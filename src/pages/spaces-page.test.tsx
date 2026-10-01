@@ -9,6 +9,7 @@ const apiMock = vi.hoisted(() => ({
   listManagedSpaces: vi.fn(),
   createSpace: vi.fn(),
   updateSpace: vi.fn(),
+  createSpaceBatch: vi.fn(),
   rotateSpaceQr: vi.fn(),
   uploadSpaceImage: vi.fn(),
   deleteSpaceImage: vi.fn(),
@@ -96,6 +97,42 @@ describe('reservas de canchas en el panel', () => {
       }),
     );
     expect(await screen.findByText('Horario guardado.')).toBeInTheDocument();
+  });
+
+  it('crea asientos en lote: muestra lo que se creará y envía el rango', async () => {
+    const user = userEvent.setup();
+    apiMock.createSpaceBatch.mockReset().mockResolvedValue({ tipo: 'asiento', solicitados: 3, creados: 2, omitidos: ['Asiento 2'] });
+    render(<SpacesPage />, { wrapper: TestProvider });
+    const from = await screen.findByLabelText('Desde');
+    await user.clear(from);
+    await user.type(from, '1');
+    const to = screen.getByLabelText('Hasta');
+    await user.clear(to);
+    await user.type(to, '3');
+    expect(screen.getByText(/Se crearán 3: Asiento 1 … Asiento 3/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Crear 3/ }));
+    await waitFor(() =>
+      expect(apiMock.createSpaceBatch).toHaveBeenCalledWith('tenant-token', {
+        tipo: 'asiento',
+        prefijo: 'Asiento',
+        desde: 1,
+        hasta: 3,
+      }),
+    );
+    expect(await screen.findByText('2 espacios creados; 1 ya existían y se omitieron.')).toBeInTheDocument();
+  });
+
+  it('no deja crear un rango al revés ni más de 500', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    const to = await screen.findByLabelText('Hasta');
+    await user.clear(to);
+    await user.type(to, '0');
+    expect(screen.getByText(/el final no puede ser menor/)).toBeInTheDocument();
+    await user.clear(to);
+    await user.type(to, '900');
+    expect(screen.getByText('Máximo 500 a la vez.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Crear 900' })).toBeDisabled();
   });
 
   it('sin canchas no aparece el horario de reservas', async () => {

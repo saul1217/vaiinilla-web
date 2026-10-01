@@ -70,6 +70,13 @@ export function KitchenOrderCard({
           {totalUnits} {totalUnits === 1 ? 'pieza' : 'piezas'}
         </span>
       </div>
+      {order.llegada_en && (
+        <p className="kitchen-ticket__arrival" role="status">
+          <MapPin aria-hidden="true" />
+          <strong>Ya llegó</strong>
+          <span>hace {minutesSince(order.llegada_en, now)} min</span>
+        </p>
+      )}
 
       <section className="kitchen-ticket__items" aria-labelledby={`kitchen-items-${order.id}`}>
         <div className="kitchen-ticket__section-title">
