@@ -4,11 +4,18 @@
 
 export type BusinessType = 'cafeteria' | 'restaurante' | 'padel' | 'bar' | 'food_truck' | 'drive_thru' | 'comedor' | 'evento';
 
+export interface Franja {
+  desde: string;
+  hasta: string;
+}
+
 export interface FlowSettings {
   tipo: BusinessType;
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
   gracia_liberacion_min: number;
+  /** Horas en las que se reciben pedidos; vacío = a cualquier hora. */
+  franjas_pedido: Franja[];
 }
 
 export interface FlowTemplate {
@@ -23,55 +30,55 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
     id: 'cafeteria-escolar',
     label: 'Cafetería escolar',
     description: 'Piden con su matrícula, pagan al pedir y recogen en barra con QR.',
-    settings: { tipo: 'cafeteria', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5 },
+    settings: { tipo: 'cafeteria', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5, franjas_pedido: [] },
   },
   {
     id: 'cafeteria-mesas',
     label: 'Cafetería con mesas',
     description: 'Escanean el QR de su mesa, pagan al pedir y el mesero lo lleva.',
-    settings: { tipo: 'cafeteria', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5 },
+    settings: { tipo: 'cafeteria', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5, franjas_pedido: [] },
   },
   {
     id: 'restaurante',
     label: 'Restaurante con mesero',
     description: 'Piden en la mesa sin pagar, varias rondas, y pagan la cuenta al final.',
-    settings: { tipo: 'restaurante', entrega_requiere_qr: false, permite_pago_al_final: true, gracia_liberacion_min: 5 },
+    settings: { tipo: 'restaurante', entrega_requiere_qr: false, permite_pago_al_final: true, gracia_liberacion_min: 5, franjas_pedido: [] },
   },
   {
     id: 'bar',
     label: 'Bar o cantina',
     description: 'Rondas en cuenta abierta, entrega sin escanear nada y cobro al irse.',
-    settings: { tipo: 'bar', entrega_requiere_qr: false, permite_pago_al_final: true, gracia_liberacion_min: 5 },
+    settings: { tipo: 'bar', entrega_requiere_qr: false, permite_pago_al_final: true, gracia_liberacion_min: 5, franjas_pedido: [] },
   },
   {
     id: 'padel',
     label: 'Club de pádel',
     description: 'Rentan la cancha, piden durante el partido y pagan todo al irse.',
-    settings: { tipo: 'padel', entrega_requiere_qr: false, permite_pago_al_final: true, gracia_liberacion_min: 5 },
+    settings: { tipo: 'padel', entrega_requiere_qr: false, permite_pago_al_final: true, gracia_liberacion_min: 5, franjas_pedido: [] },
   },
   {
     id: 'food-truck',
     label: 'Food truck o puesto',
     description: 'Piden y pagan en la app; recogen con QR.',
-    settings: { tipo: 'food_truck', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5 },
+    settings: { tipo: 'food_truck', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5, franjas_pedido: [] },
   },
   {
     id: 'drive-thru',
     label: 'Drive-thru',
     description: 'Piden desde el auto, pagan en la app y recogen en la ventanilla con QR.',
-    settings: { tipo: 'drive_thru', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5 },
+    settings: { tipo: 'drive_thru', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5, franjas_pedido: [] },
   },
   {
     id: 'comedor',
     label: 'Comedor de empresa',
     description: 'Se identifican con su número de empleado, eligen el menú del día y pagan con saldo.',
-    settings: { tipo: 'comedor', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5 },
+    settings: { tipo: 'comedor', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5, franjas_pedido: [] },
   },
   {
     id: 'evento',
     label: 'Cine, estadio o evento',
     description: 'Escanean el QR de su asiento, pagan en la app y se lo llevan al asiento.',
-    settings: { tipo: 'evento', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5 },
+    settings: { tipo: 'evento', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5, franjas_pedido: [] },
   },
 ];
 
@@ -93,7 +100,8 @@ export function sameSettings(a: FlowSettings, b: FlowSettings): boolean {
     a.tipo === b.tipo &&
     a.entrega_requiere_qr === b.entrega_requiere_qr &&
     a.permite_pago_al_final === b.permite_pago_al_final &&
-    a.gracia_liberacion_min === b.gracia_liberacion_min
+    a.gracia_liberacion_min === b.gracia_liberacion_min &&
+    JSON.stringify(a.franjas_pedido) === JSON.stringify(b.franjas_pedido)
   );
 }
 
@@ -106,10 +114,34 @@ export function validGrace(value: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= MAX_GRACE_MINUTES;
 }
 
+export const MAX_FRANJAS = 6;
+const HOUR_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Mismas reglas que el backend: HH:MM, hasta después de desde, sin empalmarse, máximo 6. */
+export function franjasError(franjas: Franja[]): string | null {
+  if (franjas.length > MAX_FRANJAS) return `Máximo ${MAX_FRANJAS} franjas.`;
+  for (const franja of franjas) {
+    if (!HOUR_PATTERN.test(franja.desde) || !HOUR_PATTERN.test(franja.hasta)) return 'Escribe las dos horas de cada franja.';
+    if (franja.hasta <= franja.desde) return 'En cada franja, la hora final debe ser después de la inicial.';
+  }
+  const sorted = [...franjas].sort((a, b) => a.desde.localeCompare(b.desde));
+  let previousEnd = '';
+  for (const franja of sorted) {
+    if (franja.desde < previousEnd) return 'Las franjas no pueden empalmarse.';
+    previousEnd = franja.hasta;
+  }
+  return null;
+}
+
+/** Las franjas ordenadas por hora de inicio (así las guarda el backend). */
+export function sortFranjas(franjas: Franja[]): Franja[] {
+  return [...franjas].sort((a, b) => a.desde.localeCompare(b.desde));
+}
+
 export type StepStatus = 'works' | 'soon';
 
 export interface FlowStep {
-  role: 'Cliente' | 'Caja' | 'Cocina' | 'Mesero' | 'Sistema' | 'Barra';
+  role: 'Admin' | 'Cliente' | 'Caja' | 'Cocina' | 'Mesero' | 'Sistema' | 'Barra';
   text: string;
   status: StepStatus;
 }
@@ -127,12 +159,20 @@ function place(tipo: BusinessType): string {
   }
 }
 
+/** "12:00 a 15:00 y 18:00 a 20:00". */
+export function describeFranjas(franjas: Franja[]): string {
+  return sortFranjas(franjas)
+    .map((franja) => `${franja.desde} a ${franja.hasta}`)
+    .join(' y ');
+}
+
 /**
  * Los pasos de cada rol según los ajustes. `works` = ya funciona hoy en Vaiinilla; `soon` = es de
  * este tipo de negocio pero todavía no existe (se muestra como "Próximamente").
+ * Qué existe y qué falta: Obsidian → "Flujos por tipo de negocio".
  */
 export function buildFlow(settings: FlowSettings): FlowStep[] {
-  const { tipo, entrega_requiere_qr: qr, permite_pago_al_final: payLater } = settings;
+  const { tipo, entrega_requiere_qr: qr, permite_pago_al_final: payLater, franjas_pedido: franjas } = settings;
   const where = place(tipo);
   const delivery: FlowStep = {
     role: 'Mesero',
@@ -144,8 +184,17 @@ export function buildFlow(settings: FlowSettings): FlowStep[] {
     text: qr ? 'Escanea el QR y entrega' : 'Entrega el pedido',
     status: 'works',
   };
+  const hours: FlowStep | null =
+    franjas.length > 0
+      ? { role: 'Sistema', text: `Recibe pedidos solo de ${describeFranjas(franjas)}`, status: 'works' }
+      : null;
 
   const steps: FlowStep[] = [];
+  if (tipo === 'evento') {
+    steps.push({ role: 'Admin', text: 'Crea los asientos de golpe, cada uno con su QR', status: 'works' });
+  }
+  if (hours) steps.push(hours);
+
   if (tipo === 'comedor') {
     steps.push({ role: 'Cliente', text: 'Se identifica con su número de empleado y elige el menú del día', status: 'works' });
   } else if (tipo === 'drive_thru') {
@@ -162,28 +211,32 @@ export function buildFlow(settings: FlowSettings): FlowStep[] {
       { role: 'Cocina', text: 'Prepara en cuanto llega el pedido, sin esperar el cobro', status: 'works' },
       delivery,
       { role: 'Cliente', text: 'Al terminar, pide la cuenta desde la app', status: 'works' },
-      { role: 'Mesero', text: 'Cobra la cuenta en efectivo, completa o dividida por pedido', status: 'works' },
+      { role: 'Mesero', text: 'Cobra la cuenta en efectivo o con la terminal, completa o dividida por pedido', status: 'works' },
       { role: 'Mesero', text: tipo === 'padel' ? 'La cancha se libera al quedar saldada' : 'La mesa se libera al quedar saldada', status: 'works' },
-      { role: 'Cliente', text: 'Paga la cuenta con tarjeta o saldo', status: 'soon' },
+      { role: 'Sistema', text: 'Avisa si alguien se fue sin pagar', status: 'works' },
+      { role: 'Cliente', text: 'Paga la cuenta con su saldo desde la app', status: 'soon' },
     );
     if (tipo === 'bar') {
-      steps.splice(2, 0, { role: 'Barra', text: 'Prepara las bebidas en la barra', status: 'soon' });
+      steps.splice(steps.length - 7, 0, { role: 'Barra', text: 'Prepara las bebidas en la barra', status: 'soon' });
     }
     return steps;
   }
 
   steps.push({ role: 'Cliente', text: 'Paga con saldo, tarjeta o efectivo al pedir', status: 'works' });
+  if (tipo === 'drive_thru') {
+    steps.push({ role: 'Cliente', text: 'Avisa que ya llegó con un botón', status: 'works' });
+  }
   if (tipo === 'comedor') {
-    steps.push(
-      { role: 'Sistema', text: 'Descuenta de la nómina', status: 'soon' },
-      { role: 'Cocina', text: 'Limita los pedidos por franja horaria', status: 'soon' },
-    );
+    steps.push({ role: 'Sistema', text: 'Descuenta de la nómina', status: 'soon' });
   } else {
     steps.push({ role: 'Caja', text: 'Cobra si fue efectivo', status: 'works' });
   }
-  steps.push({ role: 'Cocina', text: 'Prepara y marca listo', status: 'works' });
+  steps.push({
+    role: 'Cocina',
+    text: tipo === 'drive_thru' ? 'Prepara y marca listo; ve en el pedido que ya llegó' : 'Prepara y marca listo',
+    status: 'works',
+  });
   if (tipo === 'drive_thru') {
-    steps.splice(2, 0, { role: 'Cliente', text: 'Avisa que ya llegó', status: 'soon' });
     steps.push({ role: 'Caja', text: 'Escanea el QR en la ventanilla y entrega', status: 'works' });
   } else if (tipo === 'evento') {
     steps.push(

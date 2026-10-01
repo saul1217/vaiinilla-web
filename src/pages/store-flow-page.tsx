@@ -11,9 +11,12 @@ import {
   buildFlow,
   FLOW_TEMPLATES,
   flowSummary,
+  franjasError,
+  MAX_FRANJAS,
   matchingTemplate,
   MAX_GRACE_MINUTES,
   sameSettings,
+  sortFranjas,
   validGrace,
   type BusinessType,
   type FlowSettings,
@@ -30,6 +33,7 @@ function toSettings(data: BusinessSettings): FlowSettings | null {
     entrega_requiere_qr: data.entrega_requiere_qr,
     permite_pago_al_final: data.permite_pago_al_final,
     gracia_liberacion_min: data.gracia_liberacion_min,
+    franjas_pedido: data.franjas_pedido ?? [],
   };
 }
 
@@ -84,7 +88,8 @@ export function StoreFlowPage() {
   const current = query.data ? toSettings(query.data) : null;
   const settings = draft ?? current;
   const save = useMutation({
-    mutationFn: (input: FlowSettings) => api.saveBusinessSettings(token, input),
+    mutationFn: (input: FlowSettings) =>
+      api.saveBusinessSettings(token, { ...input, franjas_pedido: sortFranjas(input.franjas_pedido) }),
     onSuccess: (data) => {
       // Mostrar ya lo guardado: si no, la página enseña un instante los datos viejos hasta recargar.
       queryClient.setQueryData(['business-settings', scopeId], data);
@@ -101,7 +106,8 @@ export function StoreFlowPage() {
   }
 
   const changed = Boolean(settings && current && !sameSettings(settings, current));
-  const valid = Boolean(settings && validGrace(settings.gracia_liberacion_min));
+  const slotsError = settings && settings.franjas_pedido.length > 0 ? franjasError(settings.franjas_pedido) : null;
+  const valid = Boolean(settings && validGrace(settings.gracia_liberacion_min) && !slotsError);
   const template = settings ? matchingTemplate(settings) : null;
   const steps = settings ? buildFlow(settings) : [];
   const summary = flowSummary(steps);
@@ -214,6 +220,86 @@ export function StoreFlowPage() {
                     error={valid ? undefined : `Escribe un número entero de 0 a ${MAX_GRACE_MINUTES}.`}
                     hint="Tiempo para renovar o liberar una cancha o mesa después de que termina su turno."
                   />
+                </div>
+                <div className="grid gap-2">
+                  <p className="field__label">¿Cuándo se reciben pedidos?</p>
+                  <Choice
+                    name="¿Cuándo se reciben pedidos?"
+                    value={settings.franjas_pedido.length > 0}
+                    onChange={(limited) =>
+                      change({ franjas_pedido: limited ? [{ desde: '12:00', hasta: '15:00' }] : [] })
+                    }
+                    options={[
+                      { value: false, label: 'A cualquier hora', hint: 'Mientras el negocio esté abierto.' },
+                      {
+                        value: true,
+                        label: 'Solo en ciertas horas',
+                        hint: 'Útil en un comedor o un evento: fuera de las franjas no entran pedidos.',
+                      },
+                    ]}
+                  />
+                  {settings.franjas_pedido.length > 0 && (
+                    <div className="grid gap-2 rounded-2xl bg-cream p-4">
+                      {settings.franjas_pedido.map((slot, index) => (
+                        <div key={index} className="flex flex-wrap items-end gap-3">
+                          <Field
+                            label={`Franja ${index + 1}: desde`}
+                            name={`slot-from-${index}`}
+                            type="time"
+                            value={slot.desde}
+                            onChange={(event) =>
+                              change({
+                                franjas_pedido: settings.franjas_pedido.map((item, i) =>
+                                  i === index ? { ...item, desde: event.target.value } : item,
+                                ),
+                              })
+                            }
+                          />
+                          <Field
+                            label={`Franja ${index + 1}: hasta`}
+                            name={`slot-to-${index}`}
+                            type="time"
+                            value={slot.hasta}
+                            onChange={(event) =>
+                              change({
+                                franjas_pedido: settings.franjas_pedido.map((item, i) =>
+                                  i === index ? { ...item, hasta: event.target.value } : item,
+                                ),
+                              })
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            aria-label={`Quitar la franja ${index + 1}`}
+                            onClick={() =>
+                              change({ franjas_pedido: settings.franjas_pedido.filter((_, i) => i !== index) })
+                            }
+                          >
+                            Quitar
+                          </Button>
+                        </div>
+                      ))}
+                      {slotsError && (
+                        <p className="field__error" role="alert">
+                          {slotsError}
+                        </p>
+                      )}
+                      {settings.franjas_pedido.length < MAX_FRANJAS && (
+                        <div>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() =>
+                              change({ franjas_pedido: [...settings.franjas_pedido, { desde: '18:00', hasta: '20:00' }] })
+                            }
+                          >
+                            Agregar otra franja
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <p className="flex items-center gap-2 text-xs leading-5 text-muted">
                   <Link2 aria-hidden="true" className="size-4 shrink-0" />
