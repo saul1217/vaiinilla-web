@@ -39,6 +39,7 @@ const typeLabels: Record<SpaceType, string> = {
   barra: 'Barra',
   cancha: 'Cancha',
   drive_thru: 'Drive-thru',
+  asiento: 'Asiento',
 };
 
 function HourlyPrice({ space, onSave }: { space: ManagedSpace; onSave: (price: string | null) => void }) {
@@ -242,6 +243,77 @@ function SpaceProfile({
         </Button>
       </div>
     </form>
+  );
+}
+
+const MAX_BATCH = 500;
+
+/** Crear muchos espacios numerados de una vez: "Asiento 1" … "Asiento 100", cada uno con su QR. */
+function BatchSpacesCard({ onCreated }: { onCreated: (message: string) => void }) {
+  const { tenant } = useSessions();
+  const token = tenant?.token ?? '';
+  const scopeId = tenant?.context.establecimiento_id ?? '';
+  const queryClient = useQueryClient();
+  const [type, setType] = useState<SpaceType>('asiento');
+  const [prefix, setPrefix] = useState('Asiento');
+  const [from, setFrom] = useState('1');
+  const [to, setTo] = useState('100');
+  const start = Number(from);
+  const end = Number(to);
+  const validRange =
+    from.trim() !== '' && to.trim() !== '' && Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end >= start;
+  const count = validRange ? end - start + 1 : 0;
+  const tooMany = count > MAX_BATCH;
+  const label = prefix.trim();
+  const create = useMutation({
+    mutationFn: () => api.createSpaceBatch(token, { tipo: type, prefijo: label, desde: start, hasta: end }),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] });
+      const skipped = result.omitidos.length;
+      onCreated(
+        `${result.creados} ${result.creados === 1 ? 'espacio creado' : 'espacios creados'}` +
+          (skipped > 0 ? `; ${skipped} ya existían y se omitieron.` : '.'),
+      );
+    },
+  });
+  return (
+    <section className="panel-card p-5 sm:p-6" aria-labelledby="batch-spaces-title">
+      <h2 id="batch-spaces-title" className="text-xl font-extrabold text-ink">
+        Crear varios a la vez
+      </h2>
+      <p className="mt-1 text-sm text-muted">
+        Para un cine, un estadio o un evento: crea asientos numerados, cada uno con su propio QR.
+      </p>
+      {create.isError && <Feedback tone="error">{errorMessage(create.error)}</Feedback>}
+      <form
+        className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_120px_120px_auto] md:items-end"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (validRange && !tooMany && label) create.mutate();
+        }}
+      >
+        <SelectField label="Tipo" value={type} onChange={(event) => setType(event.target.value as SpaceType)}>
+          <option value="asiento">Asiento</option>
+          <option value="mesa">Mesa</option>
+          <option value="barra">Barra</option>
+          <option value="drive_thru">Drive-thru</option>
+        </SelectField>
+        <Field label="Nombre base" name="batch-prefix" value={prefix} onChange={(event) => setPrefix(event.target.value)} maxLength={70} required />
+        <Field label="Desde" name="batch-from" type="number" min={0} value={from} onChange={(event) => setFrom(event.target.value)} required />
+        <Field label="Hasta" name="batch-to" type="number" min={0} value={to} onChange={(event) => setTo(event.target.value)} required />
+        <Button type="submit" loading={create.isPending} disabled={!validRange || tooMany || !label}>
+          <Plus aria-hidden="true" className="size-4" />
+          Crear {count > 0 ? count : ''}
+        </Button>
+      </form>
+      <p className="mt-3 text-xs leading-5 text-muted" role="status">
+        {!validRange
+          ? 'Escribe el número inicial y el final (el final no puede ser menor).'
+          : tooMany
+            ? `Máximo ${MAX_BATCH} a la vez.`
+            : `Se crearán ${count}: ${label} ${start}${count > 1 ? ` … ${label} ${end}` : ''}. Los nombres que ya existan se omiten.`}
+      </p>
+    </section>
   );
 }
 
@@ -449,6 +521,7 @@ function SpaceCard({
         <option value="barra">Barra</option>
         <option value="cancha">Cancha</option>
         <option value="drive_thru">Drive-thru</option>
+        <option value="asiento">Asiento</option>
       </SelectField>
       {space.tipo === 'cancha' && <HourlyPrice key={space.precio_hora ?? ''} space={space} onSave={onChangePrice} />}
       {space.tipo === 'cancha' && (
@@ -578,6 +651,7 @@ export function SpacesPage() {
             <option value="barra">Barra</option>
             <option value="cancha">Cancha</option>
             <option value="drive_thru">Drive-thru</option>
+            <option value="asiento">Asiento</option>
           </SelectField>
           <Button type="submit" loading={create.isPending} disabled={!name.trim()}>
             <Plus aria-hidden="true" className="size-4" />
@@ -585,6 +659,7 @@ export function SpacesPage() {
           </Button>
         </form>
       </section>
+      <BatchSpacesCard onCreated={setFeedback} />
       {spaces.data?.some((space) => space.tipo === 'cancha') && <BookingSettingsCard />}
       <section className="space-y-4" aria-labelledby="spaces-list-title">
         <div className="flex items-center justify-between gap-4">
