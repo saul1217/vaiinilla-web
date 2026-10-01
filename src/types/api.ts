@@ -151,7 +151,7 @@ export interface OperationalStatus {
 export interface OrderSpace {
   id: number;
   nombre: string;
-  tipo: 'mesa' | 'barra' | 'cancha' | 'drive_thru';
+  tipo: 'mesa' | 'barra' | 'cancha' | 'drive_thru' | 'asiento';
 }
 
 export interface OrderItemOption {
@@ -194,6 +194,8 @@ export interface OrderDetail {
   items: OrderItem[];
   vence_operacion_en?: string | null;
   motivo_pendiente_operativo?: 'caja_inactiva' | 'cocina_inactiva' | null;
+  /** Drive-thru: cuándo el cliente avisó que llegó por su pedido; null si no ha avisado. */
+  llegada_en?: string | null;
 }
 
 export interface CashPaymentResult {
@@ -367,7 +369,15 @@ export interface PlatformAnalytics extends TenantAnalytics {
   establecimientos: PlatformEstablishmentMetric[];
 }
 
-export type SpaceType = 'mesa' | 'barra' | 'cancha' | 'drive_thru';
+export type SpaceType = 'mesa' | 'barra' | 'cancha' | 'drive_thru' | 'asiento';
+
+/** Resultado de crear espacios numerados en lote. */
+export interface SpaceBatchResult {
+  tipo: SpaceType;
+  solicitados: number;
+  creados: number;
+  omitidos: string[];
+}
 
 export interface ManagedSpace {
   id: number;
