@@ -408,6 +408,8 @@ export interface BusinessSettings {
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
   gracia_liberacion_min: number;
+  /** Un backend anterior no lo manda: se toma como sin límite de horario. */
+  franjas_pedido?: { desde: string; hasta: string }[];
   tipos_disponibles: string[];
 }
 

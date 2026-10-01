@@ -5,11 +5,18 @@ import {
   flowSummary,
   matchingTemplate,
   sameSettings,
+  franjasError,
   validGrace,
   type FlowSettings,
 } from './business-flow';
 
-const base: FlowSettings = { tipo: 'cafeteria', entrega_requiere_qr: true, permite_pago_al_final: false, gracia_liberacion_min: 5 };
+const base: FlowSettings = {
+  tipo: 'cafeteria',
+  entrega_requiere_qr: true,
+  permite_pago_al_final: false,
+  gracia_liberacion_min: 5,
+  franjas_pedido: [],
+};
 
 describe('plantillas del flujo', () => {
   it('no hay plantilla de hotel (decisión de David)', () => {
@@ -60,20 +67,46 @@ describe('vista previa del flujo', () => {
     const text = buildFlow({ ...base, tipo: 'restaurante', entrega_requiere_qr: false, permite_pago_al_final: true }).map((s) => s.text);
     expect(text).toContain('Prepara en cuanto llega el pedido, sin esperar el cobro');
     expect(text).toContain('Lo entrega sin escanear nada');
-    expect(text).toContain('Cobra la cuenta en efectivo, completa o dividida por pedido');
+    expect(text).toContain('Cobra la cuenta en efectivo o con la terminal, completa o dividida por pedido');
     expect(text).not.toContain('Paga con saldo, tarjeta o efectivo al pedir');
   });
 
-  it('lo que todavía no existe sale como Próximamente', () => {
+  it('lo que todavía no existe sale como Próximamente; lo que ya existe, no', () => {
     const bar = buildFlow({ ...base, tipo: 'bar', permite_pago_al_final: true, entrega_requiere_qr: false });
     expect(bar.filter((s) => s.status === 'soon').map((s) => s.text)).toEqual([
-      'Prepara las bebidas en la barra',
-      'Paga la cuenta con tarjeta o saldo',
+      'Paga la cuenta con su saldo desde la app',
     ]);
+    // La barra ya existe: las bebidas de la estación "Barra / Bebidas" no pasan por cocina.
+    expect(bar.find((s) => s.role === 'Barra')).toMatchObject({ status: 'works' });
+    // Cobrar con la terminal y avisar de quien se fue sin pagar ya existen.
+    const texts = bar.filter((s) => s.status === 'works').map((s) => s.text);
+    expect(texts).toContain('Cobra la cuenta en efectivo o con la terminal, completa o dividida por pedido');
+    expect(texts).toContain('Avisa si alguien se fue sin pagar');
     const comedor = buildFlow({ ...base, tipo: 'comedor' });
-    expect(comedor.filter((s) => s.status === 'soon')).toHaveLength(2);
+    expect(comedor.filter((s) => s.status === 'soon').map((s) => s.text)).toEqual(['Descuenta de la nómina']);
+    const evento = buildFlow({ ...base, tipo: 'evento' });
+    expect(evento.filter((s) => s.status === 'soon').map((s) => s.text)).toEqual([
+      'Prepara en el punto más cercano al asiento',
+    ]);
+  });
+
+  it('drive-thru: "ya llegó" ya funciona y cocina lo ve', () => {
     const drive = buildFlow({ ...base, tipo: 'drive_thru' });
-    expect(drive[2]).toMatchObject({ text: 'Avisa que ya llegó', status: 'soon' });
+    expect(drive.find((s) => s.text === 'Avisa que ya llegó con un botón')?.status).toBe('works');
+    expect(drive.some((s) => s.text.includes('ve en el pedido que ya llegó'))).toBe(true);
+    expect(drive.every((s) => s.status === 'works')).toBe(true);
+  });
+
+  it('evento: el admin crea los asientos en lote', () => {
+    const evento = buildFlow({ ...base, tipo: 'evento' });
+    expect(evento[0]).toMatchObject({ role: 'Admin', status: 'works' });
+    expect(evento[0]?.text).toContain('asientos');
+  });
+
+  it('con franjas de pedidos el flujo lo dice; sin ellas no aparece el paso', () => {
+    const limited = buildFlow({ ...base, tipo: 'comedor', franjas_pedido: [{ desde: '18:00', hasta: '20:00' }, { desde: '12:00', hasta: '15:00' }] });
+    expect(limited.map((s) => s.text)).toContain('Recibe pedidos solo de 12:00 a 15:00 y 18:00 a 20:00');
+    expect(buildFlow({ ...base, tipo: 'comedor' }).some((s) => s.text.startsWith('Recibe pedidos solo'))).toBe(false);
   });
 
   it('el QR al entregar cambia el paso de entrega', () => {
@@ -89,5 +122,22 @@ describe('vista previa del flujo', () => {
       const text = buildFlow(template.settings).map((s) => s.text).join(' ').toLowerCase();
       expect(text).not.toMatch(/habitaci|hotel|recepci/);
     }
+  });
+});
+
+describe('franjas de pedidos (mismas reglas que el backend)', () => {
+  it('acepta franjas válidas y vacío', () => {
+    expect(franjasError([])).toBeNull();
+    expect(franjasError([{ desde: '12:00', hasta: '15:00' }, { desde: '15:00', hasta: '16:00' }])).toBeNull();
+  });
+
+  it.each([
+    [[{ desde: '15:00', hasta: '12:00' }], /después/],
+    [[{ desde: '12:00', hasta: '12:00' }], /después/],
+    [[{ desde: '', hasta: '12:00' }], /dos horas/],
+    [[{ desde: '12:00', hasta: '15:00' }, { desde: '14:00', hasta: '16:00' }], /empalmar/],
+    [Array.from({ length: 7 }, (_, i) => ({ desde: `0${i}:00`, hasta: `0${i}:30` })), /Máximo 6/],
+  ])('rechaza %j', (franjas, mensaje) => {
+    expect(franjasError(franjas)).toMatch(mensaje);
   });
 });

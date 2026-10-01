@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
@@ -18,6 +18,7 @@ const cafeteria = {
   entrega_requiere_qr: true,
   permite_pago_al_final: false,
   gracia_liberacion_min: 5,
+  franjas_pedido: [],
   tipos_disponibles: ['cafeteria'],
 };
 
@@ -57,6 +58,7 @@ describe('Flujo de mi tienda', () => {
         entrega_requiere_qr: false,
         permite_pago_al_final: true,
         gracia_liberacion_min: 5,
+        franjas_pedido: [],
       }),
     );
   });
@@ -87,9 +89,52 @@ describe('Flujo de mi tienda', () => {
   it('lo que aún no existe sale como Próximamente', async () => {
     const user = userEvent.setup();
     render(<StoreFlowPage />, { wrapper: Wrapper });
-    await user.click(await screen.findByRole('button', { name: /Drive-thru/ }));
-    expect(screen.getByText('Avisa que ya llegó')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: /Comedor de empresa/ }));
+    expect(screen.getByText('Descuenta de la nómina')).toBeInTheDocument();
     expect(screen.getAllByText('Próximamente').length).toBeGreaterThan(0);
+  });
+
+  it('elegir solo ciertas horas muestra las franjas, las valida y las guarda ordenadas', async () => {
+    const user = userEvent.setup();
+    render(<StoreFlowPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('radio', { name: /Solo en ciertas horas/ }));
+    expect(screen.getByText('Recibe pedidos solo de 12:00 a 15:00')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Agregar otra franja' }));
+    expect(screen.getByText('Recibe pedidos solo de 12:00 a 15:00 y 18:00 a 20:00')).toBeInTheDocument();
+    // Una franja al revés bloquea el guardado.
+    const to = screen.getByLabelText('Franja 2: hasta');
+    fireEvent.change(to, { target: { value: '17:00' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('después de la inicial');
+    expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeDisabled();
+    fireEvent.change(to, { target: { value: '20:00' } });
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await waitFor(() =>
+      expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith(
+        'tenant-token',
+        expect.objectContaining({
+          franjas_pedido: [
+            { desde: '12:00', hasta: '15:00' },
+            { desde: '18:00', hasta: '20:00' },
+          ],
+        }),
+      ),
+    );
+  });
+
+  it('volver a "a cualquier hora" quita las franjas', async () => {
+    const user = userEvent.setup();
+    apiMock.businessSettings.mockResolvedValue({ ...cafeteria, franjas_pedido: [{ desde: '12:00', hasta: '15:00' }] });
+    render(<StoreFlowPage />, { wrapper: Wrapper });
+    await screen.findByLabelText('Franja 1: desde');
+    await user.click(screen.getByRole('radio', { name: /A cualquier hora/ }));
+    expect(screen.queryByLabelText('Franja 1: desde')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await waitFor(() =>
+      expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith(
+        'tenant-token',
+        expect.objectContaining({ franjas_pedido: [] }),
+      ),
+    );
   });
 
   it('una gracia fuera de 0 a 60 no se puede guardar', async () => {
