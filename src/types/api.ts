@@ -534,6 +534,15 @@ export interface PlatformStripeSummary {
   livemode: boolean;
 }
 
+/** La tarjeta del negocio vista por su dueño (GET /stripe/configuracion). */
+export interface TenantCardPayments {
+  stripe_enabled: boolean;
+  stripe_account_id: string;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+  estado_onboarding: StripeOnboardingStatus;
+}
+
 export interface StripeOnboarding {
   stripe_account_id: string;
   account_link_url: string;

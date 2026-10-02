@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StoreFlowPage } from './store-flow-page';
 
-const apiMock = vi.hoisted(() => ({ businessSettings: vi.fn(), saveBusinessSettings: vi.fn() }));
+const apiMock = vi.hoisted(() => ({ businessSettings: vi.fn(), saveBusinessSettings: vi.fn(), cardPayments: vi.fn().mockResolvedValue(null) }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
 vi.mock('../context/session-context', () => ({
