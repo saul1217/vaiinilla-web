@@ -2814,6 +2814,8 @@ tbody tr:last-child td {
 }
 
 .kitchen-ticket__action {
+  display: grid;
+  gap: 8px;
   padding-top: 2px;
 }
 
@@ -6301,4 +6303,81 @@ tbody tr:last-child td {
   width: 18px;
   height: 18px;
   flex: none;
+}
+
+/* Cuenta del espacio en el tablero del personal: cobrar, dividir, rentar y liberar. */
+.space-account {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.space-account__status,
+.space-account__charge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 700;
+}
+
+.space-account__hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.space-account__rent,
+.space-account__bill {
+  display: grid;
+  gap: 10px;
+}
+
+.space-account__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.space-account__totals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.space-account__orders {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.space-account__orders label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--color-white-warm);
+  cursor: pointer;
+}
+
+.space-account__orders input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-lime-dark);
+}
+
+.space-account__orders span {
+  display: grid;
+  gap: 2px;
+}
+
+.space-account__orders small {
+  color: var(--color-muted);
 }
