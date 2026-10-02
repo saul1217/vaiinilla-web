@@ -146,6 +146,8 @@ export interface OperationalStatus {
   franjas_pedido?: { desde: string; hasta: string }[];
   /** false = ahora está fuera de esas franjas (por eso no recibe pedidos). */
   dentro_de_franja?: boolean;
+  /** false = el personal entrega en el espacio sin pedir el QR. Un backend anterior no lo manda. */
+  entrega_requiere_qr?: boolean;
 }
 
 export interface OrderSpace {
@@ -431,6 +433,72 @@ export interface UnpaidAccounts {
   cuentas: UnpaidAccount[];
   total: string;
   abandonadas: number;
+}
+
+/** Estado de un espacio: libre, con turno, en gracia o con la cuenta pendiente al terminar. */
+export type SpaceOccupancy = 'libre' | 'ocupada' | 'en_gracia' | 'por_cobrar';
+
+/** Un espacio en el mapa de disponibilidad (GET /espacios/disponibilidad). */
+export interface SpaceAvailability {
+  espacio: OrderSpace;
+  estado: SpaceOccupancy;
+  saldada: boolean;
+  inicio: string | null;
+  fin_previsto: string | null;
+  /** Precio por hora: solo las canchas que se rentan. */
+  precio_hora: string | null;
+  proxima_reserva: { inicio: string; fin: string; estado: string } | null;
+}
+
+export interface SpaceAccountOrder {
+  id: string;
+  folio: number;
+  estado: OrderStatus;
+  total: number;
+  pago_diferido: boolean;
+  pendiente_cobro: boolean;
+  cliente: { nombre: string } | null;
+  items_resumen: string;
+  creado_en: string;
+}
+
+/** La sesión abierta de un espacio y su cuenta (GET /espacios/:id/sesion). */
+export interface SpaceSessionDetail {
+  espacio: OrderSpace;
+  estado: SpaceOccupancy;
+  saldada: boolean;
+  fin_previsto: string | null;
+  sesion: { id: string; estado: string; inicio: string; fin_previsto: string | null; version: number } | null;
+  cuenta: { pedidos: SpaceAccountOrder[]; total: number; pendiente: number; pagado: number; saldada: boolean } | null;
+}
+
+export type AccountPaymentMethod = 'efectivo' | 'terminal';
+
+export interface AccountCollection {
+  pedidos_cobrados: number;
+  total: string;
+  metodo_pago: AccountPaymentMethod;
+  monto_recibido: string | null;
+  cambio: string;
+  /** Lo que sigue sin cobrar de la cuenta: "0.00" si quedó saldada. */
+  restante: string;
+}
+
+/** Una renta de cancha apartada en mostrador, esperando su cobro. */
+export interface CounterRental {
+  id: string;
+  espacio: OrderSpace;
+  inicio: string;
+  fin: string;
+  duracion_min: number;
+  monto: string;
+  estado: string;
+  version: number;
+}
+
+export interface CounterRentalPayment {
+  reserva: CounterRental;
+  cobro: { monto_recibido: string; cambio: string } | null;
 }
 
 export interface BookingSettings {

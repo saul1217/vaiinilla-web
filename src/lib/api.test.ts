@@ -687,4 +687,73 @@ describe('Vaiinilla API client', () => {
       ),
     ).resolves.toMatchObject({ stripe_enabled: true });
   });
+  it('cobra la cuenta del espacio dividida, con la terminal y sin efectivo recibido', async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${baseUrl}/espacios/7/sesion/cobros`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBeTruthy();
+        body = await request.json();
+        return HttpResponse.json(
+          { data: { pedidos_cobrados: 1, total: '120.00', metodo_pago: 'terminal', monto_recibido: null, cambio: '0.00', restante: '80.00' }, meta: {}, error: null },
+          { status: 201 },
+        );
+      }),
+    );
+
+    await expect(
+      api.collectSpaceAccount('tenant-token', 7, { metodo: 'terminal', totalEsperado: '120.00', pedidoIds: ['p1'] }),
+    ).resolves.toMatchObject({ restante: '80.00' });
+    expect(body).toEqual({ metodo_pago: 'terminal', total_esperado: '120.00', pedido_ids: ['p1'] });
+  });
+
+  it('cobra la cuenta completa en efectivo con lo recibido', async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${baseUrl}/espacios/7/sesion/cobros`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(
+          { data: { pedidos_cobrados: 2, total: '200.00', metodo_pago: 'efectivo', monto_recibido: '500.00', cambio: '300.00', restante: '0.00' }, meta: {}, error: null },
+          { status: 201 },
+        );
+      }),
+    );
+
+    await api.collectSpaceAccount('tenant-token', 7, { metodo: 'efectivo', montoRecibido: '500.00', totalEsperado: '200.00' });
+    expect(body).toEqual({ metodo_pago: 'efectivo', monto_recibido: '500.00', total_esperado: '200.00' });
+  });
+
+  it('aparta una renta de mostrador para renovar al fin del turno y la cobra en efectivo', async () => {
+    const bodies: unknown[] = [];
+    const rental = { id: 'r1', espacio: { id: 3, nombre: 'Cancha 1', tipo: 'cancha' }, inicio: '2026-10-01T19:00:00Z', fin: '2026-10-01T20:00:00Z', duracion_min: 60, monto: '300.00', estado: 'pendiente_pago', version: 1 };
+    server.use(
+      http.post(`${baseUrl}/reservas`, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({ data: rental, meta: {}, error: null }, { status: 201 });
+      }),
+      http.post(`${baseUrl}/reservas/r1/pago`, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({ data: { reserva: rental, pedido: {}, cobro: { monto_recibido: '500.00', cambio: '200.00' } }, meta: {}, error: null }, { status: 201 });
+      }),
+    );
+
+    await api.startCounterRental('tenant-token', { espacioId: 3, duracionMin: 60, inicio: '2026-10-01T19:00:00Z' });
+    await expect(api.payCounterRental('tenant-token', 'r1', '500.00')).resolves.toMatchObject({ cobro: { cambio: '200.00' } });
+    expect(bodies).toEqual([
+      { espacio_id: 3, duracion_min: 60, inicio: '2026-10-01T19:00:00Z' },
+      { metodo_pago: 'efectivo', monto_recibido: '500.00' },
+    ]);
+  });
+
+  it('rechaza un pedido desde Cocina con su versión y el motivo', async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${baseUrl}/pedidos/${orderFixture.id}/cancelaciones`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ data: {}, meta: {}, error: null }, { status: 201 });
+      }),
+    );
+
+    await api.rejectOrder('tenant-token', orderFixture.id, 2, 'Se terminó');
+    expect(body).toEqual({ version_esperada: 2, motivo: 'Se terminó' });
+  });
 });

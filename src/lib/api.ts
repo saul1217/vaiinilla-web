@@ -44,6 +44,12 @@ import type {
   UnpaidAccounts,
   SpaceBatchResult,
   SpaceType,
+  AccountCollection,
+  AccountPaymentMethod,
+  CounterRental,
+  CounterRentalPayment,
+  SpaceAvailability,
+  SpaceSessionDetail,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -602,6 +608,90 @@ export const api = {
 
   async unpaidAccounts(token: string): Promise<UnpaidAccounts> {
     return (await request<UnpaidAccounts>('/espacios/cuentas-sin-pagar', { token })).data;
+  },
+
+  /** Cocina rechaza un pedido que no puede preparar; el cliente ve el motivo. */
+  async rejectOrder(token: string, id: string, expectedVersion: number, motivo: string): Promise<void> {
+    await request(`/pedidos/${id}/cancelaciones`, {
+      method: 'POST',
+      token,
+      idempotent: true,
+      body: { version_esperada: expectedVersion, motivo },
+    });
+  },
+
+  async spaceAvailability(token: string): Promise<SpaceAvailability[]> {
+    return (await request<SpaceAvailability[]>('/espacios/disponibilidad', { token })).data;
+  },
+
+  async spaceSession(token: string, spaceId: number): Promise<SpaceSessionDetail> {
+    return (await request<SpaceSessionDetail>(`/espacios/${spaceId}/sesion`, { token })).data;
+  },
+
+  /**
+   * Cobra la cuenta del espacio (pagar al final): toda, o solo `pedidoIds` para dividirla.
+   * Con la terminal no hay efectivo recibido ni cambio.
+   */
+  async collectSpaceAccount(
+    token: string,
+    spaceId: number,
+    input: { metodo: AccountPaymentMethod; montoRecibido?: string; totalEsperado: string; pedidoIds?: string[] },
+  ): Promise<AccountCollection> {
+    return (
+      await request<AccountCollection>(`/espacios/${spaceId}/sesion/cobros`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: {
+          metodo_pago: input.metodo,
+          ...(input.metodo === 'efectivo' ? { monto_recibido: input.montoRecibido } : {}),
+          total_esperado: input.totalEsperado,
+          ...(input.pedidoIds ? { pedido_ids: input.pedidoIds } : {}),
+        },
+      })
+    ).data;
+  },
+
+  /** Libera el espacio. El backend lo rechaza con pedidos sin cobrar. */
+  async releaseSpace(token: string, spaceId: number, version?: number): Promise<void> {
+    await request(`/espacios/${spaceId}/sesion/cierres`, {
+      method: 'POST',
+      token,
+      idempotent: true,
+      body: version ? { version } : {},
+    });
+  },
+
+  /** Aparta una cancha en mostrador: `inicio` null = ahora; el fin del turno = renovar. */
+  async startCounterRental(
+    token: string,
+    input: { espacioId: number; duracionMin: number; inicio: string | null },
+  ): Promise<CounterRental> {
+    return (
+      await request<CounterRental>('/reservas', {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: { espacio_id: input.espacioId, duracion_min: input.duracionMin, ...(input.inicio ? { inicio: input.inicio } : {}) },
+      })
+    ).data;
+  },
+
+  /** Cobra en efectivo la renta apartada: con el cobro se ocupa la cancha o se alarga su turno. */
+  async payCounterRental(token: string, rentalId: string, montoRecibido: string): Promise<CounterRentalPayment> {
+    return (
+      await request<CounterRentalPayment>(`/reservas/${rentalId}/pago`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: { metodo_pago: 'efectivo', monto_recibido: montoRecibido },
+      })
+    ).data;
+  },
+
+  /** Suelta el horario apartado si no se cobró. */
+  async cancelCounterRental(token: string, rentalId: string): Promise<void> {
+    await request(`/reservas/${rentalId}/cancelacion`, { method: 'POST', token, idempotent: true });
   },
 
   async createSpaceBatch(

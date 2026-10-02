@@ -12,11 +12,12 @@ import {
   RefreshCw,
   TimerReset,
   UtensilsCrossed,
+  XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { KitchenOrderCard } from '../components/kitchen-order-card';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
-import { Button, Feedback, PageHeader } from '../components/ui';
+import { Button, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
@@ -27,6 +28,9 @@ import type { OrderDetail, OrderStatus } from '../types/api';
 type KitchenTargetStatus = Extract<OrderStatus, 'preparando' | 'listo'>;
 type OrderPage = { orders: OrderDetail[]; cursor: string | null };
 
+/** Mínimo que pide el backend para el motivo de un rechazo. */
+const MIN_REJECTION_REASON = 3;
+
 export function KitchenPage() {
   const { tenant } = useSessions();
   const token = tenant?.token ?? '';
@@ -34,6 +38,8 @@ export function KitchenPage() {
   const role = tenant?.context.rol;
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<OrderDetail | null>(null);
+  const [reason, setReason] = useState('');
   const now = useKitchenClock();
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
   const ordersQueryKey = ['orders', 'kitchen', scopeId] as const;
@@ -81,6 +87,36 @@ export function KitchenPage() {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
     },
   });
+
+  // Cocina rechaza lo que no puede preparar; el cliente ve el motivo y se le devuelve el pago.
+  const reject = useMutation({
+    mutationFn: ({ order, motivo }: { order: OrderDetail; motivo: string }) =>
+      api.rejectOrder(token, order.id, order.version, motivo),
+    onSuccess: (_, { order }) => {
+      setRejecting(null);
+      setNotice(`Pedido ${order.folio} rechazado. El cliente verá el motivo.`);
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
+    },
+  });
+
+  function beginReject(order: OrderDetail) {
+    reject.reset();
+    setReason('');
+    setRejecting(order);
+  }
+
+  const rejectButton = (order: OrderDetail) => (
+    <Button
+      className="kitchen-ticket__button"
+      variant="ghost"
+      disabled={transition.isPending || reject.isPending}
+      onClick={() => beginReject(order)}
+    >
+      <XCircle aria-hidden="true" /> No se puede preparar
+    </Button>
+  );
 
   const allOrders = useMemo(
     () => [...(orders.data?.pages.flatMap((page) => page.orders) ?? [])]
@@ -237,14 +273,17 @@ export function KitchenPage() {
                 stage="pending"
                 now={now}
                 action={(
-                  <Button
-                    className="kitchen-ticket__button"
-                    loading={changingOrderId === order.id}
-                    disabled={transition.isPending}
-                    onClick={() => transition.mutate({ order, target: 'preparando' })}
-                  >
-                    <Flame aria-hidden="true" /> Comenzar preparación
-                  </Button>
+                  <>
+                    <Button
+                      className="kitchen-ticket__button"
+                      loading={changingOrderId === order.id}
+                      disabled={transition.isPending}
+                      onClick={() => transition.mutate({ order, target: 'preparando' })}
+                    >
+                      <Flame aria-hidden="true" /> Comenzar preparación
+                    </Button>
+                    {rejectButton(order)}
+                  </>
                 )}
               />
             )) : (
@@ -270,14 +309,17 @@ export function KitchenPage() {
                 stage="preparing"
                 now={now}
                 action={(
-                  <Button
-                    className="kitchen-ticket__button"
-                    loading={changingOrderId === order.id}
-                    disabled={transition.isPending}
-                    onClick={() => transition.mutate({ order, target: 'listo' })}
-                  >
-                    <CheckCircle2 aria-hidden="true" /> Marcar como listo
-                  </Button>
+                  <>
+                    <Button
+                      className="kitchen-ticket__button"
+                      loading={changingOrderId === order.id}
+                      disabled={transition.isPending}
+                      onClick={() => transition.mutate({ order, target: 'listo' })}
+                    >
+                      <CheckCircle2 aria-hidden="true" /> Marcar como listo
+                    </Button>
+                    {rejectButton(order)}
+                  </>
                 )}
               />
             )) : (
@@ -308,6 +350,47 @@ export function KitchenPage() {
           </KitchenColumn>
         </section>
       )}
+
+      <Modal
+        open={Boolean(rejecting)}
+        onOpenChange={(open) => { if (!open) setRejecting(null); }}
+        title={rejecting ? `Rechazar pedido ${rejecting.folio}` : 'Rechazar pedido'}
+        description="El cliente verá este motivo y se le devolverá lo que pagó."
+      >
+        {rejecting && (
+          <form
+            className="transaction-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const motivo = reason.trim();
+              if (motivo.length >= MIN_REJECTION_REASON) reject.mutate({ order: rejecting, motivo });
+            }}
+          >
+            {reject.isError && <Feedback tone="error">{errorMessage(reject.error)}</Feedback>}
+            <Field
+              name="rejection-reason"
+              label="Motivo"
+              placeholder="Se terminó el producto"
+              maxLength={240}
+              autoFocus
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              hint={`Mínimo ${MIN_REJECTION_REASON} letras.`}
+            />
+            <div className="form-actions">
+              <Button type="button" variant="ghost" onClick={() => setRejecting(null)}>Cancelar</Button>
+              <Button
+                type="submit"
+                variant="danger"
+                loading={reject.isPending}
+                disabled={reason.trim().length < MIN_REJECTION_REASON}
+              >
+                Rechazar pedido
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {orders.hasNextPage && (
         <div className="orders-footer">
