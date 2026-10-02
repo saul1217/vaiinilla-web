@@ -4,12 +4,14 @@
 // Contrato: docs/mesero-backend.md.
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Bell, CheckCircle2, ScanLine, Table2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, EmptyState, Feedback, Modal } from './ui';
 import { SpaceAccountPanel } from './space-account-panel';
 import { spaceStatusLine } from '../lib/space-status';
 import { splitSpaceName, type StaffUi } from '../lib/staff-ui';
 import { OrderStatusBadge } from './status-badge';
+import { alertKeys, newAlerts, type WaiterAlert } from '../lib/waiter-alerts';
+import { playAlert, systemNotify, unlockAlertSound } from '../lib/alert-sound';
 import { QrTokenField } from './qr-token-field';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -139,6 +141,32 @@ export function WaiterBoard({
     return list;
   }, [board.data, spaces]);
 
+  // Avisos: lo que cambió desde el sondeo anterior. La primera carga solo marca lo visto.
+  const seen = useRef<Set<string> | null>(null);
+  const [alerts, setAlerts] = useState<WaiterAlert[]>([]);
+  const [notifyPermission, setNotifyPermission] = useState(() =>
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+  );
+  useEffect(() => {
+    if (!board.data || role !== 'mesero') return;
+    const current = board.data.tables;
+    if (seen.current) {
+      const fresh = newAlerts(current, seen.current);
+      if (fresh.length) {
+        setAlerts((shown) => [...fresh, ...shown].slice(0, 4));
+        playAlert();
+        fresh.forEach((alert) => systemNotify(alert.title, alert.body));
+      }
+    }
+    seen.current = alertKeys(current);
+    // Se va el aviso de lo que ya se entregó o atendió.
+    setAlerts((shown) => shown.filter((alert) => seen.current!.has(alert.key)));
+  }, [board.data, role]);
+  useEffect(() => {
+    window.addEventListener('pointerdown', unlockAlertSound);
+    return () => window.removeEventListener('pointerdown', unlockAlertSound);
+  }, []);
+
   const latestDelivering = delivering
     ? tables.flatMap((table) => table.pedidos).find((order) => order.id === delivering.id) ?? delivering
     : null;
@@ -167,6 +195,44 @@ export function WaiterBoard({
     }
     return space ? spaceStatusLine(space) : 'Libre';
   };
+
+  const alertsBlock = (
+    <>
+      {role === 'mesero' && notifyPermission === 'default' && (
+        <button
+          type="button"
+          className="waiter-alerts__enable"
+          onClick={() => {
+            unlockAlertSound();
+            void Notification.requestPermission().then(setNotifyPermission);
+          }}
+        >
+          <Bell aria-hidden="true" className="size-4" /> Activar avisos de pedidos listos
+        </button>
+      )}
+      {alerts.length > 0 && (
+        <div className="waiter-alerts" role="alert">
+          {alerts.map((alert) => (
+            <button
+              key={alert.key}
+              type="button"
+              className={`waiter-alert waiter-alert--${alert.kind}`}
+              onClick={() => {
+                setOpenId(alert.spaceId);
+                setAlerts((shown) => shown.filter((item) => item.key !== alert.key));
+              }}
+            >
+              {alert.kind === 'ready' ? <CheckCircle2 aria-hidden="true" /> : <Bell aria-hidden="true" />}
+              <span>
+                <strong>{alert.title}</strong>
+                <small>{alert.body}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
 
   const summary = nueva ? (
     <>
@@ -233,6 +299,7 @@ export function WaiterBoard({
   return (
     <section className={nueva ? 'mesero-board staff-board' : 'mesero-board'} aria-labelledby="mesero-board-title">
       {summary}
+      {alertsBlock}
 
       {board.data && !board.data.callsEnabled && (
         <Feedback tone="info">
