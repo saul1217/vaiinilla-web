@@ -9,8 +9,10 @@ import {
   ReceiptText,
   ScanLine,
   WalletCards,
+  XCircle,
 } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { RejectOrderDialog } from '../components/reject-order-dialog';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
@@ -46,6 +48,8 @@ export function PosPage() {
   const [deliveryOrder, setDeliveryOrder] = useState<OrderDetail | null>(null);
   const [qrToken, setQrToken] = useState('');
   const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
+  // Caja quita un artículo que no se puede entregar; si ya se pagó, se devuelve esa parte.
+  const [removingFrom, setRemovingFrom] = useState<OrderDetail | null>(null);
 
   const session = useQuery({
     queryKey: ['cash-session', scopeId],
@@ -331,9 +335,14 @@ export function PosPage() {
                     key={order.id}
                     order={order}
                     actions={
-                      <Button disabled={!active} onClick={() => beginCash(order)}>
-                        <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar
-                      </Button>
+                      <>
+                        <Button disabled={!active} onClick={() => beginCash(order)}>
+                          <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar
+                        </Button>
+                        <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                        </Button>
+                      </>
                     }
                   />
                 )) : (
@@ -359,9 +368,14 @@ export function PosPage() {
                     key={order.id}
                     order={order}
                     actions={
-                      <Button variant="dark" onClick={() => beginDelivery(order)}>
-                        <ScanLine aria-hidden="true" className="size-5" /> Validar QR
-                      </Button>
+                      <>
+                        <Button variant="dark" onClick={() => beginDelivery(order)}>
+                          <ScanLine aria-hidden="true" className="size-5" /> Validar QR
+                        </Button>
+                        <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                        </Button>
+                      </>
                     }
                   />
                 )) : (
@@ -463,6 +477,19 @@ export function PosPage() {
           </div>
         )}
       </Modal>
+      <RejectOrderDialog
+        token={token}
+        order={removingFrom}
+        allowWholeOrder={false}
+        onClose={() => setRemovingFrom(null)}
+        onRejected={async (order, target) => {
+          setRemovingFrom(null);
+          setDeliveryNotice(
+            target.kind === 'item' ? `Se quitó ${target.name} del pedido ${order.folio}. El cliente verá el motivo.` : null,
+          );
+          await refreshOperation();
+        }}
+      />
     </div>
   );
 }

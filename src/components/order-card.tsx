@@ -83,11 +83,12 @@ function OrderItems({ order, expanded = false }: { order: OrderDetail; expanded?
   return (
     <ul className={`order-items ${expanded ? 'order-items--expanded' : ''}`} aria-label="Productos del pedido">
       {order.items.map((item) => (
-        <li key={item.id}>
+        <li key={item.id} className={item.rechazo ? 'is-rejected' : undefined}>
           <span className="order-items__quantity">{item.cantidad}×</span>
           <span className="order-items__name">
             <strong>{item.nombre_producto}</strong>
             {item.opciones.length > 0 && <small>{item.opciones.map((option) => option.nombre).join(', ')}</small>}
+            {item.rechazo && <small className="item-rejection">Quitado: {item.rechazo.motivo}</small>}
           </span>
           {expanded && <span className="order-items__subtotal">{formatMoney(item.subtotal)}</span>}
         </li>

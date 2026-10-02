@@ -6629,3 +6629,50 @@ tbody tr:last-child td {
   .charge-mode__indicator, .charge-mode button { transition: none; }
   .split-parts__count { animation: none; }
 }
+
+/* Rechazo por artículo: el artículo sigue a la vista, tachado y con su motivo. */
+.order-items li.is-rejected .order-items__name strong,
+.order-items li.is-rejected .order-items__quantity,
+.order-items li.is-rejected .order-items__subtotal,
+.kitchen-ticket li.is-rejected .kitchen-ticket__product > strong,
+.kitchen-ticket li.is-rejected .kitchen-ticket__quantity {
+  color: var(--color-muted);
+  text-decoration: line-through;
+  transition: color 240ms ease;
+}
+
+.item-rejection {
+  display: block;
+  color: var(--color-danger);
+  font-size: 0.78rem;
+  font-weight: 700;
+  animation: item-rejection-in 360ms var(--spring-bouncy-easing, cubic-bezier(.34, 1.56, .64, 1)) both;
+}
+
+@keyframes item-rejection-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Elegir qué no se puede preparar: renglones como la lista de pedidos del cobro. */
+.reject-scope { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.reject-scope__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--color-white-warm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 200ms ease, border-color 200ms ease, transform var(--spring-bouncy);
+}
+.reject-scope__option:active { transform: scale(0.98); }
+.reject-scope__option:has(input:checked) { background: var(--color-danger-soft); border-color: var(--color-danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  .item-rejection { animation: none; }
+  .reject-scope__option { transition: none; }
+}
