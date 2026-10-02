@@ -6680,3 +6680,372 @@ tbody tr:last-child td {
 /* El artículo quitado no se ve activo, y el radio sigue el color de peligro de la app. */
 .kitchen-ticket li.is-rejected .kitchen-ticket__quantity { background: var(--color-cream-2); }
 .reject-scope__option input { accent-color: var(--color-danger); width: 18px; height: 18px; flex-shrink: 0; }
+
+/* ===== Personal (Mesero, Caja, Cocina): presentación de las apps, oscura. =====
+   Se activa con html[data-staff-ui='nueva'] mientras una vista del personal está abierta.
+   Redefinir las variables oscurece todo el marco, los diálogos y los formularios a la vez. */
+html[data-staff-ui='nueva'] {
+  --color-cream: #1b1b19;
+  --color-cream-2: #2a2a26;
+  --color-cream-3: #34342f;
+  --color-ink: #f4f1e7;
+  --color-ink-soft: #dedbcf;
+  --color-white-warm: #232320;
+  --color-muted: #a3a194;
+  --line: rgba(244, 241, 231, 0.09);
+  --line-strong: rgba(244, 241, 231, 0.18);
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.28);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
+  --shadow-lg: 0 36px 90px rgba(0, 0, 0, 0.55);
+  --color-danger: #f07a6e;
+  --color-danger-dark: #f39a90;
+  --color-danger-soft: rgba(240, 122, 110, 0.14);
+  --staff-call: #df5b4f;
+  --staff-ready: rgba(180, 224, 77, 0.15);
+  color-scheme: dark;
+}
+
+/* Sobre lima el texto sigue oscuro; el botón "oscuro" se vuelve claro, como la píldora de la app. */
+html[data-staff-ui='nueva'] .button--primary { color: #16150f; box-shadow: none; }
+html[data-staff-ui='nueva'] .button--primary:enabled:hover { box-shadow: 0 10px 24px rgba(180, 224, 77, 0.22); }
+html[data-staff-ui='nueva'] .button--dark:enabled:hover { background: #e6e2d4; }
+
+.staff-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.staff-ui-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin-left: auto;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--color-white-warm);
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: transform var(--spring-bouncy), background-color 240ms ease;
+}
+
+.staff-ui-switch svg { width: 16px; height: 16px; }
+.staff-ui-switch:active { transform: scale(0.96); }
+
+.staff-chip,
+.staff-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.staff-chip span,
+.staff-live span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-muted);
+  transition: background-color 400ms ease;
+}
+
+.staff-chip--on span,
+.staff-live span { background: var(--color-lime); }
+.staff-live--off span { background: var(--color-danger); }
+
+.staff-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.staff-eyebrow::before {
+  content: '';
+  width: 28px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--color-lime);
+}
+
+.staff-title {
+  margin: 6px 0 0;
+  color: var(--color-ink);
+  font-size: clamp(2.6rem, 9vw, 3.6rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.staff-hero p:not(.staff-eyebrow) {
+  margin: 10px 0 0;
+  max-width: 46ch;
+  color: var(--color-muted);
+}
+
+.staff-hero,
+.staff-board > *,
+.staff-cashbar {
+  animation: arrive 520ms var(--ease) both;
+}
+
+.staff-board {
+  display: grid;
+  gap: 14px;
+}
+
+.staff-board-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.staff-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.staff-stat {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 20px;
+  background: var(--color-white-warm);
+  transition: background-color 420ms var(--ease), border-color 420ms var(--ease);
+}
+
+.staff-stat dd {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.staff-stat dt { color: var(--color-muted); font-weight: 600; }
+.staff-stat--call { border-color: rgba(240, 122, 110, 0.45); background: rgba(240, 122, 110, 0.14); }
+.staff-stat--call dt { color: var(--color-danger); }
+.staff-stat--ready { border-color: rgba(180, 224, 77, 0.4); background: var(--staff-ready); }
+
+/* Un solo indicador que se desliza con resorte, como el segmento "Todas / Por atender" de la app. */
+.staff-segment {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--color-white-warm);
+}
+
+.staff-segment__indicator {
+  position: absolute;
+  inset: 5px auto 5px 5px;
+  width: calc((100% - 10px) / 2);
+  border-radius: 13px;
+  background: var(--color-ink);
+  transition: transform var(--spring-snappy);
+}
+
+.staff-segment[data-value='pending'] .staff-segment__indicator { transform: translateX(100%); }
+
+.staff-segment button {
+  position: relative;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-weight: 700;
+  transition: color 240ms ease, transform var(--spring-bouncy);
+}
+
+.staff-segment button[aria-checked='true'] { color: #16150f; }
+.staff-segment button:active { transform: scale(0.96); }
+
+.staff-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (min-width: 900px) {
+  .staff-tiles { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); }
+}
+
+.staff-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 132px;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 22px;
+  background: var(--color-white-warm);
+  color: var(--color-ink);
+  text-align: left;
+  animation: arrive 520ms var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 38ms);
+  transition:
+    transform var(--spring-bouncy),
+    background-color 420ms var(--ease),
+    border-color 420ms var(--ease),
+    color 420ms var(--ease);
+}
+
+.staff-tile:active { transform: scale(0.96); }
+
+.staff-tile__name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.staff-tile__name strong {
+  font-size: 2.1rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.staff-tile__name span {
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.staff-tile small {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  animation: arrive 420ms var(--ease) both;
+}
+
+/* Libre: apagada, como en la app. */
+.staff-tile--free {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.staff-tile--free .staff-tile__name strong { color: color-mix(in srgb, var(--color-muted) 80%, transparent); }
+
+.staff-tile--call {
+  border-color: transparent;
+  background: var(--staff-call);
+  color: #fff7f2;
+  animation: arrive 520ms var(--ease) both, staff-call-pulse 2.4s ease-in-out 600ms infinite;
+}
+
+.staff-tile--ready {
+  border-color: rgba(180, 224, 77, 0.45);
+  background: var(--staff-ready);
+}
+
+.staff-tile--skeleton {
+  background: var(--color-cream-2);
+  animation: skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes staff-call-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(223, 91, 79, 0); }
+  50% { box-shadow: 0 0 0 6px rgba(223, 91, 79, 0.18); }
+}
+
+.staff-empty {
+  margin: 8px 0;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+/* Caja: la sesión en una barra; cerrar se despliega. */
+.staff-cashbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 22px;
+  background: var(--color-white-warm);
+}
+
+.staff-cashbar__state { display: flex; align-items: center; gap: 12px; }
+.staff-cashbar__state div { display: grid; }
+.staff-cashbar__state strong { font-size: 1.05rem; }
+.staff-cashbar__state small { color: var(--color-muted); }
+
+.staff-cashbar__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-muted);
+}
+
+.staff-cashbar--open .staff-cashbar__dot { background: var(--color-lime); box-shadow: 0 0 0 4px rgba(180, 224, 77, 0.18); }
+
+.staff-cashbar__close summary,
+.staff-details summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+  transition: transform var(--spring-bouncy);
+}
+
+.staff-cashbar__close summary::-webkit-details-marker,
+.staff-details summary::-webkit-details-marker { display: none; }
+.staff-cashbar__close summary:active,
+.staff-details summary:active { transform: scale(0.96); }
+.staff-cashbar__close[open] form,
+.staff-details[open] > :not(summary) { margin-top: 12px; animation: arrive 420ms var(--ease) both; }
+
+.staff-details { color: var(--color-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .staff-hero, .staff-board > *, .staff-cashbar, .staff-tile, .staff-tile small,
+  .staff-cashbar__close[open] form, .staff-details[open] > :not(summary) { animation: none; }
+  .staff-segment__indicator, .staff-tile, .staff-ui-switch, .staff-segment button { transition: none; }
+}
+
+html[data-staff-ui='nueva'] .mobile-header { background: rgba(27, 27, 25, 0.92); }
+html[data-staff-ui='nueva'] .operational-signal { background: rgba(244, 241, 231, 0.04); }
+/* Nombres largos ("VIP vaini 1", "Cancha"): hasta dos renglones en vez de "CAN…". */
+.staff-tile__name span { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15; }
+html[data-staff-ui='nueva'] .queue-column { background: rgba(244, 241, 231, 0.03); }
+html[data-staff-ui='nueva'] :is(.orders-section, .kitchen-system-details, .kitchen-toolbar) { background: rgba(244, 241, 231, 0.03); }
+html[data-staff-ui='nueva'], html[data-staff-ui='nueva'] body { background: var(--color-cream); }
+.staff-tile__name span { font-size: 0.6875rem; letter-spacing: 0.04em; overflow-wrap: normal; word-break: keep-all; }
