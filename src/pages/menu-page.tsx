@@ -18,6 +18,7 @@ import { useFieldArray, useForm, useWatch, type UseFormReturn } from 'react-hook
 import { z } from 'zod';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
+import { looksLikeRental, rentsSpaces } from '../lib/rental-product';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { calculateDigitalPrice } from '../lib/catalog-pricing';
@@ -530,6 +531,17 @@ function ProductFormModal({
     control: form.control,
     name: 'precio_mostrador',
   });
+  const productName = useWatch({ control: form.control, name: 'nombre' }) ?? '';
+  // Un negocio que renta canchas las cobra desde Espacios: como producto, la renta no aparta
+  // horario y se puede empalmar con una renta real.
+  const { tenant } = useSessions();
+  const spaces = useQuery({
+    queryKey: ['managed-spaces', tenant?.context.establecimiento_id ?? ''],
+    enabled: open && Boolean(token),
+    queryFn: () => api.listManagedSpaces(token),
+  });
+  const rentalBusiness = rentsSpaces(spaces.data);
+  const rentalLikeName = rentalBusiness && looksLikeRental(productName);
   const digitalPrice = calculateDigitalPrice(counterPrice);
   const imageInputId = useId();
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -628,6 +640,13 @@ function ProductFormModal({
           )}
         </Feedback>
       )}
+      {rentalBusiness ? (
+        <Feedback tone={rentalLikeName ? 'error' : 'info'}>
+          {rentalLikeName
+            ? 'Esto parece una renta de cancha. Las rentas se cobran desde Espacios, que aparta el horario; como producto se puede vender sin horario y empalmarse con otra renta.'
+            : 'Este negocio renta canchas desde Espacios. No crees la renta como producto: no aparta horario.'}
+        </Feedback>
+      ) : null}
       <form
         className="product-form"
         onSubmit={(event) => void form.handleSubmit((data) => mutation.mutate(data))(event)}

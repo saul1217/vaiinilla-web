@@ -14,6 +14,7 @@ const apiMock = vi.hoisted(() => ({
   changeProductAvailability: vi.fn(),
   uploadProductImage: vi.fn(),
   deleteProductImage: vi.fn(),
+  listManagedSpaces: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
@@ -57,6 +58,7 @@ describe('administración del menú', () => {
       productos: [product],
     });
     apiMock.createProduct.mockReset().mockResolvedValue(product);
+    apiMock.listManagedSpaces.mockReset().mockResolvedValue([]);
     apiMock.createCategory.mockReset();
     apiMock.updateCategory.mockReset();
     apiMock.updateProduct.mockReset();
@@ -137,5 +139,25 @@ describe('administración del menú', () => {
       101,
       expect.objectContaining({ nombre: 'Latte' }),
     );
+  });
+
+  it('sin canchas con precio no avisa nada', async () => {
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Nuevo producto' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Nombre *'), 'Renta cancha 1 h');
+    expect(within(dialog).queryByText(/Espacios/)).toBeNull();
+  });
+
+  it('con canchas que se rentan avisa, y más fuerte si el nombre parece una renta', async () => {
+    apiMock.listManagedSpaces.mockResolvedValue([{ id: 1, nombre: 'Cancha 1', tipo: 'cancha', precio_hora: '300.00' }]);
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Nuevo producto' }));
+    const dialog = screen.getByRole('dialog');
+    expect(await within(dialog).findByText(/renta canchas desde Espacios/)).toBeVisible();
+    await user.type(within(dialog).getByLabelText('Nombre *'), 'Pádel 1 hora');
+    expect(await within(dialog).findByText(/Esto parece una renta de cancha/)).toBeVisible();
   });
 });
