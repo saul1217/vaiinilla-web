@@ -3,6 +3,7 @@ import {
   ArrowRight,
   BadgePercent,
   Banknote,
+  HandCoins,
   ClipboardList,
   NotebookTabs,
   PackageCheck,
@@ -130,6 +131,14 @@ export function TenantDashboardPage() {
           <p>Ticket promedio</p>
           <strong>{report ? formatAnalyticsMoney(report.resumen.ticket_promedio) : '—'}</strong>
           <small>Promedio por pedido confirmado</small>
+        </article>
+        <article className="analytics-kpi">
+          <span className="analytics-kpi__icon">
+            <HandCoins aria-hidden="true" />
+          </span>
+          <p>Propinas</p>
+          <strong>{report ? formatAnalyticsMoney(report.resumen.propinas ?? '0.00') : '—'}</strong>
+          <small>Aparte de las ventas, sin comisión</small>
         </article>
         <article className="analytics-kpi">
           <span className="analytics-kpi__icon">

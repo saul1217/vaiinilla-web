@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { RejectOrderDialog } from '../components/reject-order-dialog';
+import { TipPicker } from '../components/tip-picker';
+import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
@@ -103,8 +105,8 @@ export function PosPage() {
     onSuccess: refreshOperation,
   });
   const collectMutation = useMutation({
-    mutationFn: ({ order, amount }: { order: OrderDetail; amount: string }) =>
-      api.collectCash(token, order.id, amount, order.version),
+    mutationFn: ({ order, amount, propina }: { order: OrderDetail; amount: string; propina: string }) =>
+      api.collectCash(token, order.id, amount, order.version, propina),
     onSuccess: async (result) => {
       setCashReceipt(result);
       setCashOrder(null);
@@ -137,7 +139,11 @@ export function PosPage() {
   });
 
   const receivedAmount = cashForm.watch('amount');
-  const change = cashOrder ? calculateChange(receivedAmount, cashOrder.total) : null;
+  const [tip, setTip] = useState<TipChoice>({ kind: 'none' });
+  const tipValue = cashOrder ? tipAmount(cashOrder.total, tip) : '0.00';
+  // El efectivo cubre el pedido más la propina; el cambio se calcula después.
+  const cashToCollect = cashOrder ? addMoney(cashOrder.total, tipValue) : '0.00';
+  const change = cashOrder ? calculateChange(receivedAmount, cashToCollect) : null;
   const active = session.data;
   const queuedOrders = useMemo(
     () => cashierQueue.data?.pages.flatMap((page) => page.orders) ?? [],
@@ -156,6 +162,7 @@ export function PosPage() {
   function beginCash(order: OrderDetail) {
     collectMutation.reset();
     setCashReceipt(null);
+    setTip({ kind: 'none' });
     setCashOrder(order);
     cashForm.reset({ amount: '' });
   }
@@ -415,18 +422,19 @@ export function PosPage() {
           <form
             className="transaction-form"
             onSubmit={(event) => void cashForm.handleSubmit(({ amount }) => {
-              collectMutation.mutate({ order: cashOrder, amount });
+              collectMutation.mutate({ order: cashOrder, amount, propina: tipValue });
             })(event)}
           >
             {collectMutation.isError && <Feedback tone="error">{errorMessage(collectMutation.error)}</Feedback>}
             <OrderDetailContent order={cashOrder} />
+            <TipPicker base={cashOrder.total} value={tip} onChange={setTip} />
             <Field
               label="Efectivo recibido (MXN)"
               inputMode="decimal"
               placeholder={cashOrder.total}
               autoFocus
               error={cashForm.formState.errors.amount?.message}
-              hint={receivedAmount && change === null ? `Debe ser igual o mayor a ${formatMoney(cashOrder.total)}.` : undefined}
+              hint={receivedAmount && change === null ? `Debe ser igual o mayor a ${formatMoney(cashToCollect)}.` : undefined}
               {...cashForm.register('amount')}
             />
             <div className={`change-preview ${change !== null ? 'change-preview--ready' : ''}`} aria-live="polite">

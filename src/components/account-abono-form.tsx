@@ -2,10 +2,12 @@ import { useMutation } from '@tanstack/react-query';
 import { CreditCard, Minus, Plus, ReceiptText, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { RollingMoney } from './rolling-money';
+import { TipPicker } from './tip-picker';
 import { Button, Feedback, Field } from './ui';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { partAmountCents } from '../lib/account-split';
+import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
 import { calculateChange, centsToMoney, formatMoney, moneyToCents } from '../lib/money';
 import type { AbonoMode, AccountAbonoResult, AccountPaymentMethod } from '../types/api';
 
@@ -36,13 +38,17 @@ export function AccountAbonoForm({
   const [amount, setAmount] = useState(restante);
   const [parts, setParts] = useState(2);
   const [received, setReceived] = useState('');
+  const [tip, setTip] = useState<TipChoice>({ kind: 'none' });
 
   const restanteCents = moneyToCents(restante) ?? 0n;
   const chargeCents =
     mode === 'partes' ? partAmountCents(restanteCents, parts) : MONEY_PATTERN.test(amount) ? (moneyToCents(amount) ?? 0n) : 0n;
   const charge = centsToMoney(chargeCents);
   const tooMuch = chargeCents > restanteCents;
-  const change = method === 'efectivo' && MONEY_PATTERN.test(received) ? calculateChange(received, charge) : null;
+  const tipValue = tipAmount(charge, tip);
+  // Lo que paga la persona: su parte más la propina.
+  const toCollect = addMoney(charge, tipValue);
+  const change = method === 'efectivo' && MONEY_PATTERN.test(received) ? calculateChange(received, toCollect) : null;
   const canConfirm = chargeCents > 0n && !tooMuch && (method === 'terminal' || change !== null);
 
   const abonar = useMutation({
@@ -54,6 +60,7 @@ export function AccountAbonoForm({
         partes: mode === 'partes' ? parts : undefined,
         montoRecibido: method === 'efectivo' ? received : undefined,
         restanteEsperado: restante,
+        propina: tipValue,
       }),
     onSuccess: onDone,
   });
@@ -114,8 +121,10 @@ export function AccountAbonoForm({
           <CreditCard aria-hidden="true" className="size-5" /> Terminal
         </button>
       </div>
+      <TipPicker base={charge} value={tip} onChange={setTip} />
       <p className="space-account__charge">
-        <ReceiptText aria-hidden="true" className="size-5" /> Este pago <strong><RollingMoney value={charge} /></strong>
+        <ReceiptText aria-hidden="true" className="size-5" /> {tipValue !== '0.00' ? 'Este pago con propina' : 'Este pago'}{' '}
+        <strong><RollingMoney value={toCollect} /></strong>
       </p>
       {method === 'efectivo' ? (
         <Field
@@ -129,7 +138,7 @@ export function AccountAbonoForm({
           error={MONEY_PATTERN.test(received) && change === null ? 'El efectivo no alcanza.' : undefined}
         />
       ) : (
-        <p className="space-account__hint">Cobra {formatMoney(charge)} en la terminal y confirma cuando se apruebe.</p>
+        <p className="space-account__hint">Cobra {formatMoney(toCollect)} en la terminal y confirma cuando se apruebe.</p>
       )}
       <div className="form-actions">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
