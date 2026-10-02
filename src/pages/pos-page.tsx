@@ -21,6 +21,7 @@ import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { OrderCard, OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { PendingRefunds } from '../components/pending-refunds';
 import { WaiterBoard } from '../components/waiter-board';
 import { StaffUiSwitch } from '../components/staff-ui-switch';
 import { useStaffUi } from '../lib/staff-ui';
@@ -383,6 +384,8 @@ export function PosPage() {
           Administración controla la sesión y consulta pedidos; por seguridad, los cobros y entregas requieren una cuenta con rol de Caja.
         </Feedback>
       )}
+
+      {isCashier && <PendingRefunds token={token} canConfirm />}
 
       {isCashier && (
         <section className="pos-orders" aria-labelledby="cashier-orders-title">

@@ -443,7 +443,12 @@ export function WaiterBoard({
                 </li>
               ))}
             </ul>)}
-            <SpaceAccountPanel token={token} spaceId={open.espacio.id} availability={spaces.get(open.espacio.id)} />
+            <SpaceAccountPanel
+              token={token}
+              spaceId={open.espacio.id}
+              availability={spaces.get(open.espacio.id)}
+              canConfirmRefunds={role === 'cajero'}
+            />
           </div>
         )}
       </Modal>
