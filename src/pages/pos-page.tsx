@@ -22,6 +22,8 @@ import { OrderCard, OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { WaiterBoard } from '../components/waiter-board';
+import { StaffUiSwitch } from '../components/staff-ui-switch';
+import { useStaffUi } from '../lib/staff-ui';
 import { useSessions } from '../context/session-context';
 import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
@@ -44,6 +46,11 @@ export function PosPage() {
   const isCashier = role === 'cajero';
   const isOperationalWorker = isHeartbeatRole(role);
   const canOperateSession = role === 'admin' || isCashier;
+  // Mesero y Caja tienen la presentación de las apps (oscura) y pueden volver a la anterior.
+  const staffRole = role === 'mesero' || isCashier;
+  const [ui, setUi] = useStaffUi(staffRole);
+  const nueva = staffRole && ui === 'nueva';
+  const businessName = tenant?.access.establecimiento.nombre;
   const queryClient = useQueryClient();
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
   const [cashReceipt, setCashReceipt] = useState<CashPaymentResult | null>(null);
@@ -175,14 +182,32 @@ export function PosPage() {
   }
 
   return (
-    <div className="page-stack">
-      <PageHeader
-        eyebrow="Operación POS"
-        title={pageTitle(role)}
-        description={pageDescription(role)}
-      />
+    <div className={nueva ? 'page-stack staff-page' : 'page-stack'}>
+      {staffRole && (
+        <div className="staff-topbar">
+          {nueva && isOperationalWorker && (
+            <span className={`staff-chip ${heartbeat.isSuccess ? 'staff-chip--on' : ''}`} role="status">
+              <span /> {heartbeat.isSuccess ? `${roleLabel(role)} en línea` : `Conectando ${roleLabel(role)}`}
+            </span>
+          )}
+          <StaffUiSwitch mode={ui} onChange={setUi} />
+        </div>
+      )}
+      {!nueva ? (
+        <PageHeader
+          eyebrow="Operación POS"
+          title={pageTitle(role)}
+          description={pageDescription(role)}
+        />
+      ) : isCashier ? (
+        <header className="staff-hero">
+          <p className="staff-eyebrow">Turno de hoy{businessName ? ` · ${businessName}` : ''}</p>
+          <h1 className="staff-title">Caja en control.</h1>
+          <p>Cobra, entrega y mantén el menú disponible para todos.</p>
+        </header>
+      ) : null}
 
-      <OperationalStatusPanel />
+      {!nueva && <OperationalStatusPanel />}
 
       {session.isError && <Feedback tone="error">{errorMessage(session.error)}</Feedback>}
       {openMutation.isError && <Feedback tone="error">{errorMessage(openMutation.error)}</Feedback>}
@@ -201,7 +226,7 @@ export function PosPage() {
         </Feedback>
       )}
 
-      {isOperationalWorker && !isCashier && (
+      {isOperationalWorker && !isCashier && !nueva && (
         <section className="operation-card">
           <Radio aria-hidden="true" className="size-7 text-muted" />
           <div>
@@ -214,9 +239,57 @@ export function PosPage() {
         </section>
       )}
 
-      {role === 'mesero' && <WaiterBoard token={token} role="mesero" />}
+      {role === 'mesero' && <WaiterBoard token={token} role="mesero" variant={ui} businessName={businessName} />}
 
-      {role !== 'mesero' && (
+      {nueva && isCashier && (
+        <section className={`staff-cashbar ${active ? 'staff-cashbar--open' : ''}`} aria-label="Sesión de Caja">
+          <div className="staff-cashbar__state">
+            <span className="staff-cashbar__dot" aria-hidden="true" />
+            <div>
+              <strong>{session.isPending ? 'Consultando…' : active ? 'Caja abierta' : 'Caja cerrada'}</strong>
+              <small>
+                {active
+                  ? `Desde ${formatDate(active.abierta_en)} · fondo $${active.monto_inicial}`
+                  : 'Abre la caja para recibir pedidos.'}
+              </small>
+            </div>
+          </div>
+          {active ? (
+            <details className="staff-cashbar__close">
+              <summary>Cerrar caja</summary>
+              <form
+                className="operation-form"
+                onSubmit={(event) => void closeForm.handleSubmit((data) => closeMutation.mutate(data))(event)}
+              >
+                <Field
+                  label="Monto final (MXN)"
+                  inputMode="decimal"
+                  placeholder="725.50"
+                  error={closeForm.formState.errors.amount?.message}
+                  {...closeForm.register('amount')}
+                />
+                <Button type="submit" variant="dark" loading={closeMutation.isPending}>Cerrar Caja</Button>
+              </form>
+            </details>
+          ) : (
+            <form
+              className="operation-form"
+              onSubmit={(event) => void openForm.handleSubmit((data) => openMutation.mutate(data))(event)}
+            >
+              <Field
+                label="Monto inicial (MXN)"
+                inputMode="decimal"
+                placeholder="500.00"
+                error={openForm.formState.errors.amount?.message}
+                {...openForm.register('amount')}
+              />
+              <Button type="submit" loading={openMutation.isPending}>Abrir Caja</Button>
+            </form>
+          )}
+        </section>
+      )}
+
+      {role !== 'mesero' && !nueva && (
       <>
       <section className={`cash-hero ${active ? 'cash-hero--open' : ''}`}>
         <div className="cash-hero__icon"><WalletCards aria-hidden="true" /></div>
@@ -410,7 +483,14 @@ export function PosPage() {
       )}
 
       {/* Caja también cobra la cuenta de las mesas y renta canchas en mostrador. */}
-      {isCashier && <WaiterBoard token={token} role="cajero" />}
+      {isCashier && <WaiterBoard token={token} role="cajero" variant={ui} businessName={businessName} />}
+
+      {nueva && (
+        <details className="staff-details">
+          <summary>Estado del local</summary>
+          <OperationalStatusPanel />
+        </details>
+      )}
 
       <Modal
         open={Boolean(cashOrder)}

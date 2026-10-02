@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button, EmptyState, Feedback, Modal } from './ui';
 import { SpaceAccountPanel } from './space-account-panel';
 import { spaceStatusLine } from '../lib/space-status';
+import { splitSpaceName, type StaffUi } from '../lib/staff-ui';
 import { OrderStatusBadge } from './status-badge';
 import { QrTokenField } from './qr-token-field';
 import { api } from '../lib/api';
@@ -39,7 +40,18 @@ function since(iso: string, now: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-export function WaiterBoard({ token, role }: { token: string; role: 'mesero' | 'cajero' }) {
+export function WaiterBoard({
+  token,
+  role,
+  variant = 'anterior',
+  businessName,
+}: {
+  token: string;
+  role: 'mesero' | 'cajero';
+  /** 'nueva' = presentación de las apps (oscura); misma función. */
+  variant?: StaffUi;
+  businessName?: string;
+}) {
   const client = useMemo(() => createWaiterClient(() => Promise.resolve(token)), [token]);
   const queryClient = useQueryClient();
   const [openId, setOpenId] = useState<number | null>(null);
@@ -47,6 +59,8 @@ export function WaiterBoard({ token, role }: { token: string; role: 'mesero' | '
   const [qrToken, setQrToken] = useState('');
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // Solo en la presentación nueva, como en las apps: todas o solo las que piden algo.
+  const [onlyPending, setOnlyPending] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -132,9 +146,63 @@ export function WaiterBoard({ token, role }: { token: string; role: 'mesero' | '
   const calling = tables.filter((table) => stateOf(table) === 'call').length;
   const ready = tables.reduce((sum, table) => sum + table.pedidos.filter((order) => order.estado === 'listo').length, 0);
   const active = tables.filter((table) => stateOf(table, spaces.get(table.espacio.id)) === 'active').length;
+  const nueva = variant === 'nueva';
+  const shownTables = nueva && onlyPending
+    ? tables.filter((table) => {
+      const state = stateOf(table, spaces.get(table.espacio.id));
+      return state === 'call' || state === 'ready';
+    })
+    : tables;
 
-  return (
-    <section className="mesero-board" aria-labelledby="mesero-board-title">
+  const tileCaption = (table: BoardTable, state: TableState, space?: SpaceAvailability) => {
+    const readyOrders = table.pedidos.filter((order) => order.estado === 'listo');
+    if (state === 'call' && table.llamada) {
+      return `${table.llamada.estado === 'en_camino' ? `Va ${table.llamada.tomada_por?.nombre ?? 'alguien'}` : 'Llamando'} · ${since(table.llamada.creado_en, now)}`;
+    }
+    if (state === 'ready') return `#${readyOrders.map((order) => order.folio).join(', #')} listo`;
+    if (state === 'active') {
+      return table.pedidos.length
+        ? `${table.pedidos.length} ${table.pedidos.length === 1 ? 'pedido' : 'pedidos'}`
+        : space ? spaceStatusLine(space) : 'Ocupada';
+    }
+    return space ? spaceStatusLine(space) : 'Libre';
+  };
+
+  const summary = nueva ? (
+    <>
+      <header className="staff-board-head">
+        <div>
+          <p className="staff-eyebrow">
+            {role === 'mesero' ? 'Mesero' : 'Caja'}{businessName ? ` · ${businessName}` : ''}
+          </p>
+          <h2 id="mesero-board-title" className="staff-title">Mesas</h2>
+        </div>
+        <span className={`staff-live ${board.isError ? 'staff-live--off' : ''}`} role="status">
+          <span /> {board.isError ? 'Sin conexión' : 'En vivo'}
+        </span>
+      </header>
+      <dl className="staff-stats" role="status">
+        <div className={calling ? 'staff-stat staff-stat--call' : 'staff-stat'}>
+          <dd>{calling}</dd>
+          <dt>llamando</dt>
+        </div>
+        <div className={ready ? 'staff-stat staff-stat--ready' : 'staff-stat'}>
+          <dd>{ready}</dd>
+          <dt>{ready === 1 ? 'listo' : 'listos'}</dt>
+        </div>
+        <div className="staff-stat">
+          <dd>{active}</dd>
+          <dt>activas</dt>
+        </div>
+      </dl>
+      <div className="staff-segment" role="radiogroup" aria-label="Qué mesas ver" data-value={onlyPending ? 'pending' : 'all'}>
+        <span className="staff-segment__indicator" aria-hidden="true" />
+        <button type="button" role="radio" aria-checked={!onlyPending} onClick={() => setOnlyPending(false)}>Todas</button>
+        <button type="button" role="radio" aria-checked={onlyPending} onClick={() => setOnlyPending(true)}>Por atender</button>
+      </div>
+    </>
+  ) : (
+    <>
       <div className="section-heading">
         <div>
           <p className="eyebrow">Servicio en mesa</p>
@@ -159,6 +227,12 @@ export function WaiterBoard({ token, role }: { token: string; role: 'mesero' | '
           <dd>{active}</dd>
         </div>
       </dl>
+    </>
+  );
+
+  return (
+    <section className={nueva ? 'mesero-board staff-board' : 'mesero-board'} aria-labelledby="mesero-board-title">
+      {summary}
 
       {board.data && !board.data.callsEnabled && (
         <Feedback tone="info">
@@ -169,9 +243,9 @@ export function WaiterBoard({ token, role }: { token: string; role: 'mesero' | '
       {notice && <Feedback tone={notice.tone}>{notice.text}</Feedback>}
 
       {board.isPending ? (
-        <div className="mesero-grid" aria-hidden="true">
+        <div className={nueva ? 'staff-tiles' : 'mesero-grid'} aria-hidden="true">
           {Array.from({ length: 6 }, (_, index) => (
-            <span key={index} className="mesero-tile mesero-tile--skeleton" />
+            <span key={index} className={nueva ? 'staff-tile staff-tile--skeleton' : 'mesero-tile mesero-tile--skeleton'} />
           ))}
         </div>
       ) : tables.length === 0 ? (
@@ -180,6 +254,36 @@ export function WaiterBoard({ token, role }: { token: string; role: 'mesero' | '
           title="Sin mesas"
           description="El establecimiento todavía no tiene espacios configurados en Administración."
         />
+      ) : nueva ? (
+        shownTables.length === 0 ? (
+          <p className="staff-empty">Nadie está llamando y no hay pedidos listos.</p>
+        ) : (
+          <div className="staff-tiles">
+            {shownTables.map((table, index) => {
+              const space = spaces.get(table.espacio.id);
+              const state = stateOf(table, space);
+              const { number, kind } = splitSpaceName(table.espacio.nombre);
+              return (
+                <button
+                  key={table.espacio.id}
+                  type="button"
+                  className={`staff-tile staff-tile--${state}`}
+                  style={{ ['--i' as string]: index }}
+                  onClick={() => setOpenId(table.espacio.id)}
+                  aria-label={`${table.espacio.nombre}. ${
+                    state === 'call' ? 'Llamando' : state === 'ready' ? 'Pedido listo' : state === 'active' ? 'Con pedidos' : 'Libre'
+                  }`}
+                >
+                  <span className="staff-tile__name">
+                    {number && <strong>{number}</strong>}
+                    <span>{kind || table.espacio.nombre}</span>
+                  </span>
+                  <small key={tileCaption(table, state, space)}>{tileCaption(table, state, space)}</small>
+                </button>
+              );
+            })}
+          </div>
+        )
       ) : (
         <div className="mesero-grid">
           {tables.map((table) => {
