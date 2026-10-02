@@ -7062,3 +7062,9 @@ html[data-staff-ui='nueva'], html[data-staff-ui='nueva'] body { background: var(
 .space-account__chip--due { background: rgba(224, 92, 76, 0.14); color: #c2473a; }
 html[data-staff-ui='nueva'] .space-account__chip { color: #bfe06a; }
 html[data-staff-ui='nueva'] .space-account__chip--due { background: rgba(224, 92, 76, 0.2); color: #f08a7d; }
+
+/* En teléfono las columnas de Cocina van apiladas: una sola página que se desliza. Una lista con
+   scroll propio atrapaba el dedo a media pantalla y no dejaba bajar. */
+@media (max-width: 900px), (pointer: coarse) {
+  .kitchen-board-grid .queue-column__list { max-height: none; overflow-y: visible; overscroll-behavior: auto; }
+}
