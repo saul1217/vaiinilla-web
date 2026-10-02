@@ -460,6 +460,16 @@ export interface SpaceAccountOrder {
   cliente: { nombre: string } | null;
   items_resumen: string;
   creado_en: string;
+  /** "Esto lo pago yo": el alias de quien dijo que paga este pedido. */
+  pagara?: string | null;
+}
+
+/** Un abono (dividir por monto o partes) aún sin liquidar. */
+export interface SpaceAccountAbono {
+  id: string;
+  metodo_pago: AccountPaymentMethod;
+  monto: number;
+  creado_en: string;
 }
 
 /** La sesión abierta de un espacio y su cuenta (GET /espacios/:id/sesion). */
@@ -469,7 +479,18 @@ export interface SpaceSessionDetail {
   saldada: boolean;
   fin_previsto: string | null;
   sesion: { id: string; estado: string; inicio: string; fin_previsto: string | null; version: number } | null;
-  cuenta: { pedidos: SpaceAccountOrder[]; total: number; pendiente: number; pagado: number; saldada: boolean } | null;
+  cuenta: {
+    pedidos: SpaceAccountOrder[];
+    total: number;
+    pendiente: number;
+    pagado: number;
+    saldada: boolean;
+    /** Ya recibido en abonos; los pedidos se cobran al cubrir todo. */
+    abonado?: number;
+    /** Pendiente menos abonado. */
+    restante?: number;
+    abonos?: SpaceAccountAbono[];
+  } | null;
 }
 
 export type AccountPaymentMethod = 'efectivo' | 'terminal';
@@ -482,6 +503,16 @@ export interface AccountCollection {
   cambio: string;
   /** Lo que sigue sin cobrar de la cuenta: "0.00" si quedó saldada. */
   restante: string;
+}
+
+export type AbonoMode = 'monto' | 'partes';
+
+/** POST /espacios/:id/sesion/abonos. */
+export interface AccountAbonoResult {
+  abono: { id: string; metodo_pago: AccountPaymentMethod; monto: string; monto_recibido: string | null; cambio: string };
+  restante: string;
+  liquidada: boolean;
+  pedidos_cobrados: number;
 }
 
 /** Una renta de cancha apartada en mostrador, esperando su cobro. */

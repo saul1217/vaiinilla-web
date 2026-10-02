@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,7 @@ import { SpaceAccountPanel } from './space-account-panel';
 const apiMock = vi.hoisted(() => ({
   spaceSession: vi.fn(),
   collectSpaceAccount: vi.fn(),
+  abonarSpaceAccount: vi.fn(),
   releaseSpace: vi.fn(),
   startCounterRental: vi.fn(),
   payCounterRental: vi.fn(),
@@ -107,5 +108,101 @@ describe('cuenta del espacio', () => {
     await user.click(await screen.findByRole('button', { name: 'Cancelar renta' }));
 
     expect(apiMock.cancelCounterRental).toHaveBeenCalledWith('t', 'r1');
+  });
+
+  it('partes iguales: cobra la primera de tres con la terminal', async () => {
+    const user = userEvent.setup();
+    apiMock.abonarSpaceAccount.mockResolvedValue({
+      abono: { id: 'a1', metodo_pago: 'terminal', monto: '66.83', monto_recibido: null, cambio: '0.00' },
+      restante: '133.67',
+      liquidada: false,
+      pedidos_cobrados: 0,
+    });
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Cobrar cuenta/ }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('radio', { name: 'Partes iguales' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Una persona más' }));
+    await user.click(within(dialog).getByRole('radio', { name: /Terminal/ }));
+    // $200.50 entre 3 = 66.83 (hacia abajo); el último pago cubre el centavo.
+    expect(within(dialog).getByText(/Cobra \$66\.83 MXN en la terminal/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pago' }));
+
+    await waitFor(() =>
+      expect(apiMock.abonarSpaceAccount).toHaveBeenCalledWith('t', 7, {
+        metodo: 'terminal',
+        modo: 'partes',
+        monto: undefined,
+        partes: 3,
+        montoRecibido: undefined,
+        restanteEsperado: '200.50',
+      }),
+    );
+    expect(await screen.findByText(/Abonado \$66.83.*Falta \$133.67/)).toBeInTheDocument();
+  });
+
+  it('por monto en efectivo, con cambio', async () => {
+    const user = userEvent.setup();
+    apiMock.abonarSpaceAccount.mockResolvedValue({
+      abono: { id: 'a1', metodo_pago: 'efectivo', monto: '100.00', monto_recibido: '120.00', cambio: '20.00' },
+      restante: '100.50',
+      liquidada: false,
+      pedidos_cobrados: 0,
+    });
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Cobrar cuenta/ }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('radio', { name: 'Por monto' }));
+    const amount = within(dialog).getByRole('textbox', { name: 'Monto de este pago' });
+    await user.clear(amount);
+    await user.type(amount, '300.00');
+    expect(within(dialog).getByText('Es más de lo que falta.')).toBeInTheDocument();
+    await user.clear(amount);
+    await user.type(amount, '100.00');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Efectivo recibido' }), '120.00');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pago' }));
+
+    await waitFor(() =>
+      expect(apiMock.abonarSpaceAccount).toHaveBeenCalledWith('t', 7, expect.objectContaining({ modo: 'monto', monto: '100.00', montoRecibido: '120.00' })),
+    );
+  });
+
+  it('con abonos en curso no se cobra por pedidos y se ve lo abonado', async () => {
+    const user = userEvent.setup();
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: { ...openAccount.cuenta!, abonado: 100, restante: 100.5, abonos: [] },
+    });
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    expect(await screen.findByText('Abonado')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Cobrar cuenta/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('radio', { name: 'Por pedidos' })).toBeDisabled();
+    expect(within(dialog).getByRole('radio', { name: 'Por monto' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(dialog).getByRole('textbox', { name: 'Monto de este pago' })).toHaveValue('100.50');
+  });
+
+  it('cobra la parte de quien dijo "esto lo pago yo"', async () => {
+    const user = userEvent.setup();
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: { ...openAccount.cuenta!, pedidos: [order('p1', 11, 120), { ...order('p2', 12, 80.5), pagara: 'Ana' }] },
+    });
+    apiMock.collectSpaceAccount.mockResolvedValue({ pedidos_cobrados: 1, total: '80.50', metodo_pago: 'terminal', monto_recibido: null, cambio: '0.00', restante: '120.00' });
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Cobrar cuenta/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Paga Ana/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Parte de Ana' }));
+    await user.click(within(dialog).getByRole('radio', { name: /Terminal/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
+
+    await waitFor(() =>
+      expect(apiMock.collectSpaceAccount).toHaveBeenCalledWith('t', 7, expect.objectContaining({ pedidoIds: ['p2'], totalEsperado: '80.50' })),
+    );
   });
 });
