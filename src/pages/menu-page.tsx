@@ -21,7 +21,8 @@ import { useSessions } from '../context/session-context';
 import { looksLikeRental, rentsSpaces } from '../lib/rental-product';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
-import { calculateDigitalPrice } from '../lib/catalog-pricing';
+import { customerCounterPrice } from '../lib/catalog-pricing';
+import { cardPaymentsStep } from '../lib/card-payments';
 import { formatMoney } from '../lib/money';
 import type { CatalogCategory, CatalogProduct, CatalogProductInput } from '../types/api';
 
@@ -127,7 +128,7 @@ export function MenuPage() {
       <PageHeader
         eyebrow="Administración"
         title="Menú"
-        description="Organiza lo que vende la tienda, sus precios, preparación y opciones. El precio digital oficial siempre lo calcula el backend."
+        description="Organiza lo que vende la tienda, sus precios, preparación y opciones. El precio que ve el cliente lo confirma el sistema al cobrar."
         action={
           <Button
             disabled={categories.length === 0}
@@ -404,10 +405,12 @@ function ProductCard({
             <dt>Mostrador</dt>
             <dd>{formatMoney(product.precio_mostrador)}</dd>
           </div>
-          <div>
-            <dt>Digital</dt>
-            <dd>{formatMoney(product.precio_digital)}</dd>
-          </div>
+          {product.precio_digital !== product.precio_mostrador && (
+            <div>
+              <dt>Con tarjeta</dt>
+              <dd>{formatMoney(product.precio_digital)}</dd>
+            </div>
+          )}
         </dl>
         <div className="product-card__details">
           <span>{product.tiempo_estimado_min} min</span>
@@ -542,7 +545,18 @@ function ProductFormModal({
   });
   const rentalBusiness = rentsSpaces(spaces.data);
   const rentalLikeName = rentalBusiness && looksLikeRental(productName);
-  const digitalPrice = calculateDigitalPrice(counterPrice);
+  const customerPrice = customerCounterPrice(counterPrice);
+  // ¿Con tarjeta el cliente paga un cargo? Solo el administrador puede leerlo; para los demás
+  // roles se muestra el precio sin la nota de la tarjeta.
+  const cardConfig = useQuery({
+    queryKey: ['card-payments', tenant?.context.establecimiento_id ?? ''],
+    enabled: open && Boolean(token) && tenant?.context.rol === 'admin',
+    queryFn: () => api.cardPayments(token),
+  });
+  const cardCommissionPassed =
+    Boolean(cardConfig.data?.stripe_enabled) &&
+    cardPaymentsStep(cardConfig.data) === 'ready' &&
+    Boolean(cardConfig.data?.pasar_comision_al_cliente);
   const imageInputId = useId();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -723,9 +737,13 @@ function ProductFormModal({
               {...form.register('precio_mostrador')}
             />
             <div className="digital-price-preview" aria-live="polite">
-              <span>Precio al cliente estimado</span>
-              <strong>{digitalPrice ? formatMoney(digitalPrice) : '—'}</strong>
-              <small>El backend confirmará y guardará el precio oficial.</small>
+              <span>Lo que paga el cliente</span>
+              <strong>{customerPrice ? formatMoney(customerPrice) : '—'}</strong>
+              <small>
+                {cardCommissionPassed
+                  ? 'Con efectivo o saldo, este precio. Con tarjeta se suma la comisión; el sistema calcula el cargo.'
+                  : 'El mismo precio con efectivo, saldo o tarjeta.'}
+              </small>
             </div>
           </div>
         </section>
