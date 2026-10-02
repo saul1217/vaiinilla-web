@@ -193,7 +193,7 @@ export function PosPage() {
         </section>
       )}
 
-      {role === 'mesero' && <WaiterBoard token={token} />}
+      {role === 'mesero' && <WaiterBoard token={token} role="mesero" />}
 
       {role !== 'mesero' && (
       <>
@@ -377,6 +377,9 @@ export function PosPage() {
           )}
         </section>
       )}
+
+      {/* Caja también cobra la cuenta de las mesas y renta canchas en mostrador. */}
+      {isCashier && <WaiterBoard token={token} role="cajero" />}
 
       <Modal
         open={Boolean(cashOrder)}

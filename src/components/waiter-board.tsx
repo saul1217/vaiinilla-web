@@ -1,14 +1,18 @@
-// Tablero de Mesero: cada mesa a la vista, más urgente primero (llamando → pedido listo →
-// activa → libre). Sondea cada 5 s. Al tocar una mesa se abre su detalle con las acciones
-// Voy / Atendida / Entregar. Contrato: docs/mesero-backend.md.
+// Tablero de Mesero y Caja: cada mesa a la vista, más urgente primero (llamando → pedido
+// listo → activa → libre). Sondea cada 5 s. Al tocar una mesa se abre su detalle con las
+// acciones Voy / Atendida / Entregar y su cuenta (cobrar, rentar, liberar).
+// Contrato: docs/mesero-backend.md.
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Bell, CheckCircle2, ScanLine, Table2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button, EmptyState, Feedback, Modal } from './ui';
+import { SpaceAccountPanel } from './space-account-panel';
+import { spaceStatusLine } from '../lib/space-status';
 import { OrderStatusBadge } from './status-badge';
 import { QrTokenField } from './qr-token-field';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
+import type { SpaceAvailability } from '../types/api';
 import {
   CALL_REASON_LABEL,
   createWaiterClient,
@@ -23,10 +27,10 @@ type TableState = 'call' | 'ready' | 'active' | 'free';
 
 const STATE_RANK: Record<TableState, number> = { call: 0, ready: 1, active: 2, free: 3 };
 
-function stateOf(table: BoardTable): TableState {
+function stateOf(table: BoardTable, space?: SpaceAvailability): TableState {
   if (table.llamada) return 'call';
   if (table.pedidos.some((order) => order.estado === 'listo')) return 'ready';
-  if (table.pedidos.length > 0) return 'active';
+  if (table.pedidos.length > 0 || (space && space.estado !== 'libre')) return 'active';
   return 'free';
 }
 
@@ -35,7 +39,7 @@ function since(iso: string, now: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-export function WaiterBoard({ token }: { token: string }) {
+export function WaiterBoard({ token, role }: { token: string; role: 'mesero' | 'cajero' }) {
   const client = useMemo(() => createWaiterClient(() => Promise.resolve(token)), [token]);
   const queryClient = useQueryClient();
   const [openId, setOpenId] = useState<number | null>(null);
@@ -56,6 +60,27 @@ export function WaiterBoard({ token }: { token: string }) {
     refetchInterval: POLL_MS,
     refetchIntervalInBackground: true,
   });
+
+  const availability = useQuery({
+    queryKey: ['space-availability'],
+    enabled: Boolean(token),
+    queryFn: () => api.spaceAvailability(token),
+    refetchInterval: POLL_MS,
+  });
+  const spaces = useMemo(
+    () => new Map((availability.data ?? []).map((space) => [space.espacio.id, space])),
+    [availability.data],
+  );
+
+  // Un negocio puede dispensar el QR al entregar en el espacio ("Flujo de mi tienda").
+  const status = useQuery({
+    queryKey: ['operational-status', 'delivery-qr'],
+    enabled: Boolean(token),
+    queryFn: () => api.operationalStatus(token),
+    staleTime: 60_000,
+  });
+  const deliveryRequiresQr = status.data?.entrega_requiere_qr !== false;
+  const canDeliver = role === 'mesero';
 
   const transition = useMutation({
     mutationFn: ({ call, target }: { call: TableCall; target: 'en_camino' | 'atendida' }) => client.transitionCall(call, target),
@@ -83,19 +108,22 @@ export function WaiterBoard({ token }: { token: string }) {
       await queryClient.invalidateQueries({ queryKey: ['mesero-board'] });
     },
     // A version conflict leaves `delivering` stale; the refetched board supplies the new version on retry.
-    onError: () => queryClient.invalidateQueries({ queryKey: ['mesero-board'] }),
+    onError: async (error) => {
+      if (!deliveryRequiresQr) setNotice({ tone: 'error', text: errorMessage(error) });
+      await queryClient.invalidateQueries({ queryKey: ['mesero-board'] });
+    },
   });
 
   const tables = useMemo(() => {
     const list = [...(board.data?.tables ?? [])];
     list.sort((a, b) => {
-      const rank = STATE_RANK[stateOf(a)] - STATE_RANK[stateOf(b)];
+      const rank = STATE_RANK[stateOf(a, spaces.get(a.espacio.id))] - STATE_RANK[stateOf(b, spaces.get(b.espacio.id))];
       if (rank !== 0) return rank;
       if (a.llamada && b.llamada) return Date.parse(a.llamada.creado_en) - Date.parse(b.llamada.creado_en);
       return a.espacio.nombre.localeCompare(b.espacio.nombre, 'es', { numeric: true });
     });
     return list;
-  }, [board.data]);
+  }, [board.data, spaces]);
 
   const latestDelivering = delivering
     ? tables.flatMap((table) => table.pedidos).find((order) => order.id === delivering.id) ?? delivering
@@ -103,7 +131,7 @@ export function WaiterBoard({ token }: { token: string }) {
   const open = tables.find((table) => table.espacio.id === openId) ?? null;
   const calling = tables.filter((table) => stateOf(table) === 'call').length;
   const ready = tables.reduce((sum, table) => sum + table.pedidos.filter((order) => order.estado === 'listo').length, 0);
-  const active = tables.filter((table) => table.pedidos.length > 0).length;
+  const active = tables.filter((table) => stateOf(table, spaces.get(table.espacio.id)) === 'active').length;
 
   return (
     <section className="mesero-board" aria-labelledby="mesero-board-title">
@@ -155,7 +183,8 @@ export function WaiterBoard({ token }: { token: string }) {
       ) : (
         <div className="mesero-grid">
           {tables.map((table) => {
-            const state = stateOf(table);
+            const space = spaces.get(table.espacio.id);
+            const state = stateOf(table, space);
             const readyOrders = table.pedidos.filter((order) => order.estado === 'listo');
             return (
               <button
@@ -176,6 +205,8 @@ export function WaiterBoard({ token }: { token: string }) {
                   <small>#{readyOrders.map((order) => order.folio).join(', #')} listo</small>
                 ) : state === 'active' ? (
                   <small>{table.pedidos.length} {table.pedidos.length === 1 ? 'pedido' : 'pedidos'}</small>
+                ) : space ? (
+                  <small key={spaceStatusLine(space)}>{spaceStatusLine(space)}</small>
                 ) : (
                   <small>Libre</small>
                 )}
@@ -220,10 +251,21 @@ export function WaiterBoard({ token }: { token: string }) {
                     <strong>#{order.folio} · {order.cliente?.nombre ?? 'Cliente'}</strong>
                     <p>{order.items_resumen}</p>
                   </div>
-                  {order.estado === 'listo' ? (
-                    <Button variant="dark" onClick={() => { deliverMutation.reset(); setDelivering(order); setQrToken(''); }}>
-                      <ScanLine aria-hidden="true" className="size-5" /> Entregar
-                    </Button>
+                  {order.estado === 'listo' && canDeliver ? (
+                    deliveryRequiresQr ? (
+                      <Button variant="dark" onClick={() => { deliverMutation.reset(); setDelivering(order); setQrToken(''); }}>
+                        <ScanLine aria-hidden="true" className="size-5" /> Entregar
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="dark"
+                        loading={deliverMutation.isPending && deliverMutation.variables?.order.id === order.id}
+                        disabled={deliverMutation.isPending}
+                        onClick={() => deliverMutation.mutate({ order, qr: '' })}
+                      >
+                        <CheckCircle2 aria-hidden="true" className="size-5" /> Entregar
+                      </Button>
+                    )
                   ) : (
                     <OrderStatusBadge status={order.estado} />
                   )}
@@ -231,6 +273,7 @@ export function WaiterBoard({ token }: { token: string }) {
               ))}
               {open.pedidos.length === 0 && <li className="mesero-orders__empty">Sin pedidos en curso.</li>}
             </ul>
+            <SpaceAccountPanel token={token} spaceId={open.espacio.id} availability={spaces.get(open.espacio.id)} />
           </div>
         )}
       </Modal>

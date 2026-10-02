@@ -9,6 +9,7 @@ import { KitchenPage } from './kitchen-page';
 const apiMock = vi.hoisted(() => ({
   listOrders: vi.fn(),
   transitionOrder: vi.fn(),
+  rejectOrder: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
@@ -169,5 +170,24 @@ describe('tablero de Cocina', () => {
     render(<KitchenPage />, { wrapper: TestProvider });
     expect(await screen.findByText('Mesa 4')).toBeVisible();
     expect(screen.queryByRole('button', { name: /entregar|validar qr/i })).not.toBeInTheDocument();
+  });
+  it('rechaza un pedido con motivo y avisa que el cliente lo verá', async () => {
+    const user = userEvent.setup();
+    apiMock.rejectOrder.mockResolvedValue(undefined);
+    render(<KitchenPage />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: 'No se puede preparar' }));
+    const confirm = screen.getByRole('button', { name: 'Rechazar pedido' });
+    expect(confirm).toBeDisabled();
+    await user.type(screen.getByLabelText('Motivo'), 'Se terminó el chocolate');
+    await user.click(confirm);
+
+    await waitFor(() => expect(apiMock.rejectOrder).toHaveBeenCalledWith(
+      'tenant-token',
+      pendingOrder.id,
+      2,
+      'Se terminó el chocolate',
+    ));
+    expect(await screen.findByText('Pedido 42 rechazado. El cliente verá el motivo.')).toBeVisible();
   });
 });
