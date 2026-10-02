@@ -44,6 +44,8 @@ import type {
   UnpaidAccounts,
   SpaceBatchResult,
   SpaceType,
+  AbonoMode,
+  AccountAbonoResult,
   AccountCollection,
   AccountPaymentMethod,
   CounterRental,
@@ -633,6 +635,35 @@ export const api = {
    * Cobra la cuenta del espacio (pagar al final): toda, o solo `pedidoIds` para dividirla.
    * Con la terminal no hay efectivo recibido ni cambio.
    */
+  /** Abona a la cuenta por monto o en partes iguales; al cubrir todo, la cuenta se liquida. */
+  async abonarSpaceAccount(
+    token: string,
+    spaceId: number,
+    input: {
+      metodo: AccountPaymentMethod;
+      modo: AbonoMode;
+      monto?: string;
+      partes?: number;
+      montoRecibido?: string;
+      restanteEsperado: string;
+    },
+  ): Promise<AccountAbonoResult> {
+    return (
+      await request<AccountAbonoResult>(`/espacios/${spaceId}/sesion/abonos`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: {
+          metodo_pago: input.metodo,
+          modo: input.modo,
+          ...(input.modo === 'monto' ? { monto: input.monto } : { partes: input.partes }),
+          ...(input.metodo === 'efectivo' ? { monto_recibido: input.montoRecibido } : {}),
+          restante_esperado: input.restanteEsperado,
+        },
+      })
+    ).data;
+  },
+
   async collectSpaceAccount(
     token: string,
     spaceId: number,

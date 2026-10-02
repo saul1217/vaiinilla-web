@@ -6566,3 +6566,66 @@ tbody tr:last-child td {
     border-width: 0;
   }
 }
+
+/* Cómo dividir la cuenta: el mismo indicador con resorte que Efectivo / Terminal, en tres tercios. */
+.charge-mode {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 14px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--color-cream-2);
+}
+
+.charge-mode__indicator {
+  position: absolute;
+  inset: 4px auto 4px 4px;
+  width: calc((100% - 8px) / 3);
+  border-radius: 999px;
+  background: var(--color-ink);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--spring-snappy);
+}
+
+.charge-mode[data-mode='monto'] .charge-mode__indicator { transform: translateX(100%); }
+.charge-mode[data-mode='partes'] .charge-mode__indicator { transform: translateX(200%); }
+
+.charge-mode button {
+  position: relative;
+  z-index: 1;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: color 200ms ease, opacity 180ms ease, transform var(--spring-bouncy);
+}
+
+.charge-mode button:active { transform: scale(0.96); }
+.charge-mode button[aria-checked='true'] { color: var(--color-white-warm); }
+.charge-mode button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.split-parts { display: grid; gap: 8px; }
+.split-parts__stepper { display: flex; align-items: center; gap: 14px; }
+.split-parts__count {
+  min-width: 2ch;
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  animation: split-count-pop 320ms var(--spring-bouncy-easing, cubic-bezier(.34, 1.56, .64, 1));
+}
+
+@keyframes split-count-pop {
+  from { transform: scale(0.8); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .charge-mode__indicator, .charge-mode button { transition: none; }
+  .split-parts__count { animation: none; }
+}

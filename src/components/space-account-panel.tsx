@@ -5,9 +5,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clock3, CreditCard, Printer, ReceiptText, Unlock, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { AccountAbonoForm } from './account-abono-form';
 import { RollingMoney } from './rolling-money';
 import { Button, Feedback, Field, Modal } from './ui';
 import { api } from '../lib/api';
+import { claimAliases } from '../lib/account-split';
 import { errorMessage } from '../lib/api-error';
 import { calculateChange, centsToMoney, formatMoney } from '../lib/money';
 import { clock, spaceStatusLine } from '../lib/space-status';
@@ -69,6 +71,8 @@ export function SpaceAccountPanel({
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [collecting, setCollecting] = useState(false);
+  // Cómo se divide: por pedidos completos, por un monto o en partes iguales.
+  const [chargeMode, setChargeMode] = useState<'pedidos' | 'monto' | 'partes'>('pedidos');
   const [method, setMethod] = useState<AccountPaymentMethod>('efectivo');
   const [selected, setSelected] = useState<string[]>([]);
   const [received, setReceived] = useState('');
@@ -98,6 +102,9 @@ export function SpaceAccountPanel({
   const splitting = selectedOrders.length > 0 && selectedOrders.length < pending.length;
   const change = method === 'efectivo' && MONEY_PATTERN.test(received) ? calculateChange(received, charge) : null;
   const canConfirmCharge = selectedOrders.length > 0 && (method === 'terminal' || change !== null);
+  const abonado = account?.abonado ?? 0;
+  const restante = centsToMoney(toCents(account?.restante ?? account?.pendiente ?? 0));
+  const aliases = claimAliases(pending);
 
   const collect = useMutation({
     mutationFn: () =>
@@ -161,6 +168,8 @@ export function SpaceAccountPanel({
 
   function beginCollect() {
     collect.reset();
+    // Con abonos en curso ya no se cobra por pedidos: se sigue por monto.
+    setChargeMode(abonado > 0 ? 'monto' : 'pedidos');
     setMethod('efectivo');
     setReceived('');
     setSelected(pending.map((order) => order.id));
@@ -222,6 +231,12 @@ export function SpaceAccountPanel({
           <div className="space-account__totals">
             <span>Cuenta <strong><RollingMoney value={centsToMoney(toCents(account.total))} /></strong></span>
             <span>Por cobrar <strong><RollingMoney value={centsToMoney(toCents(account.pendiente))} /></strong></span>
+            {abonado > 0 && (
+              <>
+                <span>Abonado <strong><RollingMoney value={centsToMoney(toCents(abonado))} /></strong></span>
+                <span>Falta <strong><RollingMoney value={restante} /></strong></span>
+              </>
+            )}
           </div>
           <div className="form-actions">
             {pending.length > 0 && (
@@ -251,10 +266,66 @@ export function SpaceAccountPanel({
         open={collecting}
         onOpenChange={(next) => { if (!next) setCollecting(false); }}
         title={`Cobrar ${data.espacio.nombre}`}
-        description="Desmarca pedidos para dividir la cuenta: se cobran solo los marcados."
+        description="Divide por pedidos, por un monto o en partes iguales."
       >
+        <div className="charge-mode" role="radiogroup" aria-label="Cómo dividir" data-mode={chargeMode}>
+          <span className="charge-mode__indicator" aria-hidden="true" />
+          <button
+            type="button"
+            role="radio"
+            aria-checked={chargeMode === 'pedidos'}
+            disabled={abonado > 0}
+            onClick={() => setChargeMode('pedidos')}
+          >
+            Por pedidos
+          </button>
+          <button type="button" role="radio" aria-checked={chargeMode === 'monto'} onClick={() => setChargeMode('monto')}>
+            Por monto
+          </button>
+          <button type="button" role="radio" aria-checked={chargeMode === 'partes'} onClick={() => setChargeMode('partes')}>
+            Partes iguales
+          </button>
+        </div>
+        {abonado > 0 && (
+          <p className="space-account__hint">Ya se abonó {formatMoney(centsToMoney(toCents(abonado)))}: termina por monto o partes.</p>
+        )}
+        {chargeMode !== 'pedidos' ? (
+          <AccountAbonoForm
+            key={chargeMode}
+            token={token}
+            spaceId={spaceId}
+            restante={restante}
+            mode={chargeMode}
+            onCancel={() => setCollecting(false)}
+            onDone={async (result) => {
+              setCollecting(false);
+              const changeText = result.abono.cambio !== '0.00' ? ` Cambio: ${formatMoney(result.abono.cambio)}.` : '';
+              setNotice({
+                tone: 'success',
+                text: result.liquidada
+                  ? `Cobrado ${formatMoney(result.abono.monto)}.${changeText} Cuenta saldada.`
+                  : `Abonado ${formatMoney(result.abono.monto)}.${changeText} Falta ${formatMoney(result.restante)}.`,
+              });
+              await refresh();
+            }}
+          />
+        ) : (
         <div className="transaction-form">
           {collect.isError && <Feedback tone="error">{errorMessage(collect.error)}</Feedback>}
+          {aliases.length > 0 && (
+            <div className="space-account__chips" role="group" aria-label="Cobrar la parte de">
+              {aliases.map((alias) => (
+                <Button
+                  key={alias}
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setSelected(pending.filter((order) => order.pagara === alias).map((order) => order.id))}
+                >
+                  Parte de {alias}
+                </Button>
+              ))}
+            </div>
+          )}
           <ul className="space-account__orders">
             {pending.map((order, index) => (
               <li key={order.id} style={{ ['--i' as string]: index }}>
@@ -262,7 +333,7 @@ export function SpaceAccountPanel({
                   <input type="checkbox" checked={selected.includes(order.id)} onChange={() => toggle(order)} />
                   <span>
                     <strong>#{order.folio} · {order.cliente?.nombre ?? 'Cliente'}</strong>
-                    <small>{order.items_resumen}</small>
+                    <small>{order.items_resumen}{order.pagara ? ` · Paga ${order.pagara}` : ''}</small>
                   </span>
                   <span>{formatMoney(centsToMoney(toCents(order.total)))}</span>
                 </label>
@@ -302,6 +373,7 @@ export function SpaceAccountPanel({
             </Button>
           </div>
         </div>
+        )}
       </Modal>
 
       <Modal
