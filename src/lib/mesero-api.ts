@@ -7,13 +7,14 @@ import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
 import type { ApiEnvelope, ApiErrorEnvelope, OrderDetail, OrderStatus } from '../types/api';
 
-export type CallReason = 'atencion' | 'utensilios' | 'problema';
+export type CallReason = 'atencion' | 'utensilios' | 'problema' | 'cuenta';
 export type CallStatus = 'pendiente' | 'en_camino' | 'atendida' | 'cancelada' | 'expirada';
 
 export const CALL_REASON_LABEL: Record<CallReason, string> = {
   atencion: 'Necesita atención',
   utensilios: 'Pide cubiertos o servilletas',
   problema: 'Algo está mal con su pedido',
+  cuenta: 'Quiere pagar la cuenta',
 };
 
 export interface TableSpace {
