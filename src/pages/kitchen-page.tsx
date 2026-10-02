@@ -30,6 +30,8 @@ type OrderPage = { orders: OrderDetail[]; cursor: string | null };
 
 /** Mínimo que pide el backend para el motivo de un rechazo. */
 const MIN_REJECTION_REASON = 3;
+/** Lo que dura la salida de una tarjeta rechazada (ver .kitchen-ticket--leaving). */
+const LEAVE_MS = 560;
 
 export function KitchenPage() {
   const { tenant } = useSessions();
@@ -40,6 +42,7 @@ export function KitchenPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<OrderDetail | null>(null);
   const [reason, setReason] = useState('');
+  const [leavingId, setLeavingId] = useState<string | null>(null);
   const now = useKitchenClock();
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
   const ordersQueryKey = ['orders', 'kitchen', scopeId] as const;
@@ -92,11 +95,16 @@ export function KitchenPage() {
   const reject = useMutation({
     mutationFn: ({ order, motivo }: { order: OrderDetail; motivo: string }) =>
       api.rejectOrder(token, order.id, order.version, motivo),
-    onSuccess: (_, { order }) => {
+    onSuccess: async (_, { order }) => {
       setRejecting(null);
       setNotice(`Pedido ${order.folio} rechazado. El cliente verá el motivo.`);
+      // La tarjeta se encoge antes de que la lista recargada la quite.
+      setLeavingId(order.id);
+      await new Promise((resolve) => window.setTimeout(resolve, LEAVE_MS));
+      await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
+      setLeavingId(null);
     },
-    onSettled: async () => {
+    onError: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
     },
   });
@@ -272,6 +280,7 @@ export function KitchenPage() {
                 order={order}
                 stage="pending"
                 now={now}
+                leaving={leavingId === order.id}
                 action={(
                   <>
                     <Button
@@ -308,6 +317,7 @@ export function KitchenPage() {
                 order={order}
                 stage="preparing"
                 now={now}
+                leaving={leavingId === order.id}
                 action={(
                   <>
                     <Button

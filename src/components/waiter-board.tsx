@@ -206,7 +206,7 @@ export function WaiterBoard({ token, role }: { token: string; role: 'mesero' | '
                 ) : state === 'active' ? (
                   <small>{table.pedidos.length} {table.pedidos.length === 1 ? 'pedido' : 'pedidos'}</small>
                 ) : space ? (
-                  <small>{spaceStatusLine(space)}</small>
+                  <small key={spaceStatusLine(space)}>{spaceStatusLine(space)}</small>
                 ) : (
                   <small>Libre</small>
                 )}

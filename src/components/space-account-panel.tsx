@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clock3, CreditCard, Printer, ReceiptText, Unlock, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { RollingMoney } from './rolling-money';
 import { Button, Feedback, Field, Modal } from './ui';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -219,8 +220,8 @@ export function SpaceAccountPanel({
       {account && account.pedidos.length > 0 && (
         <div className="space-account__bill">
           <div className="space-account__totals">
-            <span>Cuenta <strong>{formatMoney(centsToMoney(toCents(account.total)))}</strong></span>
-            <span>Por cobrar <strong>{formatMoney(centsToMoney(toCents(account.pendiente)))}</strong></span>
+            <span>Cuenta <strong><RollingMoney value={centsToMoney(toCents(account.total))} /></strong></span>
+            <span>Por cobrar <strong><RollingMoney value={centsToMoney(toCents(account.pendiente))} /></strong></span>
           </div>
           <div className="form-actions">
             {pending.length > 0 && (
@@ -255,8 +256,8 @@ export function SpaceAccountPanel({
         <div className="transaction-form">
           {collect.isError && <Feedback tone="error">{errorMessage(collect.error)}</Feedback>}
           <ul className="space-account__orders">
-            {pending.map((order) => (
-              <li key={order.id}>
+            {pending.map((order, index) => (
+              <li key={order.id} style={{ ['--i' as string]: index }}>
                 <label>
                   <input type="checkbox" checked={selected.includes(order.id)} onChange={() => toggle(order)} />
                   <span>
@@ -268,16 +269,17 @@ export function SpaceAccountPanel({
               </li>
             ))}
           </ul>
-          <div className="space-account__chips" role="radiogroup" aria-label="Forma de pago">
-            <Button variant={method === 'efectivo' ? 'dark' : 'secondary'} role="radio" aria-checked={method === 'efectivo'} onClick={() => setMethod('efectivo')}>
+          <div className="pay-method" role="radiogroup" aria-label="Forma de pago" data-method={method}>
+            <span className="pay-method__indicator" aria-hidden="true" />
+            <button type="button" role="radio" aria-checked={method === 'efectivo'} onClick={() => setMethod('efectivo')}>
               <Wallet aria-hidden="true" className="size-5" /> Efectivo
-            </Button>
-            <Button variant={method === 'terminal' ? 'dark' : 'secondary'} role="radio" aria-checked={method === 'terminal'} onClick={() => setMethod('terminal')}>
+            </button>
+            <button type="button" role="radio" aria-checked={method === 'terminal'} onClick={() => setMethod('terminal')}>
               <CreditCard aria-hidden="true" className="size-5" /> Terminal
-            </Button>
+            </button>
           </div>
           <p className="space-account__charge">
-            <ReceiptText aria-hidden="true" className="size-5" /> A cobrar <strong>{formatMoney(charge)}</strong>
+            <ReceiptText aria-hidden="true" className="size-5" /> A cobrar <strong><RollingMoney value={charge} /></strong>
           </p>
           {method === 'efectivo' ? (
             <Field
@@ -312,7 +314,7 @@ export function SpaceAccountPanel({
           <div className="transaction-form">
             {payRental.isError && <Feedback tone="error">{errorMessage(payRental.error)}</Feedback>}
             <p className="space-account__charge">
-              <ReceiptText aria-hidden="true" className="size-5" /> A cobrar <strong>{formatMoney(rental.monto)}</strong>
+              <ReceiptText aria-hidden="true" className="size-5" /> A cobrar <strong><RollingMoney value={rental.monto} /></strong>
             </p>
             <Field
               name="rental-cash-received"

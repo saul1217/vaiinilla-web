@@ -25,6 +25,11 @@
   --shadow: 0 18px 50px rgba(22, 21, 15, 0.11);
   --shadow-lg: 0 36px 90px rgba(22, 21, 15, 0.18);
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Resortes muestreados de una simulación (rigidez/amortiguamiento): se pueden
+     reorientar a mitad del camino porque las transiciones CSS parten del valor actual. */
+  --spring-snappy: 400ms linear(0.001, 0.027, 0.091, 0.176, 0.273, 0.374, 0.474, 0.568, 0.653, 0.729, 0.784, 0.841, 0.889, 0.927, 0.958, 0.981, 0.998, 1.010, 1.019, 1.024, 1.026, 1.026, 1.026, 1.024, 1.022, 1.019, 1.016, 1.014, 1.011, 1.009, 1.007, 1.006, 1.004, 1.003, 1.002, 1.001, 1, 1, 1, 1, 1);
+  --spring-bouncy: 810ms linear(0.001, 0.080, 0.266, 0.498, 0.748, 0.943, 1.086, 1.174, 1.210, 1.205, 1.173, 1.127, 1.072, 1.027, 0.992, 0.969, 0.957, 0.955, 0.960, 0.969, 0.980, 0.991, 0.999, 1.005, 1.008, 1.010, 1.009, 1.007, 1.005, 1.003, 1.001, 0.999, 0.998, 0.998, 0.998, 0.998, 0.999, 0.999, 1, 1, 1);
+  --spring-soft: 610ms linear(0.001, 0.020, 0.068, 0.133, 0.217, 0.296, 0.376, 0.452, 0.524, 0.590, 0.650, 0.704, 0.751, 0.796, 0.832, 0.862, 0.888, 0.909, 0.927, 0.942, 0.956, 0.966, 0.974, 0.980, 0.986, 0.990, 0.993, 0.995, 0.997, 0.999, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
   --color-danger: #9f2f25;
   --color-danger-dark: #84251d;
   --color-danger-soft: #fff0ee;
@@ -296,6 +301,7 @@ select:enabled {
 }
 
 .feedback {
+  animation: arrive var(--spring-soft) both;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -6380,4 +6386,183 @@ tbody tr:last-child td {
 
 .space-account__orders small {
   color: var(--color-muted);
+}
+
+/* --- Movimiento del personal: cuentas, rentas y Cocina (resortes, nada aparece de golpe). --- */
+@keyframes arrive {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(8px);
+  }
+}
+
+.space-account > * {
+  animation: arrive var(--spring-soft) both;
+}
+
+.space-account > :nth-child(2) { animation-delay: 38ms; }
+.space-account > :nth-child(3) { animation-delay: 76ms; }
+.space-account > :nth-child(4) { animation-delay: 114ms; }
+.space-account > :nth-child(5) { animation-delay: 152ms; }
+
+.space-account__orders li {
+  animation: arrive var(--spring-soft) both;
+  animation-delay: calc(var(--i, 0) * 38ms);
+}
+
+.space-account__orders label {
+  transition:
+    transform var(--spring-bouncy),
+    border-color 200ms ease,
+    background-color 200ms ease;
+}
+
+.space-account__orders label:active {
+  transform: scale(0.98);
+}
+
+.space-account__orders label:has(input:checked) {
+  border-color: var(--color-lime-dark);
+  background: color-mix(in srgb, var(--color-lime) 16%, var(--color-white-warm));
+}
+
+.space-account__orders label:has(input:not(:checked)) > span:last-child {
+  color: var(--color-muted);
+  text-decoration: line-through;
+}
+
+/* Selector Efectivo / Terminal: un solo indicador que se desliza. */
+.pay-method {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--color-cream-2);
+}
+
+.pay-method__indicator {
+  position: absolute;
+  inset: 4px auto 4px 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: var(--color-ink);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--spring-snappy);
+}
+
+.pay-method[data-method='terminal'] .pay-method__indicator {
+  transform: translateX(100%);
+}
+
+.pay-method button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--color-ink);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 200ms ease,
+    transform var(--spring-bouncy);
+}
+
+.pay-method button:active {
+  transform: scale(0.96);
+}
+
+.pay-method button[aria-checked='true'] {
+  color: var(--color-white-warm);
+}
+
+.rolling-money {
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+}
+
+.rolling-money > span {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: pre;
+}
+
+.rolling-money__column {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+  line-height: 1;
+  vertical-align: -0.12em;
+}
+
+.rolling-money__reel {
+  display: grid;
+  transition: transform var(--spring-snappy);
+  transition-delay: calc(var(--column, 0) * 18ms);
+}
+
+.rolling-money__reel span {
+  height: 1em;
+}
+
+.mesero-tile {
+  transition:
+    transform var(--spring-bouncy),
+    box-shadow 160ms var(--ease),
+    background-color 260ms ease,
+    border-color 260ms ease;
+}
+
+.mesero-tile small {
+  animation: arrive var(--spring-soft) both;
+}
+
+.mesero-tile:active {
+  transform: scale(0.96);
+}
+
+/* Cocina: el pedido rechazado se desvanece y luego cierra su hueco; no desaparece.
+   La lista es una columna flex para que el margen negativo absorba el espacio entre tarjetas. */
+.kitchen-board-grid .queue-column__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.kitchen-ticket--leaving {
+  interpolate-size: allow-keywords;
+  flex-shrink: 0;
+  overflow: hidden;
+  pointer-events: none;
+  animation: ticket-leave 560ms linear forwards;
+}
+
+@keyframes ticket-leave {
+  0% {
+    height: auto;
+    animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1);
+  }
+  35% {
+    height: auto;
+    opacity: 0;
+    filter: blur(6px);
+    transform: scale(0.96);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.15, 1);
+  }
+  to {
+    opacity: 0;
+    filter: blur(6px);
+    transform: scale(0.96);
+    height: 0;
+    min-height: 0;
+    margin-bottom: -12px;
+    padding-block: 0;
+    border-width: 0;
+  }
 }
