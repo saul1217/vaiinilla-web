@@ -50,6 +50,7 @@ import type {
   CounterRentalPayment,
   SpaceAvailability,
   SpaceSessionDetail,
+  TenantCardPayments,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -692,6 +693,27 @@ export const api = {
   /** Suelta el horario apartado si no se cobró. */
   async cancelCounterRental(token: string, rentalId: string): Promise<void> {
     await request(`/reservas/${rentalId}/cancelacion`, { method: 'POST', token, idempotent: true });
+  },
+
+  /** `null` = el negocio todavía no conecta su cuenta de Stripe. */
+  async cardPayments(token: string): Promise<TenantCardPayments | null> {
+    return (await request<TenantCardPayments | null>('/stripe/configuracion', { token })).data;
+  },
+
+  /** Enlace de Stripe para conectar la cuenta o completar lo que falta. */
+  async startCardPaymentsOnboarding(token: string): Promise<StripeOnboarding> {
+    return (await request<StripeOnboarding>('/stripe/onboarding', { method: 'POST', token, idempotent: true })).data;
+  },
+
+  async setCardPayments(token: string, enabled: boolean): Promise<TenantCardPayments> {
+    return (
+      await request<TenantCardPayments>('/stripe/configuracion', {
+        method: 'PATCH',
+        token,
+        idempotent: true,
+        body: { stripe_enabled: enabled },
+      })
+    ).data;
   },
 
   async createSpaceBatch(
