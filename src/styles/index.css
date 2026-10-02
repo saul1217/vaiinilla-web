@@ -7068,3 +7068,22 @@ html[data-staff-ui='nueva'] .space-account__chip--due { background: rgba(224, 92
 @media (max-width: 900px), (pointer: coarse) {
   .kitchen-board-grid .queue-column__list { max-height: none; overflow-y: visible; overscroll-behavior: auto; }
 }
+
+/* Avisos del mesero: pedido listo (lleva a la mesa) o mesa llamando. Tocar abre la mesa. */
+.waiter-alerts { display: grid; gap: 8px; margin: 4px 0 14px; }
+.waiter-alert {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  border: 1px solid transparent; border-radius: 18px; padding: 12px 14px; cursor: pointer;
+  animation: waiter-alert-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.waiter-alert svg { width: 22px; height: 22px; flex: 0 0 auto; }
+.waiter-alert span { display: grid; gap: 2px; min-width: 0; }
+.waiter-alert small { opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.waiter-alert--ready { background: #c2e06a; color: #1b1b19; }
+.waiter-alert--call { background: #e05c4c; color: #fff; }
+.waiter-alerts__enable {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0 0 12px;
+  border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: transparent; color: inherit; font-size: 0.875rem;
+}
+@keyframes waiter-alert-in { from { opacity: 0; transform: translateY(-8px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .waiter-alert { animation: none; } }
