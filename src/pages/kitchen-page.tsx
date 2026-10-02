@@ -17,7 +17,8 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { KitchenOrderCard } from '../components/kitchen-order-card';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
-import { Button, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { RejectOrderDialog, type RejectTarget } from '../components/reject-order-dialog';
+import { Button, Feedback, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
@@ -29,7 +30,6 @@ type KitchenTargetStatus = Extract<OrderStatus, 'preparando' | 'listo'>;
 type OrderPage = { orders: OrderDetail[]; cursor: string | null };
 
 /** Mínimo que pide el backend para el motivo de un rechazo. */
-const MIN_REJECTION_REASON = 3;
 /** Lo que dura la salida de una tarjeta rechazada (ver .kitchen-ticket--leaving). */
 const LEAVE_MS = 560;
 
@@ -41,7 +41,6 @@ export function KitchenPage() {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<OrderDetail | null>(null);
-  const [reason, setReason] = useState('');
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const now = useKitchenClock();
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
@@ -91,27 +90,23 @@ export function KitchenPage() {
     },
   });
 
-  // Cocina rechaza lo que no puede preparar; el cliente ve el motivo y se le devuelve el pago.
-  const reject = useMutation({
-    mutationFn: ({ order, motivo }: { order: OrderDetail; motivo: string }) =>
-      api.rejectOrder(token, order.id, order.version, motivo),
-    onSuccess: async (_, { order }) => {
-      setRejecting(null);
-      setNotice(`Pedido ${order.folio} rechazado. El cliente verá el motivo.`);
-      // La tarjeta se encoge antes de que la lista recargada la quite.
-      setLeavingId(order.id);
-      await new Promise((resolve) => window.setTimeout(resolve, LEAVE_MS));
+  // Cocina rechaza lo que no puede preparar (el pedido o un artículo); el cliente ve el motivo.
+  async function onRejected(order: OrderDetail, target: RejectTarget) {
+    setRejecting(null);
+    if (target.kind === 'item') {
+      setNotice(`Se quitó ${target.name} del pedido ${order.folio}. El cliente verá el motivo.`);
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
-      setLeavingId(null);
-    },
-    onError: async () => {
-      await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
-    },
-  });
+      return;
+    }
+    setNotice(`Pedido ${order.folio} rechazado. El cliente verá el motivo.`);
+    // La tarjeta se encoge antes de que la lista recargada la quite.
+    setLeavingId(order.id);
+    await new Promise((resolve) => window.setTimeout(resolve, LEAVE_MS));
+    await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
+    setLeavingId(null);
+  }
 
   function beginReject(order: OrderDetail) {
-    reject.reset();
-    setReason('');
     setRejecting(order);
   }
 
@@ -119,7 +114,7 @@ export function KitchenPage() {
     <Button
       className="kitchen-ticket__button"
       variant="ghost"
-      disabled={transition.isPending || reject.isPending}
+      disabled={transition.isPending}
       onClick={() => beginReject(order)}
     >
       <XCircle aria-hidden="true" /> No se puede preparar
@@ -361,46 +356,14 @@ export function KitchenPage() {
         </section>
       )}
 
-      <Modal
-        open={Boolean(rejecting)}
-        onOpenChange={(open) => { if (!open) setRejecting(null); }}
-        title={rejecting ? `Rechazar pedido ${rejecting.folio}` : 'Rechazar pedido'}
-        description="El cliente verá este motivo y se le devolverá lo que pagó."
-      >
-        {rejecting && (
-          <form
-            className="transaction-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const motivo = reason.trim();
-              if (motivo.length >= MIN_REJECTION_REASON) reject.mutate({ order: rejecting, motivo });
-            }}
-          >
-            {reject.isError && <Feedback tone="error">{errorMessage(reject.error)}</Feedback>}
-            <Field
-              name="rejection-reason"
-              label="Motivo"
-              placeholder="Se terminó el producto"
-              maxLength={240}
-              autoFocus
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              hint={`Mínimo ${MIN_REJECTION_REASON} letras.`}
-            />
-            <div className="form-actions">
-              <Button type="button" variant="ghost" onClick={() => setRejecting(null)}>Cancelar</Button>
-              <Button
-                type="submit"
-                variant="danger"
-                loading={reject.isPending}
-                disabled={reason.trim().length < MIN_REJECTION_REASON}
-              >
-                Rechazar pedido
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
+      <RejectOrderDialog
+        token={token}
+        order={rejecting}
+        allowWholeOrder
+        itemFilter={(item) => item.estacion_preparacion === 'cocina'}
+        onClose={() => setRejecting(null)}
+        onRejected={onRejected}
+      />
 
       {orders.hasNextPage && (
         <div className="orders-footer">
