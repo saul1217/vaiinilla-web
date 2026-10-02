@@ -7049,3 +7049,16 @@ html[data-staff-ui='nueva'] .queue-column { background: rgba(244, 241, 231, 0.03
 html[data-staff-ui='nueva'] :is(.orders-section, .kitchen-system-details, .kitchen-toolbar) { background: rgba(244, 241, 231, 0.03); }
 html[data-staff-ui='nueva'], html[data-staff-ui='nueva'] body { background: var(--color-cream); }
 .staff-tile__name span { font-size: 0.6875rem; letter-spacing: 0.04em; overflow-wrap: normal; word-break: keep-all; }
+
+/* Cuenta de la mesa: cada pedido con su cliente, productos, total y si falta cobrar (como Android). */
+.space-account__head { display: flex; justify-content: space-between; align-items: baseline; }
+.space-account__head strong { font-size: 1.125rem; }
+.space-account__head span { color: var(--muted); font-size: 0.875rem; }
+.space-account__orders { display: grid; gap: 14px; margin: 12px 0 16px; padding: 0; list-style: none; }
+.space-account__orders li { display: flex; justify-content: space-between; gap: 12px; }
+.space-account__orders p { margin: 2px 0 0; color: var(--muted); font-size: 0.875rem; line-height: 1.45; }
+.space-account__order-side { display: grid; justify-items: end; align-content: start; gap: 6px; flex: 0 0 auto; }
+.space-account__chip { border-radius: 999px; padding: 3px 10px; font-size: 0.75rem; background: rgba(132, 180, 40, 0.16); color: #4f7a10; }
+.space-account__chip--due { background: rgba(224, 92, 76, 0.14); color: #c2473a; }
+html[data-staff-ui='nueva'] .space-account__chip { color: #bfe06a; }
+html[data-staff-ui='nueva'] .space-account__chip--due { background: rgba(224, 92, 76, 0.2); color: #f08a7d; }

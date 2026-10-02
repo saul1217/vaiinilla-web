@@ -235,6 +235,26 @@ export function SpaceAccountPanel({
 
       {account && account.pedidos.length > 0 && (
         <div className="space-account__bill">
+          <div className="space-account__head">
+            <strong>Cuenta</strong>
+            <span>{account.pedidos.length} {account.pedidos.length === 1 ? 'pedido' : 'pedidos'}</span>
+          </div>
+          <ul className="space-account__orders">
+            {account.pedidos.map((order) => (
+              <li key={order.id}>
+                <div>
+                  <strong>#{order.folio} · {order.cliente?.nombre ?? 'Cliente'}</strong>
+                  <p>{order.items_resumen}</p>
+                </div>
+                <div className="space-account__order-side">
+                  <strong>{formatMoney(order.total.toFixed(2))}</strong>
+                  <span className={order.pendiente_cobro ? 'space-account__chip space-account__chip--due' : 'space-account__chip'}>
+                    {order.pendiente_cobro ? 'sin cobrar' : 'cobrado'}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
           <div className="space-account__totals">
             <span>Cuenta <strong><RollingMoney value={centsToMoney(toCents(account.total))} /></strong></span>
             <span>Por cobrar <strong><RollingMoney value={centsToMoney(toCents(account.pendiente))} /></strong></span>

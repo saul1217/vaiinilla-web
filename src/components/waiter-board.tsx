@@ -348,7 +348,7 @@ export function WaiterBoard({
                 )}
               </div>
             )}
-            <ul className="mesero-orders">
+            {open.pedidos.length > 0 && (<ul className="mesero-orders">
               {open.pedidos.map((order) => (
                 <li key={order.id}>
                   <div>
@@ -375,8 +375,7 @@ export function WaiterBoard({
                   )}
                 </li>
               ))}
-              {open.pedidos.length === 0 && <li className="mesero-orders__empty">Sin pedidos en curso.</li>}
-            </ul>
+            </ul>)}
             <SpaceAccountPanel token={token} spaceId={open.espacio.id} availability={spaces.get(open.espacio.id)} />
           </div>
         )}
