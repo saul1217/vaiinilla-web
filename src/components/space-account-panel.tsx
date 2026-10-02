@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clock3, CreditCard, Printer, ReceiptText, Unlock, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AccountAbonoForm } from './account-abono-form';
+import { PendingRefunds } from './pending-refunds';
 import { RollingMoney } from './rolling-money';
 import { TipPicker } from './tip-picker';
 import { Button, Feedback, Field, Modal } from './ui';
@@ -65,10 +66,13 @@ export function SpaceAccountPanel({
   token,
   spaceId,
   availability,
+  canConfirmRefunds = false,
 }: {
   token: string;
   spaceId: number;
   availability: SpaceAvailability | undefined;
+  /** Caja confirma devoluciones; el mesero solo las ve. */
+  canConfirmRefunds?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -94,6 +98,7 @@ export function SpaceAccountPanel({
       queryClient.invalidateQueries({ queryKey: ['space-session', spaceId] }),
       queryClient.invalidateQueries({ queryKey: ['space-availability'] }),
       queryClient.invalidateQueries({ queryKey: ['mesero-board'] }),
+      queryClient.invalidateQueries({ queryKey: ['pending-refunds'] }),
     ]);
   }
 
@@ -212,6 +217,7 @@ export function SpaceAccountPanel({
       </div>
 
       {notice && <Feedback tone={notice.tone}>{notice.text}</Feedback>}
+      <PendingRefunds token={token} spaceId={spaceId} canConfirm={canConfirmRefunds} />
 
       {isRentalCourt && (
         <div className="space-account__rent">

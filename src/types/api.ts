@@ -721,3 +721,21 @@ export interface CatalogCategoryInput {
   nombre: string;
   orden: number;
 }
+
+export type RefundMethod = 'efectivo' | 'terminal' | 'otro';
+
+/** Dinero que el negocio debe regresar a mano; Caja lo confirma al devolverlo. */
+export interface PendingRefund {
+  id: string;
+  origen: 'sobrante_cuenta' | 'rechazo_articulo' | 'cancelacion';
+  espacio_id: number | null;
+  pedido_id: string | null;
+  /** efectivo, terminal, saldo o una mezcla ("efectivo+terminal"). */
+  metodo_original: string;
+  monto: string;
+  estado: 'pendiente' | 'devuelta';
+  creado_en: string;
+  metodo_devolucion: RefundMethod | null;
+  nota: string | null;
+  devuelta_en: string | null;
+}

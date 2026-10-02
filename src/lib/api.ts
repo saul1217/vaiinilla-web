@@ -53,6 +53,8 @@ import type {
   SpaceAvailability,
   SpaceSessionDetail,
   TenantCardPayments,
+  PendingRefund,
+  RefundMethod,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -637,6 +639,24 @@ export const api = {
 
   async spaceAvailability(token: string): Promise<SpaceAvailability[]> {
     return (await request<SpaceAvailability[]>('/espacios/disponibilidad', { token })).data;
+  },
+
+  /** Devoluciones pendientes (sobrante de cuenta, artículo o pedido quitado ya pagado). */
+  async pendingRefunds(token: string, spaceId?: number): Promise<PendingRefund[]> {
+    const query = spaceId ? `?espacio_id=${spaceId}` : '';
+    return (await request<PendingRefund[]>(`/devoluciones${query}`, { token, cache: 'no-store' })).data;
+  },
+
+  /** Caja confirma que ya devolvió el dinero; en efectivo sale del cajón. */
+  async confirmRefund(token: string, id: string, metodo: RefundMethod, nota?: string): Promise<PendingRefund> {
+    return (
+      await request<PendingRefund>(`/devoluciones/${id}/confirmaciones`, {
+        token,
+        method: 'POST',
+        idempotent: true,
+        body: { metodo, ...(nota ? { nota } : {}) },
+      })
+    ).data;
   },
 
   async spaceSession(token: string, spaceId: number): Promise<SpaceSessionDetail> {
