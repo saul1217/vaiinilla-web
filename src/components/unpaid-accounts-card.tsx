@@ -7,7 +7,7 @@ import { errorMessage } from '../lib/api-error';
 import { formatMoney } from '../lib/money';
 import { unpaidAgeLabel } from '../lib/unpaid';
 import type { UnpaidAccount } from '../types/api';
-import { Button, Feedback, Modal } from './ui';
+import { Button, Feedback, Field, Modal } from './ui';
 
 /**
  * Cuentas abiertas (pagar al final) que nadie ha cobrado. Las **abandonadas** son de un espacio que
@@ -27,8 +27,9 @@ export function UnpaidAccountsCard() {
   const canForceClose = tenant?.context.rol === 'admin';
   const queryClient = useQueryClient();
   const [closing, setClosing] = useState<UnpaidAccount | null>(null);
+  const [note, setNote] = useState('');
   const forceClose = useMutation({
-    mutationFn: (account: UnpaidAccount) => api.releaseSpace(token, account.espacio.id, undefined, true),
+    mutationFn: (account: UnpaidAccount) => api.releaseSpace(token, account.espacio.id, undefined, true, note.trim()),
     onSuccess: async () => {
       setClosing(null);
       await queryClient.invalidateQueries({ queryKey: ['unpaid-accounts', scopeId] });
@@ -74,7 +75,7 @@ export function UnpaidAccountsCard() {
             {account.abandonada && <span className="font-bold text-ink">Ya se liberó: se fue sin pagar</span>}
             <strong className="ml-auto text-ink">{formatMoney(account.total)}</strong>
             {canForceClose && !account.abandonada && (
-              <Button variant="ghost" onClick={() => { forceClose.reset(); setClosing(account); }}>
+              <Button variant="ghost" onClick={() => { forceClose.reset(); setNote(''); setClosing(account); }}>
                 Cerrar sin cobrar
               </Button>
             )}
@@ -94,6 +95,14 @@ export function UnpaidAccountsCard() {
               Quedan {formatMoney(closing.total)} sin cobrar. El espacio se libera, el cierre queda registrado como
               forzado con tu nombre y la hora, y la deuda sigue en esta lista.
             </p>
+            <Field
+              label="Motivo (opcional)"
+              name="force-close-note"
+              maxLength={240}
+              value={note}
+              placeholder="Se fue sin pagar"
+              onChange={(event) => setNote(event.target.value)}
+            />
             <div className="form-actions">
               <Button variant="secondary" onClick={() => setClosing(null)}>No cerrar</Button>
               <Button variant="dark" loading={forceClose.isPending} onClick={() => forceClose.mutate(closing)}>
