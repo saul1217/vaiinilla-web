@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { Button, Feedback, Field, Modal } from './ui';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
-import type { OrderDetail } from '../types/api';
+import type { ItemRejectionResult, OrderDetail } from '../types/api';
 
 export const MIN_REJECTION_REASON = 3;
 
 /** Lo que se rechaza: el pedido completo o un solo artículo. */
 export type RejectTarget = { kind: 'order' } | { kind: 'item'; itemId: number; name: string };
+
 
 /**
  * "No se puede preparar": el personal elige qué no puede preparar (el pedido completo
@@ -30,7 +31,7 @@ export function RejectOrderDialog({
   /** Qué artículos puede rechazar este rol (Cocina: solo los de su estación). */
   itemFilter?: (item: OrderDetail['items'][number]) => boolean;
   onClose: () => void;
-  onRejected: (order: OrderDetail, target: RejectTarget) => void | Promise<void>;
+  onRejected: (order: OrderDetail, target: RejectTarget, result: ItemRejectionResult | null) => void | Promise<void>;
 }) {
   const [reason, setReason] = useState('');
   const [target, setTarget] = useState<RejectTarget | null>(null);
@@ -42,13 +43,17 @@ export function RejectOrderDialog({
 
   const reject = useMutation({
     mutationFn: async ({ current, scope, motivo }: { current: OrderDetail; scope: RejectTarget; motivo: string }) => {
-      if (scope.kind === 'order') await api.rejectOrder(token, current.id, current.version, motivo);
-      else await api.rejectOrderItem(token, current.id, scope.itemId, current.version, motivo);
+      if (scope.kind === 'order') {
+        await api.rejectOrder(token, current.id, current.version, motivo);
+        return null;
+      }
+      // Se conserva la respuesta: dice si hay que devolver dinero a mano.
+      return api.rejectOrderItem(token, current.id, scope.itemId, current.version, motivo);
     },
-    onSuccess: async (_, { current, scope }) => {
+    onSuccess: async (result, { current, scope }) => {
       setReason('');
       setTarget(null);
-      await onRejected(current, scope);
+      await onRejected(current, scope, result);
     },
   });
 

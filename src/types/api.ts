@@ -739,3 +739,17 @@ export interface PendingRefund {
   nota: string | null;
   devuelta_en: string | null;
 }
+
+/** Respuesta de quitar un artículo: cómo se devuelve lo que ya se pagó. */
+export interface ItemRejectionResult {
+  rechazo: {
+    pedido_item_id: number;
+    motivo: string;
+    monto: string;
+    /** ninguno: no se había pagado; efectivo: salió del cajón; stripe: reembolso; manual: tarea de Caja. */
+    metodo_reembolso: 'ninguno' | 'efectivo' | 'stripe' | 'manual';
+    stripe_refund_id: string | null;
+  };
+  /** Solo con metodo_reembolso = manual: la devolución que Caja debe entregar y confirmar. */
+  devolucion?: PendingRefund | null;
+}

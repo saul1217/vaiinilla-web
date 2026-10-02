@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OrderDetail } from '../types/api';
+import { itemRejectionNotice } from '../lib/rejection-notice';
 import { RejectOrderDialog } from './reject-order-dialog';
 
 const apiMock = vi.hoisted(() => ({ rejectOrder: vi.fn(), rejectOrderItem: vi.fn() }));
@@ -25,7 +26,8 @@ describe('no se puede preparar', () => {
 
   it('Cocina quita un solo artículo de su estación con motivo', async () => {
     const onRejected = vi.fn();
-    apiMock.rejectOrderItem.mockResolvedValue(undefined);
+    const result = { rechazo: { pedido_item_id: 3, motivo: 'Se terminó el pan', monto: '35.00', metodo_reembolso: 'manual' as const, stripe_refund_id: null }, devolucion: null };
+    apiMock.rejectOrderItem.mockResolvedValue(result);
     const user = userEvent.setup();
     render(
       <RejectOrderDialog
@@ -47,7 +49,7 @@ describe('no se puede preparar', () => {
 
     await waitFor(() => expect(apiMock.rejectOrderItem).toHaveBeenCalledWith('t', 'p1', 3, 3, 'Se terminó el pan'));
     expect(apiMock.rejectOrder).not.toHaveBeenCalled();
-    expect(onRejected).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), { kind: 'item', itemId: 3, name: 'Torta' });
+    expect(onRejected).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), { kind: 'item', itemId: 3, name: 'Torta' }, result);
   });
 
   it('el pedido completo sigue usando el rechazo de siempre', async () => {
@@ -76,5 +78,22 @@ describe('no se puede preparar', () => {
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     expect(screen.getByText(/solo tiene un artículo/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rechazar pedido' })).toBeDisabled();
+  });
+
+  // Auditoría ítem 5: la devolución manual no se pierde en "Se quitó…".
+  it('el aviso dice qué hacer con el dinero según cómo se pagó', () => {
+    const o = { folio: 12 } as OrderDetail;
+    const r = (metodo: 'ninguno' | 'efectivo' | 'stripe' | 'manual', original?: string) => ({
+      rechazo: { pedido_item_id: 3, motivo: 'x', monto: '35.00', metodo_reembolso: metodo, stripe_refund_id: null },
+      devolucion: original
+        ? { id: 'd1', origen: 'rechazo_articulo' as const, espacio_id: null, pedido_id: 'p1', metodo_original: original, monto: '35.00', estado: 'pendiente' as const, creado_en: '', metodo_devolucion: null, nota: null, devuelta_en: null }
+        : null,
+    });
+    expect(itemRejectionNotice(o, 'Torta', r('manual', 'efectivo+terminal'))).toBe(
+      'Se quitó Torta del pedido 12. El cliente verá el motivo. Devolución pendiente: $35.00 MXN (se pagó con efectivo y terminal). Caja debe entregarla y confirmarla.',
+    );
+    expect(itemRejectionNotice(o, 'Torta', r('efectivo'))).toMatch(/Entrega \$35.00 MXN del cajón/);
+    expect(itemRejectionNotice(o, 'Torta', r('stripe'))).toMatch(/reembolsan \$35.00 MXN a su tarjeta/);
+    expect(itemRejectionNotice(o, 'Torta', r('ninguno'))).toBe('Se quitó Torta del pedido 12. El cliente verá el motivo.');
   });
 });

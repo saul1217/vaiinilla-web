@@ -53,6 +53,7 @@ import type {
   SpaceAvailability,
   SpaceSessionDetail,
   TenantCardPayments,
+  ItemRejectionResult,
   PendingRefund,
   RefundMethod,
 } from '../types/api';
@@ -628,13 +629,21 @@ export const api = {
   },
 
   /** Rechaza un solo artículo con motivo; el total baja y se devuelve esa parte. */
-  async rejectOrderItem(token: string, id: string, itemId: number, expectedVersion: number, motivo: string): Promise<void> {
-    await request(`/pedidos/${id}/articulos/${itemId}/rechazos`, {
-      method: 'POST',
-      token,
-      idempotent: true,
-      body: { version_esperada: expectedVersion, motivo },
-    });
+  async rejectOrderItem(
+    token: string,
+    id: string,
+    itemId: number,
+    expectedVersion: number,
+    motivo: string,
+  ): Promise<ItemRejectionResult> {
+    return (
+      await request<ItemRejectionResult>(`/pedidos/${id}/articulos/${itemId}/rechazos`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: { version_esperada: expectedVersion, motivo },
+      })
+    ).data;
   },
 
   async spaceAvailability(token: string): Promise<SpaceAvailability[]> {

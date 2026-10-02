@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { KitchenOrderCard } from '../components/kitchen-order-card';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { RejectOrderDialog, type RejectTarget } from '../components/reject-order-dialog';
+import { itemRejectionNotice } from '../lib/rejection-notice';
 import { Button, Feedback, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { StaffUiSwitch } from '../components/staff-ui-switch';
@@ -26,7 +27,7 @@ import { useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { kitchenOrderUnits, minutesSince } from '../lib/kitchen';
-import type { OrderDetail, OrderStatus } from '../types/api';
+import type { ItemRejectionResult, OrderDetail, OrderStatus } from '../types/api';
 
 type KitchenTargetStatus = Extract<OrderStatus, 'preparando' | 'listo'>;
 type OrderPage = { orders: OrderDetail[]; cursor: string | null };
@@ -97,11 +98,12 @@ export function KitchenPage() {
   });
 
   // Cocina rechaza lo que no puede preparar (el pedido o un artículo); el cliente ve el motivo.
-  async function onRejected(order: OrderDetail, target: RejectTarget) {
+  async function onRejected(order: OrderDetail, target: RejectTarget, result: ItemRejectionResult | null) {
     setRejecting(null);
     if (target.kind === 'item') {
-      setNotice(`Se quitó ${target.name} del pedido ${order.folio}. El cliente verá el motivo.`);
+      setNotice(itemRejectionNotice(order, target.name, result));
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: ['pending-refunds'] });
       return;
     }
     setNotice(`Pedido ${order.folio} rechazado. El cliente verá el motivo.`);
