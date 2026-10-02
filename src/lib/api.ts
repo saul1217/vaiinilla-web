@@ -762,6 +762,18 @@ export const api = {
     ).data;
   },
 
+  /** El dueño decide si la comisión de la tarjeta se suma al precio (apagado por defecto). */
+  async setCardCommissionPassThrough(token: string, pass: boolean): Promise<TenantCardPayments> {
+    return (
+      await request<TenantCardPayments>('/stripe/comision-al-cliente', {
+        method: 'PATCH',
+        token,
+        idempotent: true,
+        body: { pasar_comision_al_cliente: pass },
+      })
+    ).data;
+  },
+
   async createSpaceBatch(
     token: string,
     input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number },

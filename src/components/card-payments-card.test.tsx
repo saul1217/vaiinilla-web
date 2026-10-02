@@ -10,6 +10,7 @@ const apiMock = vi.hoisted(() => ({
   cardPayments: vi.fn(),
   startCardPaymentsOnboarding: vi.fn(),
   setCardPayments: vi.fn(),
+  setCardCommissionPassThrough: vi.fn(),
 }));
 vi.mock('../lib/api', () => ({ api: apiMock }));
 
@@ -61,5 +62,44 @@ describe('pagos con tarjeta del negocio', () => {
     await user.click(await screen.findByRole('radio', { name: /sí, aceptar tarjeta/i }));
     expect(apiMock.setCardPayments).toHaveBeenCalledWith('t', true);
     expect(await screen.findByText(/activos/i)).toBeVisible();
+  });
+
+  describe('comisión de la tarjeta', () => {
+    it('empieza apagada: el negocio paga la comisión y el cliente paga el precio de mostrador', async () => {
+      apiMock.cardPayments.mockResolvedValue({ ...ready, stripe_enabled: true });
+      render(<CardPaymentsCard token="t" scopeId="e1" />, { wrapper });
+      expect(await screen.findByRole('radio', { name: /yo, el negocio/i })).toBeChecked();
+      expect(screen.getByRole('radio', { name: /^el cliente/i })).not.toBeChecked();
+    });
+
+    it('el dueño la pasa al cliente y queda guardado', async () => {
+      apiMock.cardPayments.mockResolvedValue({ ...ready, stripe_enabled: true });
+      apiMock.setCardCommissionPassThrough.mockResolvedValue({ ...ready, stripe_enabled: true, pasar_comision_al_cliente: true });
+      const user = userEvent.setup();
+      render(<CardPaymentsCard token="t" scopeId="e1" />, { wrapper });
+
+      await user.click(await screen.findByRole('radio', { name: /^el cliente/i }));
+
+      expect(apiMock.setCardCommissionPassThrough).toHaveBeenCalledWith('t', true);
+      await waitFor(() => expect(screen.getByRole('radio', { name: /^el cliente/i })).toBeChecked());
+    });
+
+    it('un negocio que ya la pasaba la ve prendida y puede apagarla', async () => {
+      apiMock.cardPayments.mockResolvedValue({ ...ready, stripe_enabled: true, pasar_comision_al_cliente: true });
+      apiMock.setCardCommissionPassThrough.mockResolvedValue({ ...ready, stripe_enabled: true, pasar_comision_al_cliente: false });
+      const user = userEvent.setup();
+      render(<CardPaymentsCard token="t" scopeId="e1" />, { wrapper });
+
+      expect(await screen.findByRole('radio', { name: /^el cliente/i })).toBeChecked();
+      await user.click(screen.getByRole('radio', { name: /yo, el negocio/i }));
+      expect(apiMock.setCardCommissionPassThrough).toHaveBeenCalledWith('t', false);
+    });
+
+    it('sin cuenta lista no se ofrece: no hay comisión que pasar', async () => {
+      apiMock.cardPayments.mockResolvedValue(null);
+      render(<CardPaymentsCard token="t" scopeId="e1" />, { wrapper });
+      await screen.findByRole('button', { name: /conectar mi cuenta de stripe/i });
+      expect(screen.queryByRole('radio', { name: /el cliente/i })).not.toBeInTheDocument();
+    });
   });
 });
