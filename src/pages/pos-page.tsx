@@ -55,6 +55,16 @@ export function PosPage() {
   });
 
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
+  // Igual que el tablero del mesero: en un espacio el negocio puede dispensar el QR.
+  // Para llevar siempre lo exige (regla del backend).
+  const deliveryQr = useQuery({
+    queryKey: ['operational-status', 'delivery-qr'],
+    enabled: Boolean(token),
+    queryFn: () => api.operationalStatus(token),
+    staleTime: 60_000,
+  });
+  const deliveryNeedsQr = (order: OrderDetail) =>
+    order.destino === 'para_llevar' || deliveryQr.data?.entrega_requiere_qr !== false;
 
   const cashierQueue = useInfiniteQuery({
     queryKey: ['orders', 'cashier-queue', scopeId],
@@ -429,11 +439,13 @@ export function PosPage() {
           <div className="transaction-form">
             {deliveryMutation.isError && <Feedback tone="error">{errorMessage(deliveryMutation.error)}</Feedback>}
             <OrderDetailContent order={deliveryOrder} />
-            <QrTokenField
-              value={qrToken}
-              onChange={updateQrToken}
-              error={!qrToken.trim() && deliveryMutation.isError ? 'Captura el token de entrega.' : undefined}
-            />
+            {deliveryNeedsQr(deliveryOrder) && (
+              <QrTokenField
+                value={qrToken}
+                onChange={updateQrToken}
+                error={!qrToken.trim() && deliveryMutation.isError ? 'Captura el token de entrega.' : undefined}
+              />
+            )}
             <div className="form-actions">
               <Button type="button" variant="ghost" onClick={() => { setDeliveryOrder(null); setQrToken(''); }}>
                 Cancelar
@@ -442,7 +454,7 @@ export function PosPage() {
                 type="button"
                 variant="dark"
                 loading={deliveryMutation.isPending}
-                disabled={!qrToken.trim()}
+                disabled={deliveryNeedsQr(deliveryOrder) && !qrToken.trim()}
                 onClick={() => deliveryMutation.mutate({ order: deliveryOrder, pickupToken: qrToken.trim() })}
               >
                 Confirmar entrega

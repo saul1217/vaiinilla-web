@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { unpaidAgeLabel } from '../lib/unpaid';
 import { UnpaidAccountsCard } from './unpaid-accounts-card';
 
-const apiMock = vi.hoisted(() => ({ unpaidAccounts: vi.fn() }));
+const apiMock = vi.hoisted(() => ({ unpaidAccounts: vi.fn(), releaseSpace: vi.fn() }));
 vi.mock('../lib/api', () => ({ api: apiMock }));
 vi.mock('../context/session-context', () => ({
   useSessions: () => ({ tenant: { token: 'tenant-token', context: { establecimiento_id: 'est-1', rol: 'admin' } } }),
@@ -59,6 +60,30 @@ describe('cuentas sin cobrar', () => {
     expect(screen.getByText('hace 5 h')).toBeInTheDocument();
     expect(screen.getByText('hace menos de 1 h')).toBeInTheDocument();
     expect(screen.getAllByText('Ya se liberó: se fue sin pagar')).toHaveLength(1);
+  });
+
+  it('admin cierra sin cobrar solo una mesa todavía abierta, forzando el cierre', async () => {
+    apiMock.unpaidAccounts.mockResolvedValue({
+      total: '40.00',
+      abandonadas: 1,
+      cuentas: [
+        { espacio: { id: 3, nombre: 'Mesa 1', tipo: 'mesa' }, pedidos: 1, total: '40.00', desde: '2026-09-30T20:00:00Z', horas: 0, clientes: [], abandonada: false },
+        { espacio: { id: 7, nombre: 'Cancha 1', tipo: 'cancha' }, pedidos: 1, total: '10.00', desde: '2026-09-30T20:00:00Z', horas: 1, clientes: [], abandonada: true },
+      ],
+    });
+    apiMock.releaseSpace.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<UnpaidAccountsCard />, { wrapper: Wrapper });
+    // La cancha ya se liberó: no tiene botón. Solo la mesa abierta lo tiene.
+    const buttons = await screen.findAllByRole('button', { name: 'Cerrar sin cobrar' });
+    expect(buttons).toHaveLength(1);
+    await user.click(buttons[0]!);
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByRole('textbox', { name: /motivo/i }), '  Se fue sin pagar ');
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar sin cobrar' }));
+    await vi.waitFor(() =>
+      expect(apiMock.releaseSpace).toHaveBeenCalledWith('tenant-token', 3, undefined, true, 'Se fue sin pagar'),
+    );
   });
 
   it('la edad en horas', () => {

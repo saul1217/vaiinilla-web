@@ -654,12 +654,12 @@ export const api = {
   },
 
   /** Libera el espacio. El backend lo rechaza con pedidos sin cobrar. */
-  async releaseSpace(token: string, spaceId: number, version?: number): Promise<void> {
+  async releaseSpace(token: string, spaceId: number, version?: number, force = false, note?: string): Promise<void> {
     await request(`/espacios/${spaceId}/sesion/cierres`, {
       method: 'POST',
       token,
       idempotent: true,
-      body: version ? { version } : {},
+      body: { ...(version ? { version } : {}), ...(force ? { forzar: true } : {}), ...(force && note ? { nota: note } : {}) },
     });
   },
 
