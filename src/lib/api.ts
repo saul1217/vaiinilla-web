@@ -53,6 +53,9 @@ import type {
   SpaceAvailability,
   SpaceSessionDetail,
   TenantCardPayments,
+  ItemRejectionResult,
+  PendingRefund,
+  RefundMethod,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -626,17 +629,43 @@ export const api = {
   },
 
   /** Rechaza un solo artículo con motivo; el total baja y se devuelve esa parte. */
-  async rejectOrderItem(token: string, id: string, itemId: number, expectedVersion: number, motivo: string): Promise<void> {
-    await request(`/pedidos/${id}/articulos/${itemId}/rechazos`, {
-      method: 'POST',
-      token,
-      idempotent: true,
-      body: { version_esperada: expectedVersion, motivo },
-    });
+  async rejectOrderItem(
+    token: string,
+    id: string,
+    itemId: number,
+    expectedVersion: number,
+    motivo: string,
+  ): Promise<ItemRejectionResult> {
+    return (
+      await request<ItemRejectionResult>(`/pedidos/${id}/articulos/${itemId}/rechazos`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: { version_esperada: expectedVersion, motivo },
+      })
+    ).data;
   },
 
   async spaceAvailability(token: string): Promise<SpaceAvailability[]> {
     return (await request<SpaceAvailability[]>('/espacios/disponibilidad', { token })).data;
+  },
+
+  /** Devoluciones pendientes (sobrante de cuenta, artículo o pedido quitado ya pagado). */
+  async pendingRefunds(token: string, spaceId?: number): Promise<PendingRefund[]> {
+    const query = spaceId ? `?espacio_id=${spaceId}` : '';
+    return (await request<PendingRefund[]>(`/devoluciones${query}`, { token, cache: 'no-store' })).data;
+  },
+
+  /** Caja confirma que ya devolvió el dinero; en efectivo sale del cajón. */
+  async confirmRefund(token: string, id: string, metodo: RefundMethod, nota?: string): Promise<PendingRefund> {
+    return (
+      await request<PendingRefund>(`/devoluciones/${id}/confirmaciones`, {
+        token,
+        method: 'POST',
+        idempotent: true,
+        body: { metodo, ...(nota ? { nota } : {}) },
+      })
+    ).data;
   },
 
   async spaceSession(token: string, spaceId: number): Promise<SpaceSessionDetail> {

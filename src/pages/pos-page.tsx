@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { RejectOrderDialog } from '../components/reject-order-dialog';
+import { itemRejectionNotice } from '../lib/rejection-notice';
 import { TipPicker } from '../components/tip-picker';
 import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
 import { useForm } from 'react-hook-form';
@@ -21,6 +22,7 @@ import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { OrderCard, OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { PendingRefunds } from '../components/pending-refunds';
 import { WaiterBoard } from '../components/waiter-board';
 import { StaffUiSwitch } from '../components/staff-ui-switch';
 import { useStaffUi } from '../lib/staff-ui';
@@ -384,6 +386,8 @@ export function PosPage() {
         </Feedback>
       )}
 
+      {isCashier && <PendingRefunds token={token} canConfirm />}
+
       {isCashier && (
         <section className="pos-orders" aria-labelledby="cashier-orders-title">
           <div className="section-heading">
@@ -570,12 +574,11 @@ export function PosPage() {
         order={removingFrom}
         allowWholeOrder={false}
         onClose={() => setRemovingFrom(null)}
-        onRejected={async (order, target) => {
+        onRejected={async (order, target, result) => {
           setRemovingFrom(null);
-          setDeliveryNotice(
-            target.kind === 'item' ? `Se quitó ${target.name} del pedido ${order.folio}. El cliente verá el motivo.` : null,
-          );
+          setDeliveryNotice(target.kind === 'item' ? itemRejectionNotice(order, target.name, result) : null);
           await refreshOperation();
+          await queryClient.invalidateQueries({ queryKey: ['pending-refunds'] });
         }}
       />
     </div>

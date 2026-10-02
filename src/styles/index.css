@@ -7087,3 +7087,15 @@ html[data-staff-ui='nueva'] .space-account__chip--due { background: rgba(224, 92
 }
 @keyframes waiter-alert-in { from { opacity: 0; transform: translateY(-8px) scale(0.98); } }
 @media (prefers-reduced-motion: reduce) { .waiter-alert { animation: none; } }
+
+/* Devoluciones pendientes: tarea explícita para Caja, con método y monto. */
+.pending-refunds { display: grid; gap: 10px; margin: 0 0 14px; }
+.pending-refund {
+  display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: start;
+  border: 1px solid rgba(224, 92, 76, 0.45); border-radius: 18px; padding: 14px;
+  background: rgba(224, 92, 76, 0.08);
+}
+.pending-refund > svg { width: 22px; height: 22px; color: #c2473a; margin-top: 2px; }
+.pending-refund p { margin: 2px 0 0; color: var(--muted); font-size: 0.875rem; }
+.pending-refund__actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+html[data-staff-ui='nueva'] .pending-refund > svg { color: #f08a7d; }
