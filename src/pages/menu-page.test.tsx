@@ -15,6 +15,7 @@ const apiMock = vi.hoisted(() => ({
   uploadProductImage: vi.fn(),
   deleteProductImage: vi.fn(),
   listManagedSpaces: vi.fn(),
+  cardPayments: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
@@ -38,7 +39,7 @@ const product = {
   alergenos: 'Leche',
   tiempo_estimado_min: 5,
   precio_mostrador: '20.00',
-  precio_digital: '22.00',
+  precio_digital: '20.00',
   disponible: true,
   imagen_url: null,
   grupos_opcion: [],
@@ -59,6 +60,7 @@ describe('administración del menú', () => {
     });
     apiMock.createProduct.mockReset().mockResolvedValue(product);
     apiMock.listManagedSpaces.mockReset().mockResolvedValue([]);
+    apiMock.cardPayments.mockReset().mockResolvedValue(null);
     apiMock.createCategory.mockReset();
     apiMock.updateCategory.mockReset();
     apiMock.updateProduct.mockReset();
@@ -75,7 +77,9 @@ describe('administración del menú', () => {
     render(<MenuPage />, { wrapper: TestProvider });
 
     expect(await screen.findByRole('heading', { name: 'Chocolate frío' })).toBeVisible();
-    expect(screen.getByText('$22.00 MXN')).toBeVisible();
+    // Sin pasar la comisión, mostrador y cliente son el mismo precio: no se repite como "digital".
+    expect(screen.getByText('$20.00 MXN')).toBeVisible();
+    expect(screen.queryByText('Con tarjeta')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Nuevo producto' }));
     const dialog = screen.getByRole('dialog');
@@ -91,7 +95,8 @@ describe('administración del menú', () => {
     );
     await user.upload(within(dialog).getByLabelText('Elegir imagen'), image);
 
-    expect(within(dialog).getByText('$22.00 MXN')).toBeVisible();
+    expect(within(dialog).getByText('$20.00 MXN')).toBeVisible();
+    expect(within(dialog).getByText(/mismo precio con efectivo, saldo o tarjeta/i)).toBeVisible();
     expect(within(dialog).getByText('latte.png')).toBeVisible();
     await user.click(within(dialog).getByRole('button', { name: 'Crear producto' }));
 
@@ -159,5 +164,28 @@ describe('administración del menú', () => {
     expect(await within(dialog).findByText(/renta canchas desde Espacios/)).toBeVisible();
     await user.type(within(dialog).getByLabelText('Nombre *'), 'Pádel 1 hora');
     expect(await within(dialog).findByText(/Esto parece una renta de cancha/)).toBeVisible();
+  });
+
+  it('si el negocio pasa la comisión, el menú muestra el precio con tarjeta y el formulario lo avisa', async () => {
+    apiMock.catalog.mockResolvedValue({
+      categorias: [{ id: 10, nombre: 'Bebidas', orden: 0 }],
+      productos: [{ ...product, precio_digital: '25.30' }],
+    });
+    apiMock.cardPayments.mockResolvedValue({
+      stripe_enabled: true,
+      stripe_account_id: 'acct_1',
+      charges_enabled: true,
+      payouts_enabled: true,
+      estado_onboarding: 'habilitada',
+      pasar_comision_al_cliente: true,
+    });
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+
+    expect(await screen.findByText('Con tarjeta')).toBeVisible();
+    expect(screen.getByText('$25.30 MXN')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Nuevo producto' }));
+    const dialog = screen.getByRole('dialog');
+    expect(await within(dialog).findByText(/con tarjeta se suma la comisión/i)).toBeVisible();
   });
 });

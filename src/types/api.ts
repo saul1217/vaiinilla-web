@@ -578,6 +578,8 @@ export interface TenantCardPayments {
   charges_enabled: boolean;
   payouts_enabled: boolean;
   estado_onboarding: StripeOnboardingStatus;
+  /** Si es true, el pago con tarjeta suma la comisión al precio; si no, el cliente paga el de mostrador. */
+  pasar_comision_al_cliente?: boolean;
 }
 
 export interface StripeOnboarding {
