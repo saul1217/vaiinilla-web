@@ -6679,4 +6679,4 @@ tbody tr:last-child td {
 
 /* El artículo quitado no se ve activo, y el radio sigue el color de peligro de la app. */
 .kitchen-ticket li.is-rejected .kitchen-ticket__quantity { background: var(--color-cream-2); }
-.reject-scope__option input { accent-color: var(--color-danger); width: 18px; height: 18px; }
+.reject-scope__option input { accent-color: var(--color-danger); width: 18px; height: 18px; flex-shrink: 0; }
