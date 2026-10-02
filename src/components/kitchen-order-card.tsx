@@ -40,7 +40,8 @@ export function KitchenOrderCard({
   const referenceTime = stage === 'pending' ? order.creado_en : order.actualizado_en;
   const elapsedMinutes = minutesSince(referenceTime, now);
   const ageTone = elapsedMinutes >= 20 ? 'high' : elapsedMinutes >= 10 ? 'medium' : 'normal';
-  const totalUnits = order.items.reduce((total, item) => total + item.cantidad, 0);
+  // Un artículo rechazado ya no se prepara.
+  const totalUnits = order.items.reduce((total, item) => total + (item.rechazo ? 0 : item.cantidad), 0);
   const destination = destinationLabel(order);
   const DestinationIcon = order.destino === 'para_llevar' ? ShoppingBag : MapPin;
 
@@ -89,12 +90,13 @@ export function KitchenOrderCard({
         </div>
         <ul aria-label="Productos a preparar">
           {order.items.map((item) => (
-            <li key={item.id}>
+            <li key={item.id} className={item.rechazo ? 'is-rejected' : undefined}>
               <strong className="kitchen-ticket__quantity" aria-label={`${item.cantidad} unidades`}>
                 {item.cantidad}
               </strong>
               <div className="kitchen-ticket__product">
                 <strong>{item.nombre_producto}</strong>
+                {item.rechazo && <small className="item-rejection">Quitado: {item.rechazo.motivo}</small>}
                 {item.opciones.length > 0 && (
                   <ul className="kitchen-ticket__options" aria-label={`Opciones de ${item.nombre_producto}`}>
                     {item.opciones.map((option) => (

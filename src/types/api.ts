@@ -171,6 +171,8 @@ export interface OrderItem {
   precio_digital_unitario: string;
   subtotal: string;
   opciones: OrderItemOption[];
+  /** Rechazo por artículo: ya no cuenta en el total. */
+  rechazo?: { motivo: string; monto: string } | null;
 }
 
 export interface OrderDetail {
@@ -236,6 +238,8 @@ export interface AnalyticsSummary {
   recargas: string;
   compras_saldo?: string;
   cashback_otorgado?: string;
+  /** Propinas del periodo: del negocio, fuera de ventas y sin comisión. */
+  propinas?: string;
   cancelaciones_wallet?: string;
   pedidos_cancelados?: number;
   comisiones: string;
@@ -503,6 +507,7 @@ export interface AccountCollection {
   cambio: string;
   /** Lo que sigue sin cobrar de la cuenta: "0.00" si quedó saldada. */
   restante: string;
+  propina?: string;
 }
 
 export type AbonoMode = 'monto' | 'partes';
@@ -511,6 +516,7 @@ export type AbonoMode = 'monto' | 'partes';
 export interface AccountAbonoResult {
   abono: { id: string; metodo_pago: AccountPaymentMethod; monto: string; monto_recibido: string | null; cambio: string };
   restante: string;
+  propina?: string;
   liquidada: boolean;
   pedidos_cobrados: number;
 }

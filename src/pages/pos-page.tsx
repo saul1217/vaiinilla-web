@@ -9,8 +9,12 @@ import {
   ReceiptText,
   ScanLine,
   WalletCards,
+  XCircle,
 } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { RejectOrderDialog } from '../components/reject-order-dialog';
+import { TipPicker } from '../components/tip-picker';
+import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
@@ -46,6 +50,8 @@ export function PosPage() {
   const [deliveryOrder, setDeliveryOrder] = useState<OrderDetail | null>(null);
   const [qrToken, setQrToken] = useState('');
   const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
+  // Caja quita un artículo que no se puede entregar; si ya se pagó, se devuelve esa parte.
+  const [removingFrom, setRemovingFrom] = useState<OrderDetail | null>(null);
 
   const session = useQuery({
     queryKey: ['cash-session', scopeId],
@@ -99,8 +105,8 @@ export function PosPage() {
     onSuccess: refreshOperation,
   });
   const collectMutation = useMutation({
-    mutationFn: ({ order, amount }: { order: OrderDetail; amount: string }) =>
-      api.collectCash(token, order.id, amount, order.version),
+    mutationFn: ({ order, amount, propina }: { order: OrderDetail; amount: string; propina: string }) =>
+      api.collectCash(token, order.id, amount, order.version, propina),
     onSuccess: async (result) => {
       setCashReceipt(result);
       setCashOrder(null);
@@ -133,7 +139,11 @@ export function PosPage() {
   });
 
   const receivedAmount = cashForm.watch('amount');
-  const change = cashOrder ? calculateChange(receivedAmount, cashOrder.total) : null;
+  const [tip, setTip] = useState<TipChoice>({ kind: 'none' });
+  const tipValue = cashOrder ? tipAmount(cashOrder.total, tip) : '0.00';
+  // El efectivo cubre el pedido más la propina; el cambio se calcula después.
+  const cashToCollect = cashOrder ? addMoney(cashOrder.total, tipValue) : '0.00';
+  const change = cashOrder ? calculateChange(receivedAmount, cashToCollect) : null;
   const active = session.data;
   const queuedOrders = useMemo(
     () => cashierQueue.data?.pages.flatMap((page) => page.orders) ?? [],
@@ -152,6 +162,7 @@ export function PosPage() {
   function beginCash(order: OrderDetail) {
     collectMutation.reset();
     setCashReceipt(null);
+    setTip({ kind: 'none' });
     setCashOrder(order);
     cashForm.reset({ amount: '' });
   }
@@ -331,9 +342,14 @@ export function PosPage() {
                     key={order.id}
                     order={order}
                     actions={
-                      <Button disabled={!active} onClick={() => beginCash(order)}>
-                        <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar
-                      </Button>
+                      <>
+                        <Button disabled={!active} onClick={() => beginCash(order)}>
+                          <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar
+                        </Button>
+                        <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                        </Button>
+                      </>
                     }
                   />
                 )) : (
@@ -359,9 +375,14 @@ export function PosPage() {
                     key={order.id}
                     order={order}
                     actions={
-                      <Button variant="dark" onClick={() => beginDelivery(order)}>
-                        <ScanLine aria-hidden="true" className="size-5" /> Validar QR
-                      </Button>
+                      <>
+                        <Button variant="dark" onClick={() => beginDelivery(order)}>
+                          <ScanLine aria-hidden="true" className="size-5" /> Validar QR
+                        </Button>
+                        <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                        </Button>
+                      </>
                     }
                   />
                 )) : (
@@ -401,18 +422,19 @@ export function PosPage() {
           <form
             className="transaction-form"
             onSubmit={(event) => void cashForm.handleSubmit(({ amount }) => {
-              collectMutation.mutate({ order: cashOrder, amount });
+              collectMutation.mutate({ order: cashOrder, amount, propina: tipValue });
             })(event)}
           >
             {collectMutation.isError && <Feedback tone="error">{errorMessage(collectMutation.error)}</Feedback>}
             <OrderDetailContent order={cashOrder} />
+            <TipPicker base={cashOrder.total} value={tip} onChange={setTip} />
             <Field
               label="Efectivo recibido (MXN)"
               inputMode="decimal"
               placeholder={cashOrder.total}
               autoFocus
               error={cashForm.formState.errors.amount?.message}
-              hint={receivedAmount && change === null ? `Debe ser igual o mayor a ${formatMoney(cashOrder.total)}.` : undefined}
+              hint={receivedAmount && change === null ? `Debe ser igual o mayor a ${formatMoney(cashToCollect)}.` : undefined}
               {...cashForm.register('amount')}
             />
             <div className={`change-preview ${change !== null ? 'change-preview--ready' : ''}`} aria-live="polite">
@@ -463,6 +485,19 @@ export function PosPage() {
           </div>
         )}
       </Modal>
+      <RejectOrderDialog
+        token={token}
+        order={removingFrom}
+        allowWholeOrder={false}
+        onClose={() => setRemovingFrom(null)}
+        onRejected={async (order, target) => {
+          setRemovingFrom(null);
+          setDeliveryNotice(
+            target.kind === 'item' ? `Se quitó ${target.name} del pedido ${order.folio}. El cliente verá el motivo.` : null,
+          );
+          await refreshOperation();
+        }}
+      />
     </div>
   );
 }

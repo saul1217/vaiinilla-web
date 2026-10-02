@@ -357,6 +357,7 @@ export const api = {
     id: string,
     montoRecibido: string,
     versionEsperada: number,
+    propina?: string,
   ): Promise<CashPaymentResult> {
     return (
       await request<CashPaymentResult>(`/pedidos/${id}/cobros-efectivo`, {
@@ -366,6 +367,7 @@ export const api = {
         body: {
           monto_recibido: montoRecibido,
           version_esperada: versionEsperada,
+          ...(propina && propina !== '0.00' ? { propina } : {}),
         },
       })
     ).data;
@@ -623,6 +625,16 @@ export const api = {
     });
   },
 
+  /** Rechaza un solo artículo con motivo; el total baja y se devuelve esa parte. */
+  async rejectOrderItem(token: string, id: string, itemId: number, expectedVersion: number, motivo: string): Promise<void> {
+    await request(`/pedidos/${id}/articulos/${itemId}/rechazos`, {
+      method: 'POST',
+      token,
+      idempotent: true,
+      body: { version_esperada: expectedVersion, motivo },
+    });
+  },
+
   async spaceAvailability(token: string): Promise<SpaceAvailability[]> {
     return (await request<SpaceAvailability[]>('/espacios/disponibilidad', { token })).data;
   },
@@ -646,6 +658,7 @@ export const api = {
       partes?: number;
       montoRecibido?: string;
       restanteEsperado: string;
+      propina?: string;
     },
   ): Promise<AccountAbonoResult> {
     return (
@@ -659,6 +672,7 @@ export const api = {
           ...(input.modo === 'monto' ? { monto: input.monto } : { partes: input.partes }),
           ...(input.metodo === 'efectivo' ? { monto_recibido: input.montoRecibido } : {}),
           restante_esperado: input.restanteEsperado,
+          ...(input.propina && input.propina !== '0.00' ? { propina: input.propina } : {}),
         },
       })
     ).data;
@@ -667,7 +681,7 @@ export const api = {
   async collectSpaceAccount(
     token: string,
     spaceId: number,
-    input: { metodo: AccountPaymentMethod; montoRecibido?: string; totalEsperado: string; pedidoIds?: string[] },
+    input: { metodo: AccountPaymentMethod; montoRecibido?: string; totalEsperado: string; pedidoIds?: string[]; propina?: string },
   ): Promise<AccountCollection> {
     return (
       await request<AccountCollection>(`/espacios/${spaceId}/sesion/cobros`, {
@@ -679,6 +693,7 @@ export const api = {
           ...(input.metodo === 'efectivo' ? { monto_recibido: input.montoRecibido } : {}),
           total_esperado: input.totalEsperado,
           ...(input.pedidoIds ? { pedido_ids: input.pedidoIds } : {}),
+          ...(input.propina && input.propina !== '0.00' ? { propina: input.propina } : {}),
         },
       })
     ).data;
