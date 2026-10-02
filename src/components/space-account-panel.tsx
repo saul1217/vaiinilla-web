@@ -7,9 +7,11 @@ import { Clock3, CreditCard, Printer, ReceiptText, Unlock, Wallet } from 'lucide
 import { useMemo, useState } from 'react';
 import { AccountAbonoForm } from './account-abono-form';
 import { RollingMoney } from './rolling-money';
+import { TipPicker } from './tip-picker';
 import { Button, Feedback, Field, Modal } from './ui';
 import { api } from '../lib/api';
 import { claimAliases } from '../lib/account-split';
+import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
 import { errorMessage } from '../lib/api-error';
 import { calculateChange, centsToMoney, formatMoney } from '../lib/money';
 import { clock, spaceStatusLine } from '../lib/space-status';
@@ -76,6 +78,7 @@ export function SpaceAccountPanel({
   const [method, setMethod] = useState<AccountPaymentMethod>('efectivo');
   const [selected, setSelected] = useState<string[]>([]);
   const [received, setReceived] = useState('');
+  const [tip, setTip] = useState<TipChoice>({ kind: 'none' });
   const [rental, setRental] = useState<CounterRental | null>(null);
   const [rentalReceived, setRentalReceived] = useState('');
 
@@ -100,7 +103,9 @@ export function SpaceAccountPanel({
   const chargeCents = selectedOrders.reduce((sum, order) => sum + toCents(order.total), 0n);
   const charge = centsToMoney(chargeCents);
   const splitting = selectedOrders.length > 0 && selectedOrders.length < pending.length;
-  const change = method === 'efectivo' && MONEY_PATTERN.test(received) ? calculateChange(received, charge) : null;
+  const tipValue = tipAmount(charge, tip);
+  const toCollect = addMoney(charge, tipValue);
+  const change = method === 'efectivo' && MONEY_PATTERN.test(received) ? calculateChange(received, toCollect) : null;
   const canConfirmCharge = selectedOrders.length > 0 && (method === 'terminal' || change !== null);
   const abonado = account?.abonado ?? 0;
   const restante = centsToMoney(toCents(account?.restante ?? account?.pendiente ?? 0));
@@ -113,6 +118,7 @@ export function SpaceAccountPanel({
         montoRecibido: method === 'efectivo' ? received : undefined,
         totalEsperado: charge,
         pedidoIds: splitting ? selectedOrders.map((order) => order.id) : undefined,
+        propina: tipValue,
       }),
     onSuccess: async (result) => {
       setCollecting(false);
@@ -172,6 +178,7 @@ export function SpaceAccountPanel({
     setChargeMode(abonado > 0 ? 'monto' : 'pedidos');
     setMethod('efectivo');
     setReceived('');
+    setTip({ kind: 'none' });
     setSelected(pending.map((order) => order.id));
     setCollecting(true);
   }
@@ -349,8 +356,10 @@ export function SpaceAccountPanel({
               <CreditCard aria-hidden="true" className="size-5" /> Terminal
             </button>
           </div>
+          <TipPicker base={charge} value={tip} onChange={setTip} />
           <p className="space-account__charge">
-            <ReceiptText aria-hidden="true" className="size-5" /> A cobrar <strong><RollingMoney value={charge} /></strong>
+            <ReceiptText aria-hidden="true" className="size-5" /> {tipValue !== '0.00' ? 'A cobrar con propina' : 'A cobrar'}{' '}
+            <strong><RollingMoney value={toCollect} /></strong>
           </p>
           {method === 'efectivo' ? (
             <Field
@@ -364,7 +373,7 @@ export function SpaceAccountPanel({
               error={MONEY_PATTERN.test(received) && change === null ? 'El efectivo no alcanza.' : undefined}
             />
           ) : (
-            <p className="space-account__hint">Cobra {formatMoney(charge)} en la terminal y confirma cuando se apruebe.</p>
+            <p className="space-account__hint">Cobra {formatMoney(toCollect)} en la terminal y confirma cuando se apruebe.</p>
           )}
           <div className="form-actions">
             <Button type="button" variant="ghost" onClick={() => setCollecting(false)}>Cancelar</Button>

@@ -69,6 +69,7 @@ describe('cuenta del espacio', () => {
       montoRecibido: undefined,
       totalEsperado: '120.00',
       pedidoIds: ['p1'],
+      propina: '0.00',
     }));
     expect(await screen.findByText(/Falta por cobrar \$80\.50 MXN/)).toBeVisible();
   });
@@ -91,6 +92,7 @@ describe('cuenta del espacio', () => {
       montoRecibido: '300.00',
       totalEsperado: '200.50',
       pedidoIds: undefined,
+      propina: '0.00',
     }));
     expect(await screen.findByText(/Cuenta saldada/)).toBeVisible();
   });
@@ -137,6 +139,7 @@ describe('cuenta del espacio', () => {
         partes: 3,
         montoRecibido: undefined,
         restanteEsperado: '200.50',
+        propina: '0.00',
       }),
     );
     expect(await screen.findByText(/Abonado \$66.83.*Falta \$133.67/)).toBeInTheDocument();
@@ -203,6 +206,27 @@ describe('cuenta del espacio', () => {
 
     await waitFor(() =>
       expect(apiMock.collectSpaceAccount).toHaveBeenCalledWith('t', 7, expect.objectContaining({ pedidoIds: ['p2'], totalEsperado: '80.50' })),
+    );
+  });
+
+  it('propina del 10 %: el efectivo cubre cuenta más propina y se manda aparte', async () => {
+    const user = userEvent.setup();
+    apiMock.collectSpaceAccount.mockResolvedValue({ pedidos_cobrados: 2, total: '200.50', metodo_pago: 'efectivo', monto_recibido: '250.00', cambio: '29.45', restante: '0.00', propina: '20.05' });
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Cobrar cuenta/ }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: '10%' }));
+    expect(within(dialog).getByText(/Propina \$20\.05 MXN/)).toBeInTheDocument();
+    // 200.50 + 20.05 = 220.55: con 220.00 no alcanza.
+    await user.type(within(dialog).getByRole('textbox', { name: 'Efectivo recibido' }), '220.00');
+    expect(within(dialog).getByRole('button', { name: 'Confirmar cobro' })).toBeDisabled();
+    await user.clear(within(dialog).getByRole('textbox', { name: 'Efectivo recibido' }));
+    await user.type(within(dialog).getByRole('textbox', { name: 'Efectivo recibido' }), '250.00');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
+
+    await waitFor(() =>
+      expect(apiMock.collectSpaceAccount).toHaveBeenCalledWith('t', 7, expect.objectContaining({ montoRecibido: '250.00', totalEsperado: '200.50', propina: '20.05' })),
     );
   });
 });
