@@ -28,11 +28,14 @@ export function KitchenOrderCard({
   stage,
   now,
   action,
+  leaving = false,
 }: {
   order: OrderDetail;
   stage: KitchenStage;
   now: number;
   action?: ReactNode;
+  /** Se está yendo (Cocina lo rechazó): se encoge antes de salir de la lista. */
+  leaving?: boolean;
 }) {
   const referenceTime = stage === 'pending' ? order.creado_en : order.actualizado_en;
   const elapsedMinutes = minutesSince(referenceTime, now);
@@ -43,7 +46,7 @@ export function KitchenOrderCard({
 
   return (
     <article
-      className={`kitchen-ticket kitchen-ticket--${stage} kitchen-ticket--age-${ageTone}`}
+      className={`kitchen-ticket kitchen-ticket--${stage} kitchen-ticket--age-${ageTone}${leaving ? ' kitchen-ticket--leaving' : ''}`}
       aria-label={`Pedido ${order.folio}, ${stageCopy[stage].label}`}
     >
       <header className="kitchen-ticket__header">

@@ -60,7 +60,7 @@ describe('cuenta del espacio', () => {
     await user.click(await screen.findByRole('button', { name: /Cobrar cuenta/ }));
     await user.click(screen.getByRole('checkbox', { name: /#12/ }));
     await user.click(screen.getByRole('radio', { name: /Terminal/ }));
-    expect(screen.getByText(/A cobrar/)).toHaveTextContent('A cobrar $120.00 MXN');
+    expect(screen.getByText(/A cobrar/).querySelector('.rolling-money')).toHaveAccessibleName('$120.00 MXN');
     await user.click(screen.getByRole('button', { name: 'Confirmar cobro' }));
 
     await waitFor(() => expect(apiMock.collectSpaceAccount).toHaveBeenCalledWith('t', 7, {
