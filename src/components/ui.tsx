@@ -138,7 +138,7 @@ export function Modal({
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
         <Dialog.Content className={`dialog-content ${contentClassName}`}>
-          <div className="pr-10">
+          <div className="pr-14">
             <Dialog.Title className="text-xl font-bold text-ink">{title}</Dialog.Title>
             {description && (
               <Dialog.Description className="mt-2 text-sm leading-6 text-muted">
