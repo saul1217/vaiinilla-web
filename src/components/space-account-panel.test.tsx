@@ -182,7 +182,7 @@ describe('cuenta del espacio', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('radio', { name: 'Por pedidos' })).toBeDisabled();
     expect(within(dialog).getByRole('radio', { name: 'Por monto' })).toHaveAttribute('aria-checked', 'true');
-    expect((within(dialog).getByRole('textbox', { name: 'Monto de este pago' })).value).toBe('100.50');
+    expect(within(dialog).getByRole('textbox', { name: 'Monto de este pago' })).toHaveValue('100.50');
   });
 
   it('cobra la parte de quien dijo "esto lo pago yo"', async () => {
