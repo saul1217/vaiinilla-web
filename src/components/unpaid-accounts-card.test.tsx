@@ -79,8 +79,11 @@ describe('cuentas sin cobrar', () => {
     expect(buttons).toHaveLength(1);
     await user.click(buttons[0]!);
     const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByRole('textbox', { name: /motivo/i }), '  Se fue sin pagar ');
     await user.click(within(dialog).getByRole('button', { name: 'Cerrar sin cobrar' }));
-    await vi.waitFor(() => expect(apiMock.releaseSpace).toHaveBeenCalledWith('tenant-token', 3, undefined, true));
+    await vi.waitFor(() =>
+      expect(apiMock.releaseSpace).toHaveBeenCalledWith('tenant-token', 3, undefined, true, 'Se fue sin pagar'),
+    );
   });
 
   it('la edad en horas', () => {
