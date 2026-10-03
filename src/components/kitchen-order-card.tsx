@@ -124,6 +124,7 @@ export function KitchenOrderCard({
           <small>Cliente</small>
           <strong>{order.usuario?.nombre ?? 'Cliente'}</strong>
           {order.usuario?.matricula && <small>{order.usuario.matricula}</small>}
+          {order.invitado && <span className="guest-tag">Invitado</span>}
         </span>
         {stage === 'ready' && (
           <span className="kitchen-ticket__ready-state">
