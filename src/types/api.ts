@@ -200,6 +200,8 @@ export interface OrderDetail {
   motivo_pendiente_operativo?: 'caja_inactiva' | 'cocina_inactiva' | null;
   /** Drive-thru: cuándo el cliente avisó que llegó por su pedido; null si no ha avisado. */
   llegada_en?: string | null;
+  /** Compra sin cuenta: pedido de un invitado (solo dio su nombre). */
+  invitado?: boolean;
 }
 
 export interface CashPaymentResult {
