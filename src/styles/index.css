@@ -7099,3 +7099,11 @@ html[data-staff-ui='nueva'] .space-account__chip--due { background: rgba(224, 92
 .pending-refund p { margin: 2px 0 0; color: var(--muted); font-size: 0.875rem; }
 .pending-refund__actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
 html[data-staff-ui='nueva'] .pending-refund > svg { color: #f08a7d; }
+
+/* Pedido de invitado (compra sin cuenta): solo dio su nombre. */
+.guest-tag {
+  display: inline-block; margin-left: 6px; border-radius: 999px; padding: 2px 8px;
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  background: rgba(132, 180, 40, 0.18); color: #4f7a10;
+}
+html[data-staff-ui='nueva'] .guest-tag { color: #bfe06a; }
