@@ -158,4 +158,31 @@ describe('Flujo de mi tienda', () => {
     render(<StoreFlowPage />, { wrapper: Wrapper });
     expect(await screen.findByText(/tipo que esta pantalla no conoce/)).toBeInTheDocument();
   });
+
+  it('oculto del directorio por defecto; activarlo se guarda solo y la tienda trae su QR', async () => {
+    apiMock.businessSettings.mockResolvedValue({
+      ...cafeteria,
+      visible_en_directorio: false,
+      tienda_url: 'https://vaiinilla.app/e/cafeteria-centro',
+    });
+    apiMock.saveBusinessSettings.mockResolvedValue({
+      ...cafeteria,
+      visible_en_directorio: true,
+      tienda_url: 'https://vaiinilla.app/e/cafeteria-centro',
+    });
+    const user = userEvent.setup();
+    render(<StoreFlowPage />, { wrapper: Wrapper });
+
+    const hidden = await screen.findByRole('radio', { name: /Solo con QR o código/ });
+    expect(hidden).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('https://vaiinilla.app/e/cafeteria-centro')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: /También en la lista de Vaiinilla/ }));
+    await waitFor(() =>
+      expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('tenant-token', { visible_en_directorio: true }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('radio', { name: /También en la lista de Vaiinilla/ })).toHaveAttribute('aria-checked', 'true'),
+    );
+  });
 });

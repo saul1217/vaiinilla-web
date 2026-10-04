@@ -3,6 +3,7 @@ import { Check, Clock3, Link2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CardPaymentsCard } from '../components/card-payments-card';
+import { StoreDirectoryCard } from '../components/store-directory-card';
 import { Choice } from '../components/choice';
 import { Button, Feedback, Field, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
@@ -98,6 +99,7 @@ export function StoreFlowPage() {
       {query.isLoading && <div className="table-loading">Consultando tu negocio…</div>}
 
       <CardPaymentsCard token={token} scopeId={scopeId} />
+      {query.data && <StoreDirectoryCard token={token} scopeId={scopeId} settings={query.data} />}
 
       {(settings || unknownType) && (
         <>
