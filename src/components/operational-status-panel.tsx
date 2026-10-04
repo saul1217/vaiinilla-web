@@ -52,7 +52,10 @@ export function OperationalStatusPanel() {
         <Signal icon={ChefHat} label="Dispositivo Cocina" active={data.cocina_en_linea} activeText="En línea" inactiveText="Sin conexión" />
         <div className="operational-signal">
           <Clock3 aria-hidden="true" />
-          <span><small>Tiempo estimado</small><strong>{data.tiempo_estimado_min === null ? 'Sin dato' : `${data.tiempo_estimado_min} min`}</strong></span>
+          <span title={data.tiempo_estimado_min === null ? 'Tiempo estimado: Sin dato' : `Tiempo estimado: ${data.tiempo_estimado_min} min`}>
+            <small>Tiempo estimado</small>
+            <strong>{data.tiempo_estimado_min === null ? 'Sin dato' : `${data.tiempo_estimado_min} min`}</strong>
+          </span>
         </div>
       </div>
 
@@ -76,10 +79,11 @@ function Signal({
   activeText: string;
   inactiveText: string;
 }) {
+  const value = active ? activeText : inactiveText;
   return (
     <div className={`operational-signal ${active ? 'operational-signal--active' : 'operational-signal--inactive'}`}>
       <Icon aria-hidden="true" />
-      <span><small>{label}</small><strong>{active ? activeText : inactiveText}</strong></span>
+      <span title={`${label}: ${value}`}><small>{label}</small><strong>{value}</strong></span>
     </div>
   );
 }

@@ -32,6 +32,13 @@ describe('"Ya llegó" del drive-thru', () => {
     expect(screen.getByRole('status')).toHaveTextContent('hace 3 min');
   });
 
+  it('un aviso de hace varios días no se queda en minutos crudos', () => {
+    const now = new Date('2026-09-30T19:12:00.000Z').getTime();
+    const llegada = new Date(now - 5362 * 60_000).toISOString();
+    render(<KitchenOrderCard order={{ ...order, llegada_en: llegada }} stage="pending" now={now} />);
+    expect(screen.getByRole('status')).toHaveTextContent('hace 3 d 17 h');
+  });
+
   it('cocina no muestra nada si no ha avisado', () => {
     render(<KitchenOrderCard order={order} stage="pending" now={Date.now()} />);
     expect(screen.queryByText('Ya llegó')).not.toBeInTheDocument();

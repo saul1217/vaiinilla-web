@@ -8,7 +8,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { minutesSince, type KitchenStage } from '../lib/kitchen';
+import { formatElapsed, minutesSince, type KitchenStage } from '../lib/kitchen';
 import type { OrderDetail } from '../types/api';
 
 const stageCopy: Record<KitchenStage, { label: string; timeLabel: string }> = {
@@ -78,7 +78,7 @@ export function KitchenOrderCard({
         <p className="kitchen-ticket__arrival" role="status">
           <MapPin aria-hidden="true" />
           <strong>Ya llegó</strong>
-          <span>hace {minutesSince(order.llegada_en, now)} min</span>
+          <span>hace {formatElapsed(minutesSince(order.llegada_en, now))}</span>
         </p>
       )}
 

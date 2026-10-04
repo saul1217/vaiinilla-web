@@ -14,9 +14,10 @@
 | Texto principal | `#16150F` | `--color-ink` |
 | Superficie oscura | `#2A2820` | `--color-ink-soft` |
 | Acción de marca | `#B4E04D` | `--color-lime` |
-| Foco y texto accesible | `#668C16` | `--color-lime-dark` |
+| Foco e iconos | `#668C16` | `--color-lime-dark` (3.5:1: no usar como texto) |
 | Superficie clara | `#FBF9F2` | `--color-white-warm` |
-| Texto secundario | `#6F695A` | `--color-muted` |
+| Texto secundario | `#655F50` | `--color-muted` (4.97:1 sobre `cream-2`) |
+| Texto de acento verde | `#4F6C12` | `--color-lime-text` (5.3:1 sobre `cream`; en UI oscura del personal `#BFE06A`) |
 
 - Tipografía: **Poppins**, con `system-ui` como respaldo.
 - Iconografía: únicamente Lucide, con trazo consistente. No usar emojis como iconos.
@@ -61,3 +62,9 @@
 - [ ] Sin emojis como iconos; Lucide en toda la aplicación.
 - [ ] Carga, vacío, error y reintento presentes donde corresponda.
 
+
+## Deuda técnica de contraste
+
+- Los paneles oscuros de Plataforma/Admin (`.dashboard-card--dark`, `.analytics-kpi--dark`, `.analytics-secondary`, `.cashback-help`, `.invitation-intro`, `.platform-security-note`, `.auth-visual`) usan grises hardcodeados (`#c8c2b5`, `#bdb7aa`, `#cbc5b7`, `#d5cfc1`) sobre `--color-ink`. Hoy leen bien porque esas vistas siempre van en tema claro; se romperían si adoptan el tema oscuro del personal (`--color-ink` pasa a claro). Migrarlos a tokens antes de oscurecerlas.
+- `.table-action` solo se renderiza en Invitaciones (Administración, tema claro); no aparece en Cocina, POS ni mesero. El hover sigue con fondos claros fijos (`#edf5dc`, `#fff0ee`): correcto en ese tema, no moverlo al tema oscuro del personal.
+- Logo: `/acceso`, `/accesos`, legales y recuperación usan `Logo` en tema claro sobre fondo claro. Plataforma y el splash de acceso de plataforma usan `theme="dark"`. El logo negro del personal solo se sustituye bajo `html[data-staff-ui='nueva']`.
