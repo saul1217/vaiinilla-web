@@ -11,3 +11,14 @@ export function minutesSince(value: string, now: number): number {
   if (!Number.isFinite(timestamp)) return 0;
   return Math.max(0, Math.floor((now - timestamp) / 60_000));
 }
+
+/** Minutos ya calculados, en una frase corta: "3 min", "2 h 5 min" o "3 d 17 h". */
+export function formatElapsed(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours < 24) return remainder ? `${hours} h ${remainder} min` : `${hours} h`;
+  const days = Math.floor(hours / 24);
+  const restHours = hours % 24;
+  return restHours ? `${days} d ${restHours} h` : `${days} d`;
+}

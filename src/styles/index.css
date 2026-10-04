@@ -7114,6 +7114,45 @@ html[data-staff-ui='nueva'] .guest-tag { color: #bfe06a; }
 /* Legibilidad en la UI oscura del personal: lo que usa --color-ink como texto sobre lima o un
    campo blanco fijo se invertía a claro sobre claro. */
 html[data-staff-ui='nueva'] :is(.kitchen-ticket__quantity, .order-card__arrival, .kitchen-ticket__arrival, .operational-panel__main-icon, .nav-item--active) { color: #16150f; }
+
+/* El panel operativo trae fondos claros fijos (#f5faeb, #f1f8e5). En el tema oscuro
+   --color-ink es crema, y quedaba texto claro sobre esa tarjeta. Sigue el tema. */
+html[data-staff-ui='nueva'] .operational-panel,
+html[data-staff-ui='nueva'] .operational-panel--ready {
+  background: var(--color-cream-2);
+  border-color: var(--line-strong);
+  color: var(--color-ink);
+}
+html[data-staff-ui='nueva'] .operational-panel h2,
+html[data-staff-ui='nueva'] .operational-signal strong {
+  color: var(--color-ink);
+}
+html[data-staff-ui='nueva'] .operational-panel .eyebrow,
+html[data-staff-ui='nueva'] .operational-panel__lead p:last-child,
+html[data-staff-ui='nueva'] .operational-panel__updated {
+  color: var(--color-muted);
+}
+html[data-staff-ui='nueva'] .operational-signal,
+html[data-staff-ui='nueva'] .operational-signal--active,
+html[data-staff-ui='nueva'] .operational-signal--inactive {
+  background: var(--color-cream-3);
+  border-color: var(--line-strong);
+  color: var(--color-ink);
+}
+html[data-staff-ui='nueva'] .operational-signal small,
+html[data-staff-ui='nueva'] .operational-signal > svg {
+  color: var(--color-ink-soft);
+}
+html[data-staff-ui='nueva'] .operational-signal--active {
+  background: rgba(180, 224, 77, 0.12);
+  border-color: rgba(191, 224, 106, 0.55);
+}
+html[data-staff-ui='nueva'] .operational-signal--active > svg { color: #bfe06a; }
+html[data-staff-ui='nueva'] .operational-signal--inactive {
+  background: rgba(240, 122, 110, 0.12);
+  border-color: rgba(243, 154, 144, 0.55);
+}
+html[data-staff-ui='nueva'] .operational-signal--inactive > svg { color: #f39a90; }
 html[data-staff-ui='nueva'] .field__control { background: var(--color-white-warm); }
 html[data-staff-ui='nueva'] .field__control:hover { border-color: rgba(244, 241, 231, 0.36); }
 
