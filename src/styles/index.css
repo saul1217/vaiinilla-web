@@ -1684,7 +1684,8 @@ tbody tr:last-child td {
 }
 
 .status-badge--order-cancelado,
-.status-badge--order-no_recogido {
+.status-badge--order-no_recogido,
+.status-badge--order-sin_cobrar {
   border-color: #e0aaa3;
   background: #fff0ee;
   color: #76251e;

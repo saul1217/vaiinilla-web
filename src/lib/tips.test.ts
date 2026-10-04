@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addMoney, tipAmount, tipForPercent } from './tips';
+import { addMoney, tipAmount, tipExceedsTotal, tipForPercent } from './tips';
 
 describe('propinas', () => {
   it('porcentaje redondeado al centavo', () => {
@@ -17,5 +17,12 @@ describe('propinas', () => {
 
   it('suma montos', () => {
     expect(addMoney('150.50', '22.58')).toBe('173.08');
+  });
+
+  it('la propina no puede ser mayor a lo que se cobra', () => {
+    expect(tipExceedsTotal('30.00', '50.00')).toBe(true);
+    expect(tipExceedsTotal('30.00', '30.00')).toBe(false);
+    expect(tipExceedsTotal('30.00', '4.50')).toBe(false);
+    expect(tipExceedsTotal('30.00', '0.00')).toBe(false);
   });
 });

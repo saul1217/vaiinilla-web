@@ -6,7 +6,18 @@ import { TIP_PERCENTS, tipAmount, type TipChoice } from '../lib/tips';
  * Propina al cobrar: sin propina, 10/15/20 % del monto que se cobra o un monto libre.
  * La propina es del negocio y no paga comisión.
  */
-export function TipPicker({ base, value, onChange }: { base: string; value: TipChoice; onChange: (next: TipChoice) => void }) {
+export function TipPicker({
+  base,
+  value,
+  onChange,
+  error,
+}: {
+  base: string;
+  value: TipChoice;
+  onChange: (next: TipChoice) => void;
+  /** La propina no puede ser mayor a lo que se cobra. */
+  error?: string | null;
+}) {
   const amount = tipAmount(base, value);
   const isOn = (choice: TipChoice) =>
     choice.kind === value.kind && (choice.kind !== 'percent' || (value.kind === 'percent' && value.percent === choice.percent));
@@ -45,7 +56,8 @@ export function TipPicker({ base, value, onChange }: { base: string; value: TipC
           hint="Usa pesos con dos decimales, por ejemplo 20.00."
         />
       )}
-      {amount !== '0.00' && <p className="space-account__hint">Propina {formatMoney(amount)}: es del negocio y no paga comisión.</p>}
+      {amount !== '0.00' && !error && <p className="space-account__hint">Propina {formatMoney(amount)}: es del negocio y no paga comisión.</p>}
+      {error ? <p className="field__error">{error}</p> : null}
     </div>
   );
 }

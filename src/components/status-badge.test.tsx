@@ -27,4 +27,14 @@ describe('status badges', () => {
     render(<OrderStatusBadge status="por_cobrar" />);
     expect(screen.getByText('Por cobrar')).toHaveClass('status-badge--order-por_cobrar');
   });
+
+  it('un pagar-al-final dice Sin cobrar aunque su estado sea cobrado', () => {
+    render(<OrderStatusBadge status="cobrado" pagoPendiente />);
+    expect(screen.getByText('Sin cobrar')).toHaveClass('status-badge--order-sin_cobrar');
+  });
+
+  it('cobrado de verdad sigue diciendo Cobrado', () => {
+    render(<OrderStatusBadge status="cobrado" />);
+    expect(screen.getByText('Cobrado')).toHaveClass('status-badge--order-cobrado');
+  });
 });

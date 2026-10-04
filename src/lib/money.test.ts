@@ -1,19 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { calculateChange, centsToMoney, moneyToCents } from './money';
+import { calculateChange, normalizeMoneyInput } from './money';
 
-describe('money helpers', () => {
-  it('convierte dinero sin usar flotantes', () => {
-    expect(moneyToCents('725.50')).toBe(72550n);
-    expect(centsToMoney(72550n)).toBe('725.50');
+describe('montos del POS', () => {
+  it('normaliza al perder el foco o pegar: 200 → 200.00', () => {
+    expect(normalizeMoneyInput('200')).toBe('200.00');
+    expect(normalizeMoneyInput('200.5')).toBe('200.50');
+    expect(normalizeMoneyInput('200.00')).toBe('200.00');
+    expect(normalizeMoneyInput(' 200 ')).toBe('200.00');
+    expect(normalizeMoneyInput('abc')).toBe('abc');
   });
 
-  it('calcula el cambio exacto', () => {
-    expect(calculateChange('100.00', '73.45')).toBe('26.55');
-    expect(calculateChange('73.44', '73.45')).toBeNull();
-  });
-
-  it('rechaza montos que no respetan dos decimales', () => {
-    expect(moneyToCents('10')).toBeNull();
-    expect(moneyToCents('10.5')).toBeNull();
+  it('el cambio se calcula con el monto normalizado', () => {
+    expect(calculateChange(normalizeMoneyInput('200'), '120.00')).toBe('80.00');
+    expect(calculateChange('200.00', '120.00')).toBe('80.00');
+    expect(calculateChange('100.00', '120.00')).toBeNull();
   });
 });

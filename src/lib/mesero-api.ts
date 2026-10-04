@@ -42,6 +42,10 @@ export interface BoardOrder {
   folio: number;
   estado: OrderStatus;
   version: number;
+  /** Va a la cuenta del espacio (pagar al final). */
+  pago_diferido?: boolean;
+  /** Aún no se cobra: el badge dice Sin cobrar aunque el estado sea cobrado. */
+  pago_pendiente?: boolean;
   cliente: { nombre: string } | null;
   items_resumen: string;
   actualizado_en: string;

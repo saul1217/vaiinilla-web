@@ -15,7 +15,7 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { RejectOrderDialog } from '../components/reject-order-dialog';
 import { itemRejectionNotice } from '../lib/rejection-notice';
 import { TipPicker } from '../components/tip-picker';
-import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
+import { addMoney, tipAmount, tipExceedsTotal, type TipChoice } from '../lib/tips';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
@@ -30,7 +30,7 @@ import { useSessions } from '../context/session-context';
 import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
-import { calculateChange, formatMoney } from '../lib/money';
+import { calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
 import { isCashierCashOrder, isCashierDeliveryOrder } from '../lib/cashier-queue';
 import type { CashPaymentResult, OrderDetail } from '../types/api';
 
@@ -148,8 +148,12 @@ export function PosPage() {
   });
 
   const receivedAmount = cashForm.watch('amount');
+  const cashAmountField = cashForm.register('amount');
   const [tip, setTip] = useState<TipChoice>({ kind: 'none' });
   const tipValue = cashOrder ? tipAmount(cashOrder.total, tip) : '0.00';
+  // La propina no puede ser mayor a lo que se cobra (misma regla del servidor).
+  const tipTooBig = cashOrder ? tipExceedsTotal(cashOrder.total, tipValue) : false;
+  const tipError = tipTooBig ? 'La propina no puede ser mayor a lo que se cobra.' : null;
   // El efectivo cubre el pedido más la propina; el cambio se calcula después.
   const cashToCollect = cashOrder ? addMoney(cashOrder.total, tipValue) : '0.00';
   const change = cashOrder ? calculateChange(receivedAmount, cashToCollect) : null;
@@ -506,12 +510,13 @@ export function PosPage() {
           <form
             className="transaction-form"
             onSubmit={(event) => void cashForm.handleSubmit(({ amount }) => {
+              if (tipTooBig) return;
               collectMutation.mutate({ order: cashOrder, amount, propina: tipValue });
             })(event)}
           >
             {collectMutation.isError && <Feedback tone="error">{errorMessage(collectMutation.error)}</Feedback>}
             <OrderDetailContent order={cashOrder} />
-            <TipPicker base={cashOrder.total} value={tip} onChange={setTip} />
+            <TipPicker base={cashOrder.total} value={tip} onChange={setTip} error={tipError} />
             <Field
               label="Efectivo recibido (MXN)"
               inputMode="decimal"
@@ -519,7 +524,14 @@ export function PosPage() {
               autoFocus
               error={cashForm.formState.errors.amount?.message}
               hint={receivedAmount && change === null ? `Debe ser igual o mayor a ${formatMoney(cashToCollect)}.` : undefined}
-              {...cashForm.register('amount')}
+              {...cashAmountField}
+              onBlur={(event) => {
+                void cashAmountField.onBlur(event);
+                const normalized = normalizeMoneyInput(event.target.value);
+                if (normalized !== event.target.value) {
+                  cashForm.setValue('amount', normalized, { shouldValidate: true, shouldDirty: true });
+                }
+              }}
             />
             <div className={`change-preview ${change !== null ? 'change-preview--ready' : ''}`} aria-live="polite">
               <span>Cambio</span>
@@ -527,7 +539,7 @@ export function PosPage() {
             </div>
             <div className="form-actions">
               <Button type="button" variant="ghost" onClick={() => setCashOrder(null)}>Cancelar</Button>
-              <Button type="submit" loading={collectMutation.isPending} disabled={change === null}>
+              <Button type="submit" loading={collectMutation.isPending} disabled={change === null || tipTooBig} aria-disabled={change === null || tipTooBig}>
                 Confirmar cobro
               </Button>
             </div>
