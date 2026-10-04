@@ -6,6 +6,7 @@ import {
   ExternalLink,
   ImageIcon,
   Link2,
+  Nfc,
   Pencil,
   Plus,
   RefreshCw,
@@ -23,6 +24,7 @@ import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { parseHourlyPrice } from '../lib/hourly-price';
+import { canWriteNfc, writeNfcUrl } from '../lib/nfc-tag';
 import {
   addFeature,
   COURT_FEATURE_SUGGESTIONS,
@@ -434,6 +436,7 @@ function SpaceCard({
   onRemoveImage: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [nfc, setNfc] = useState<'idle' | 'waiting' | 'done' | 'error'>('idle');
   const [qr, setQr] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(space.nombre);
@@ -450,6 +453,16 @@ function SpaceCard({
       mounted = false;
     };
   }, [space.qr_url]);
+
+  async function writeTag() {
+    setNfc('waiting');
+    try {
+      await writeNfcUrl(space.qr_url);
+      setNfc('done');
+    } catch {
+      setNfc('error');
+    }
+  }
 
   async function copyUrl() {
     await navigator.clipboard.writeText(space.qr_url);
@@ -537,8 +550,18 @@ function SpaceCard({
       <div className="flex items-center gap-4 rounded-2xl bg-cream p-4">
         {qr && <img src={qr} alt={`Código QR de ${space.nombre}`} width="96" height="96" className="size-24 rounded-xl" />}
         <div className="min-w-0 flex-1">
-          <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.08em] text-muted">Enlace del QR</p>
+          {space.codigo ? (
+            <div className="mb-3">
+              <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-muted">Código de la mesa</p>
+              <p className="font-mono text-3xl font-extrabold tracking-[0.25em] text-ink">{space.codigo}</p>
+              <p className="text-xs leading-5 text-muted">Imprímelo junto al QR: quien no pueda escanear lo escribe en la app.</p>
+            </div>
+          ) : null}
+          <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.08em] text-muted">Enlace del QR y NFC</p>
           <p className="break-all text-xs leading-5 text-ink">{space.qr_url}</p>
+          {canWriteNfc() ? null : (
+            <p className="mt-1 text-xs leading-5 text-muted">Para NFC, graba este enlace en la etiqueta con cualquier app de NFC.</p>
+          )}
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -556,6 +579,18 @@ function SpaceCard({
           <ExternalLink aria-hidden="true" className="size-4" />
           Abrir
         </a>
+        {canWriteNfc() ? (
+          <Button type="button" variant="ghost" onClick={() => void writeTag()} disabled={nfc === 'waiting'}>
+            <Nfc aria-hidden="true" className="size-4" />
+            {nfc === 'waiting'
+              ? 'Acerca la etiqueta…'
+              : nfc === 'done'
+                ? 'Grabada'
+                : nfc === 'error'
+                  ? 'No se grabó, reintenta'
+                  : 'Grabar en NFC'}
+          </Button>
+        ) : null}
         <Button type="button" variant="ghost" onClick={() => {
           setDraftName(space.nombre);
           setEditing(true);

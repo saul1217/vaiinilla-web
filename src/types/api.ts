@@ -393,6 +393,8 @@ export interface ManagedSpace {
   tipo: SpaceType;
   activo: boolean;
   qr_url: string;
+  /** Código corto (4 dígitos) que se imprime junto al QR. Un backend anterior no lo manda. */
+  codigo?: string | null;
   /** Precio por hora para rentar la cancha ("300.00"); null = no se renta. */
   precio_hora: string | null;
   /** Ficha que ven los clientes antes de rentar. Opcional: un backend anterior no la manda. */
@@ -418,10 +420,14 @@ export interface BusinessSettings {
   gracia_liberacion_min: number;
   /** Un backend anterior no lo manda: se toma como sin límite de horario. */
   franjas_pedido?: { desde: string; hasta: string }[];
+  /** Aparece en el directorio público de Vaiinilla (oculto por defecto). */
+  visible_en_directorio?: boolean;
+  /** Enlace al menú de la tienda, para su QR general. Solo lectura. */
+  tienda_url?: string | null;
   tipos_disponibles: string[];
 }
 
-export type BusinessSettingsInput = Partial<Omit<BusinessSettings, 'tipos_disponibles'>>;
+export type BusinessSettingsInput = Partial<Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url'>>;
 
 /** Una cuenta abierta (pagar al final) que nadie ha cobrado. */
 export interface UnpaidAccount {
