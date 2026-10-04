@@ -22,3 +22,11 @@ export function tipAmount(base: string, choice: TipChoice): string {
 export function addMoney(a: string, b: string): string {
   return centsToMoney((moneyToCents(a) ?? 0n) + (moneyToCents(b) ?? 0n));
 }
+
+/** La propina no puede ser mayor a lo que se cobra (misma regla del servidor). */
+export function tipExceedsTotal(total: string, tipValue: string): boolean {
+  const totalCents = moneyToCents(total);
+  const tipCents = moneyToCents(tipValue);
+  if (totalCents === null || tipCents === null) return false;
+  return tipCents > totalCents;
+}
