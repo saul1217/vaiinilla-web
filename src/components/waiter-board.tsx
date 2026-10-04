@@ -438,7 +438,7 @@ export function WaiterBoard({
                       </Button>
                     )
                   ) : (
-                    <OrderStatusBadge status={order.estado} />
+                    <OrderStatusBadge status={order.estado} pagoPendiente={order.pago_pendiente} />
                   )}
                 </li>
               ))}
