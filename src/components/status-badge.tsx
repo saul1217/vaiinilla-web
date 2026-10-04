@@ -31,6 +31,16 @@ const orderLabels: Record<OrderStatus, string> = {
   expirado: 'Expirado',
 };
 
-export function OrderStatusBadge({ status }: { status: OrderStatus }) {
+export function OrderStatusBadge({
+  status,
+  pagoPendiente,
+}: {
+  status: OrderStatus;
+  /** Va a la cuenta y aún no se cobra: se muestra Sin cobrar en vez del estado. */
+  pagoPendiente?: boolean;
+}) {
+  if (pagoPendiente) {
+    return <span className="status-badge status-badge--order-sin_cobrar">Sin cobrar</span>;
+  }
   return <span className={`status-badge status-badge--order-${status}`}>{orderLabels[status]}</span>;
 }
