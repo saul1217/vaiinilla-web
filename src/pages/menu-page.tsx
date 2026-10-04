@@ -229,7 +229,7 @@ export function MenuPage() {
                     aria-pressed={categoryFilter === category.id}
                     onClick={() => setCategoryFilter(category.id)}
                   >
-                    <span>{category.nombre}</span>
+                    <span title={category.nombre}>{category.nombre}</span>
                     <strong>{count}</strong>
                   </button>
                   <button
@@ -814,7 +814,7 @@ function ProductFormModal({
                 </div>
                 {selectedImage && (
                   <p className="product-image-uploader__file" role="status">
-                    <strong>{selectedImage.name}</strong>
+                    <strong title={selectedImage.name}>{selectedImage.name}</strong>
                     <span>{formatFileSize(selectedImage.size)}</span>
                   </p>
                 )}

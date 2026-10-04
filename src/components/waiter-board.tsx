@@ -225,7 +225,7 @@ export function WaiterBoard({
               {alert.kind === 'ready' ? <CheckCircle2 aria-hidden="true" /> : <Bell aria-hidden="true" />}
               <span>
                 <strong>{alert.title}</strong>
-                <small>{alert.body}</small>
+                <small title={alert.body}>{alert.body}</small>
               </span>
             </button>
           ))}
@@ -343,7 +343,7 @@ export function WaiterBoard({
                 >
                   <span className="staff-tile__name">
                     {number && <strong>{number}</strong>}
-                    <span>{kind || table.espacio.nombre}</span>
+                    <span title={table.espacio.nombre}>{kind || table.espacio.nombre}</span>
                   </span>
                   <small key={tileCaption(table, state, space)}>{tileCaption(table, state, space)}</small>
                 </button>
