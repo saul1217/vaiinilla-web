@@ -19,6 +19,7 @@ import { clock, spaceStatusLine } from '../lib/space-status';
 import type {
   AccountPaymentMethod,
   CounterRental,
+  SpaceAccount,
   SpaceAccountOrder,
   SpaceAvailability,
   SpaceSessionDetail,
@@ -43,14 +44,32 @@ function printAccount(detail: SpaceSessionDetail): boolean {
   if (!win) return false;
   const escape = (text: string) =>
     text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
-  const rows = account.pedidos
-    .map(
-      (order) => `<tr><td>#${order.folio} ${escape(order.items_resumen)}</td><td class="r">$${order.total.toFixed(2)}</td></tr>`,
-    )
-    .join('');
+  const orderRow = (order: SpaceAccountOrder) =>
+    `<tr><td>#${order.folio} ${escape(order.items_resumen)}</td><td class="r">$${order.total.toFixed(2)}</td></tr>`;
+  const byId = new Map(account.pedidos.map((order) => [order.id, order]));
+  let rows: string;
+  if (account.grupos?.length) {
+    const covered = new Set<string>();
+    const groups = account.grupos
+      .map((grupo) => {
+        const orders = grupo.pedidos
+          .map((id) => byId.get(id))
+          .filter((order): order is SpaceAccountOrder => Boolean(order));
+        orders.forEach((order) => covered.add(order.id));
+        const label = escape(grupo.etiqueta.toLocaleUpperCase('es-MX'));
+        const items = orders.map(orderRow).join('');
+        return `<tr class="g"><td colspan="2">${label}</td></tr>${items}<tr class="s"><td>Subtotal ${escape(grupo.etiqueta)}</td><td class="r">$${grupo.total.toFixed(2)}</td></tr>`;
+      })
+      .join('');
+    const leftover = account.pedidos.filter((order) => !covered.has(order.id)).map(orderRow).join('');
+    rows = `${groups}${leftover}`;
+  } else {
+    rows = account.pedidos.map(orderRow).join('');
+  }
   win.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Cuenta ${escape(detail.espacio.nombre)}</title>
 <style>body{font:14px/1.4 ui-monospace,monospace;margin:16px;color:#111}h1{font-size:16px;margin:0 0 4px}p{margin:0 0 12px}
 table{width:100%;border-collapse:collapse}td{padding:4px 0;vertical-align:top;border-bottom:1px dashed #999}.r{text-align:right;white-space:nowrap;padding-left:8px}
+.g td{font-weight:700;border:0;padding-top:10px}.s td{font-weight:700}
 tfoot td{border:0;font-weight:700;padding-top:8px}</style></head><body>
 <h1>${escape(detail.espacio.nombre)}</h1><p>${new Date().toLocaleString('es-MX')}</p>
 <table><tbody>${rows}</tbody><tfoot>
@@ -60,6 +79,65 @@ tfoot td{border:0;font-weight:700;padding-top:8px}</style></head><body>
 <script>window.onload=function(){window.print()}</script></body></html>`);
   win.document.close();
   return true;
+}
+
+/** Pedidos de la cuenta agrupados por persona (por los ids que manda el backend, nunca por texto). */
+function AccountGroups({ account }: { account: SpaceAccount }) {
+  const grupos = account.grupos ?? [];
+  const byId = new Map(account.pedidos.map((order) => [order.id, order]));
+  const leftover = (() => {
+    const ids = new Set(grupos.flatMap((grupo) => grupo.pedidos));
+    return account.pedidos.filter((order) => !ids.has(order.id));
+  })();
+  return (
+    <div className="space-account__groups">
+      {grupos.map((grupo, index) => {
+        const orders = grupo.pedidos
+          .map((id) => byId.get(id))
+          .filter((order): order is SpaceAccountOrder => Boolean(order));
+        return (
+          <div key={`${grupo.participante_id ?? grupo.etiqueta}-${index}`} className="space-account__group">
+            <p className="eyebrow">{grupo.etiqueta.toLocaleUpperCase('es-MX')}</p>
+            <ul className="space-account__orders">
+              {orders.map((order) => (
+                <li key={order.id}>
+                  <div>
+                    <strong>#{order.folio} · {order.cliente?.nombre ?? 'Cliente'}</strong>
+                    <p>{order.items_resumen}</p>
+                  </div>
+                  <div className="space-account__order-side">
+                    <strong>{formatMoney(order.total.toFixed(2))}</strong>
+                    <span className={order.pendiente_cobro ? 'space-account__chip space-account__chip--due' : 'space-account__chip'}>
+                      {order.pendiente_cobro ? 'sin cobrar' : 'cobrado'}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="space-account__hint">Subtotal {grupo.etiqueta}: <strong>{formatMoney(grupo.total.toFixed(2))}</strong></p>
+          </div>
+        );
+      })}
+      {leftover.length > 0 && (
+        <ul className="space-account__orders">
+          {leftover.map((order) => (
+            <li key={order.id}>
+              <div>
+                <strong>#{order.folio} · {order.cliente?.nombre ?? 'Cliente'}</strong>
+                <p>{order.items_resumen}</p>
+              </div>
+              <div className="space-account__order-side">
+                <strong>{formatMoney(order.total.toFixed(2))}</strong>
+                <span className={order.pendiente_cobro ? 'space-account__chip space-account__chip--due' : 'space-account__chip'}>
+                  {order.pendiente_cobro ? 'sin cobrar' : 'cobrado'}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 export function SpaceAccountPanel({
@@ -245,6 +323,9 @@ export function SpaceAccountPanel({
             <strong>Cuenta</strong>
             <span>{account.pedidos.length} {account.pedidos.length === 1 ? 'pedido' : 'pedidos'}</span>
           </div>
+          {account.grupos?.length ? (
+            <AccountGroups account={account} />
+          ) : (
           <ul className="space-account__orders">
             {account.pedidos.map((order) => (
               <li key={order.id}>
@@ -261,6 +342,7 @@ export function SpaceAccountPanel({
               </li>
             ))}
           </ul>
+          )}
           <div className="space-account__totals">
             <span>Cuenta <strong><RollingMoney value={centsToMoney(toCents(account.total))} /></strong></span>
             <span>Por cobrar <strong><RollingMoney value={centsToMoney(toCents(account.pendiente))} /></strong></span>

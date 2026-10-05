@@ -744,6 +744,35 @@ describe('Vaiinilla API client', () => {
     ]);
   });
 
+  it('consulta la cuenta de una sesión cerrada con sus grupos por persona', async () => {
+    const sessionId = '3d196e4d-9082-4b5d-aa7a-65f0e21ac654';
+    const closed = {
+      espacio: { id: 7, nombre: 'Mesa 7', tipo: 'mesa' },
+      sesion: { id: sessionId, estado: 'cerrada', inicio: '2026-10-01T18:00:00Z', fin_previsto: null, version: 5 },
+      cuenta: {
+        pedidos: [],
+        grupos: [
+          { etiqueta: 'Persona 1', participante_id: null, pedidos: [], total: 120, pagado: 120, pendiente: 0 },
+          { etiqueta: 'Pedido general', participante_id: null, pedidos: [], total: 30.5, pagado: 0, pendiente: 30.5 },
+        ],
+        total: 150.5,
+        pendiente: 30.5,
+        pagado: 120,
+        saldada: false,
+      },
+    };
+    server.use(
+      http.get(`${baseUrl}/espacios/7/sesiones/${sessionId}/cuenta`, ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        return HttpResponse.json({ data: closed, meta: {}, error: null });
+      }),
+    );
+
+    await expect(api.getClosedSessionAccount('tenant-token', 7, sessionId)).resolves.toMatchObject({
+      cuenta: { total: 150.5, grupos: [{ etiqueta: 'Persona 1' }, { etiqueta: 'Pedido general' }] },
+    });
+  });
+
   it('rechaza un pedido desde Cocina con su versión y el motivo', async () => {
     let body: unknown;
     server.use(
