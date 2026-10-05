@@ -290,6 +290,99 @@ select:enabled {
   font-weight: 600;
 }
 
+/* Desplegable propio: mismo campo, lista de la casa (sin el menú del sistema). */
+.custom-select {
+  position: relative;
+  min-width: 0;
+}
+
+.custom-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.custom-select__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select__chevron {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-muted);
+  transition: transform 200ms var(--ease);
+}
+
+.custom-select--open .custom-select__chevron {
+  transform: rotate(180deg);
+}
+
+.custom-select__list {
+  position: absolute;
+  z-index: 60;
+  inset-inline: 0;
+  top: calc(100% + 6px);
+  display: grid;
+  gap: 2px;
+  max-height: 248px;
+  overflow-y: auto;
+  margin: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--color-white-warm);
+  padding: 6px;
+  box-shadow: var(--shadow);
+  list-style: none;
+  animation: arrive 320ms var(--ease) both;
+}
+
+.custom-select__group {
+  margin: 0;
+  padding: 8px 12px 4px;
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.custom-select__option {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 11px;
+  padding: 10px 12px;
+  color: var(--color-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.custom-select__option:hover {
+  background: var(--color-cream-2);
+}
+
+.custom-select__option--selected {
+  background: var(--color-cream-2);
+}
+
+.custom-select__option:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(180, 224, 77, 0.4);
+}
+
 .text-link {
   min-height: 40px;
   padding: 8px;
@@ -4003,13 +4096,13 @@ tbody tr:last-child td {
   border: 1px solid var(--line);
   border-radius: 24px;
   background: var(--color-white-warm);
-  padding: 18px;
+  padding: 20px;
   box-shadow: var(--shadow-sm);
 }
 
 .category-panel__header {
   margin-bottom: 6px;
-  padding: 2px 2px 12px;
+  padding: 2px 4px 14px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -5699,6 +5792,27 @@ tbody tr:last-child td {
   box-shadow: var(--shadow-sm);
 }
 
+/* ===== Mesas y espacios: entradas con el mismo sistema de resortes (arrive),
+   y contención para que nada empuje la tarjeta más allá del viewport. ===== */
+.spaces-grid > .space-card-enter {
+  animation: arrive var(--spring-soft) both;
+}
+
+.spaces-grid > :nth-child(2) { animation-delay: 40ms; }
+.spaces-grid > :nth-child(3) { animation-delay: 80ms; }
+.spaces-grid > :nth-child(4) { animation-delay: 120ms; }
+.spaces-grid > :nth-child(5) { animation-delay: 160ms; }
+.spaces-grid > :nth-child(6) { animation-delay: 200ms; }
+.spaces-grid > :nth-child(n + 7) { animation-delay: 240ms; }
+
+.swap-enter {
+  animation: arrive 420ms var(--ease) both;
+}
+
+.qr-enter {
+  animation: fade-in 220ms ease-out both;
+}
+
 .cashback-context {
   display: flex;
   align-items: center;
@@ -6713,6 +6827,42 @@ html[data-staff-ui='nueva'] .button--primary { color: #16150f; box-shadow: none;
 html[data-staff-ui='nueva'] .button--primary:enabled:hover { box-shadow: 0 10px 24px rgba(180, 224, 77, 0.22); }
 html[data-staff-ui='nueva'] .button--dark:enabled:hover { background: #e6e2d4; }
 
+/* ===== Panel en modo oscuro (por defecto; cada dispositivo puede pasarlo a
+   claro). Mismas variables y reglas genéricas que la presentación nueva del
+   personal: nada propio del personal (tickets, cocina) se arrastra aquí. ===== */
+html[data-admin-theme='oscuro'] {
+  --color-cream: #1b1b19;
+  --color-cream-2: #2a2a26;
+  --color-cream-3: #34342f;
+  --color-ink: #f4f1e7;
+  --color-ink-soft: #dedbcf;
+  --color-white-warm: #232320;
+  --color-muted: #a3a194;
+  --line: rgba(244, 241, 231, 0.09);
+  --line-strong: rgba(244, 241, 231, 0.18);
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.28);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
+  --shadow-lg: 0 36px 90px rgba(0, 0, 0, 0.55);
+  --color-danger: #f07a6e;
+  --color-danger-dark: #f39a90;
+  --color-danger-soft: rgba(240, 122, 110, 0.14);
+  --color-lime-text: #bfe06a;
+  color-scheme: dark;
+}
+
+html[data-admin-theme='oscuro'] .button--primary { color: #16150f; box-shadow: none; }
+html[data-admin-theme='oscuro'] .button--primary:enabled:hover { box-shadow: 0 10px 24px rgba(180, 224, 77, 0.22); }
+html[data-admin-theme='oscuro'] .button--dark:enabled:hover { background: #e6e2d4; }
+html[data-admin-theme='oscuro'] .mobile-header { background: rgba(27, 27, 25, 0.92); }
+html[data-admin-theme='oscuro'], html[data-admin-theme='oscuro'] body { background: var(--color-cream); }
+
+/* Los campos siguen blancos (como en la presentación del personal): el texto va
+   oscuro para que se lea; el menú del desplegable propio ya es oscuro. */
+html[data-admin-theme='oscuro'] .field__control { color: #16150f; }
+html[data-admin-theme='oscuro'] .field__control::placeholder { color: rgba(22, 21, 15, 0.45); }
+html[data-admin-theme='oscuro'] select.field__control option { color: #16150f; background: #ffffff; }
+html[data-admin-theme='oscuro'] .category-row strong { background: rgba(244, 241, 231, 0.14); }
+
 .staff-topbar {
   display: flex;
   flex-wrap: wrap;
@@ -7139,6 +7289,80 @@ html[data-staff-ui='nueva'] .operational-signal--inactive {
   border-color: var(--line-strong);
   color: var(--color-ink);
 }
+
+/* Legibilidad en el modo oscuro del panel: el mismo tratamiento que la UI del
+   personal. El seleccionado del menú lateral lleva letra oscura sobre lima, y el
+   panel operativo (fondos claros fijos) sigue el tema. */
+html[data-admin-theme='oscuro'] :is(.operational-panel__main-icon, .nav-item--active) { color: #16150f; }
+
+html[data-admin-theme='oscuro'] .operational-panel,
+html[data-admin-theme='oscuro'] .operational-panel--ready {
+  background: var(--color-cream-2);
+  border-color: var(--line-strong);
+  color: var(--color-ink);
+}
+html[data-admin-theme='oscuro'] .operational-panel h2,
+html[data-admin-theme='oscuro'] .operational-signal strong {
+  color: var(--color-ink);
+}
+html[data-admin-theme='oscuro'] .operational-panel .eyebrow,
+html[data-admin-theme='oscuro'] .operational-panel__lead p:last-child,
+html[data-admin-theme='oscuro'] .operational-panel__updated {
+  color: var(--color-muted);
+}
+html[data-admin-theme='oscuro'] .operational-signal,
+html[data-admin-theme='oscuro'] .operational-signal--active,
+html[data-admin-theme='oscuro'] .operational-signal--inactive {
+  background: var(--color-cream-3);
+  border-color: var(--line-strong);
+  color: var(--color-ink);
+}
+
+/* La tarjeta de producto oculto trae fondo claro fijo (#f2eee5): en oscuro el
+   título y el precio (tinta) quedaban invisibles. Sigue el tema. */
+html[data-admin-theme='oscuro'] .product-card--hidden {
+  background: #26251f;
+  border-color: var(--line-strong);
+}
+
+/* Tarjetas de éxito con fondo claro fijo (conciliación, héroe de caja): en oscuro
+   el título (tinta) quedaba invisible. Siguen el tema. */
+html[data-admin-theme='oscuro'] .cashback-reconciliation {
+  background: var(--color-cream-2);
+  border-color: var(--line-strong);
+}
+html[data-admin-theme='oscuro'] .cashback-reconciliation--warning {
+  background: rgba(240, 122, 110, 0.12);
+  border-color: rgba(243, 154, 144, 0.5);
+}
+html[data-admin-theme='oscuro'] .cash-hero--open {
+  background: var(--color-cream-2);
+  border-color: var(--line-strong);
+}
+html[data-admin-theme='oscuro'] .cash-hero__icon,
+html[data-admin-theme='oscuro'] .cashback-reconciliation__icon { color: #16150f; }
+
+/* Sobre lima el texto sigue oscuro (plantillas de flujo, opciones, iconos): en
+   oscuro la tinta es crema y quedaba claro sobre lima. */
+html[data-admin-theme='oscuro'] :is(.bg-lime.text-ink, .bg-lime .text-ink) { color: #16150f; }
+html[data-admin-theme='oscuro'] :is(.bg-lime.text-muted, .bg-lime .text-muted) { color: rgba(22, 21, 15, 0.65); }
+
+/* El banner de contexto trae fondo lima claro fijo: en oscuro el nombre (tinta)
+   quedaba invisible. */
+html[data-admin-theme='oscuro'] .cashback-context strong { color: #16150f; }
+
+/* Superficies invertidas (fondo --color-ink, claro en el tema claro): en oscuro el
+   fondo se vuelve crema y el texto secundario fijo #c8c2b5 quedaba ilegible. */
+html[data-admin-theme='oscuro'] :is(
+  .platform-security-note p,
+  .invitation-intro > div > p:last-child,
+  .analytics-kpi--dark > p,
+  .analytics-kpi--dark > small,
+  .analytics-secondary span,
+  .analytics-secondary p,
+  .cashback-help > p:not(.eyebrow),
+  .cashback-help ol
+) { color: rgba(22, 21, 15, 0.62); }
 html[data-staff-ui='nueva'] .operational-signal small,
 html[data-staff-ui='nueva'] .operational-signal > svg {
   color: var(--color-ink-soft);

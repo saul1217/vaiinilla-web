@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { PeriodSelector } from '../components/analytics-dashboard';
-import { Button, Feedback, Field, Modal, PageHeader, SelectField } from '../components/ui';
+import { Button, CustomSelect, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -402,19 +402,16 @@ export function CashbackPage() {
             <h2>Movimientos por tipo</h2>
             <p>Solo se muestran importes y conteos agregados; no hay datos de clientes.</p>
           </div>
-          <SelectField
+          <CustomSelect
             id="wallet-movement-type"
             label="Tipo de movimiento"
             value={movementType}
-            onChange={(event) => setMovementType(event.target.value as typeof movementType)}
-          >
-            <option value="todos">Todos</option>
-            {Object.entries(movementLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </SelectField>
+            onChange={(next) => setMovementType(next as typeof movementType)}
+            options={[
+              { value: 'todos', label: 'Todos' },
+              ...Object.entries(movementLabels).map(([value, label]) => ({ value, label })),
+            ]}
+          />
         </header>
 
         {analytics.isPending ? (

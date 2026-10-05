@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Button, Feedback, Field, PageHeader, SelectField } from '../components/ui';
+import { Button, CustomSelect, Feedback, Field, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -52,13 +52,13 @@ function HourlyPrice({ space, onSave }: { space: ManagedSpace; onSave: (price: s
   const changed = parsed !== undefined && parsed !== space.precio_hora;
   return (
     <form
-      className="grid gap-2 rounded-2xl bg-cream p-4"
+      className="swap-enter grid gap-2 rounded-2xl bg-cream p-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (changed) onSave(parsed);
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end [&>*]:min-w-0">
         <Field
           label="Precio por hora (MXN)"
           name={`precio-hora-${space.id}`}
@@ -127,7 +127,7 @@ function SpaceProfile({
 
   return (
     <form
-      className="grid gap-4 rounded-2xl bg-cream p-4"
+      className="swap-enter grid gap-4 rounded-2xl bg-cream p-4"
       aria-label={`Ficha de ${space.nombre}`}
       onSubmit={(event) => {
         event.preventDefault();
@@ -288,18 +288,23 @@ function BatchSpacesCard({ onCreated }: { onCreated: (message: string) => void }
       </p>
       {create.isError && <Feedback tone="error">{errorMessage(create.error)}</Feedback>}
       <form
-        className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_120px_120px_auto] md:items-end"
+        className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_120px_120px_auto] md:items-end [&>*]:min-w-0"
         onSubmit={(event) => {
           event.preventDefault();
           if (validRange && !tooMany && label) create.mutate();
         }}
       >
-        <SelectField label="Tipo" value={type} onChange={(event) => setType(event.target.value as SpaceType)}>
-          <option value="asiento">Asiento</option>
-          <option value="mesa">Mesa</option>
-          <option value="barra">Barra</option>
-          <option value="drive_thru">Drive-thru</option>
-        </SelectField>
+        <CustomSelect
+          label="Tipo"
+          value={type}
+          onChange={(next) => setType(next as SpaceType)}
+          options={[
+            { value: 'asiento', label: 'Asiento' },
+            { value: 'mesa', label: 'Mesa' },
+            { value: 'barra', label: 'Barra' },
+            { value: 'drive_thru', label: 'Drive-thru' },
+          ]}
+        />
         <Field label="Nombre base" name="batch-prefix" value={prefix} onChange={(event) => setPrefix(event.target.value)} maxLength={70} required />
         <Field label="Desde" name="batch-from" type="number" min={0} value={from} onChange={(event) => setFrom(event.target.value)} required />
         <Field label="Hasta" name="batch-to" type="number" min={0} value={to} onChange={(event) => setTo(event.target.value)} required />
@@ -347,7 +352,7 @@ function BookingSettingsCard() {
     Boolean(draft) && current !== undefined &&
     (draft?.apertura !== current.apertura || draft?.cierre !== current.cierre || Number(draft?.dias) !== current.dias_adelanto);
   return (
-    <section className="panel-card" aria-labelledby="booking-settings-title">
+    <section className="panel-card p-5 sm:p-6" aria-labelledby="booking-settings-title">
       <div className="mb-5 flex items-start gap-3">
         <span className="grid size-11 place-items-center rounded-2xl bg-ink text-white-warm">
           <CalendarClock aria-hidden="true" />
@@ -366,7 +371,7 @@ function BookingSettingsCard() {
       {saved && !save.isError && <Feedback tone="success">Horario guardado.</Feedback>}
       {values && (
         <form
-          className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
+          className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end [&>*]:min-w-0"
           onSubmit={(event) => {
             event.preventDefault();
             setSaved(false);
@@ -483,15 +488,15 @@ function SpaceCard({
   }
 
   return (
-    <article className="panel-card flex flex-col gap-5">
+    <article className="panel-card space-card-enter flex flex-col gap-5 p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="grid size-12 place-items-center rounded-2xl bg-lime text-ink">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-lime text-ink">
             <Table2 aria-hidden="true" />
           </span>
-          <div>
+          <div className="min-w-0">
             {editing ? (
-              <form className="grid gap-2" onSubmit={saveName}>
+              <form className="swap-enter grid gap-2" onSubmit={saveName}>
                 <Field
                   label="Nombre"
                   value={nameValue}
@@ -521,21 +526,16 @@ function SpaceCard({
             )}
           </div>
         </div>
-        <span className={`status-badge ${space.activo ? 'status-badge--success' : 'status-badge--muted'}`}>
+        <span className={`status-badge shrink-0 ${space.activo ? 'status-badge--success' : 'status-badge--muted'}`}>
           {space.activo ? 'Activo' : 'Inactivo'}
         </span>
       </div>
-      <SelectField
+      <CustomSelect
         label="Tipo"
         value={space.tipo}
-        onChange={(event) => onChangeType(event.target.value as SpaceType)}
-      >
-        <option value="mesa">Mesa</option>
-        <option value="barra">Barra</option>
-        <option value="cancha">Cancha</option>
-        <option value="drive_thru">Drive-thru</option>
-        <option value="asiento">Asiento</option>
-      </SelectField>
+        onChange={(next) => onChangeType(next as SpaceType)}
+        options={(Object.keys(typeLabels) as SpaceType[]).map((tipo) => ({ value: tipo, label: typeLabels[tipo] }))}
+      />
       {space.tipo === 'cancha' && <HourlyPrice key={space.precio_hora ?? ''} space={space} onSave={onChangePrice} />}
       {space.tipo === 'cancha' && (
         <SpaceProfile
@@ -547,8 +547,8 @@ function SpaceCard({
           onRemoveImage={onRemoveImage}
         />
       )}
-      <div className="flex items-center gap-4 rounded-2xl bg-cream p-4">
-        {qr && <img src={qr} alt={`Código QR de ${space.nombre}`} width="96" height="96" className="size-24 rounded-xl" />}
+      <div className="swap-enter flex items-center gap-4 rounded-2xl bg-cream p-4">
+        {qr && <img src={qr} alt={`Código QR de ${space.nombre}`} width="96" height="96" className="qr-enter size-24 shrink-0 rounded-xl" />}
         <div className="min-w-0 flex-1">
           {space.codigo ? (
             <div className="mb-3">
@@ -662,7 +662,7 @@ export function SpacesPage() {
       {feedback && <Feedback tone="success">{feedback}</Feedback>}
       {mutationError && <Feedback tone="error">{errorMessage(mutationError)}</Feedback>}
       {spaces.isError && <Feedback tone="error">{errorMessage(spaces.error)}</Feedback>}
-      <section className="panel-card">
+      <section className="panel-card p-5 sm:p-6">
         <div className="mb-5 flex items-start gap-3">
           <span className="grid size-11 place-items-center rounded-2xl bg-ink text-white-warm">
             <Plus aria-hidden="true" />
@@ -672,7 +672,7 @@ export function SpacesPage() {
             <p className="mt-1 text-sm text-muted">Puedes usar mesas, canchas o espacios drive-thru.</p>
           </div>
         </div>
-        <form className="grid gap-4 md:grid-cols-[1fr_220px_auto] md:items-end" onSubmit={submit}>
+        <form className="grid gap-4 md:grid-cols-[1fr_220px_auto] md:items-end [&>*]:min-w-0" onSubmit={submit}>
           <Field
             label="Nombre"
             value={name}
@@ -681,13 +681,12 @@ export function SpacesPage() {
             maxLength={80}
             required
           />
-          <SelectField label="Tipo" value={type} onChange={(event) => setType(event.target.value as SpaceType)}>
-            <option value="mesa">Mesa</option>
-            <option value="barra">Barra</option>
-            <option value="cancha">Cancha</option>
-            <option value="drive_thru">Drive-thru</option>
-            <option value="asiento">Asiento</option>
-          </SelectField>
+          <CustomSelect
+            label="Tipo"
+            value={type}
+            onChange={(next) => setType(next as SpaceType)}
+            options={(Object.keys(typeLabels) as SpaceType[]).map((tipo) => ({ value: tipo, label: typeLabels[tipo] }))}
+          />
           <Button type="submit" loading={create.isPending} disabled={!name.trim()}>
             <Plus aria-hidden="true" className="size-4" />
             Crear espacio
@@ -719,7 +718,7 @@ export function SpacesPage() {
             <p className="mt-2 text-sm text-muted">Crea el primero arriba para comenzar a recibir pedidos en mesa.</p>
           </div>
         )}
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="spaces-grid grid gap-4 lg:grid-cols-2">
           {spaces.data?.map((space) => (
             <SpaceCard
               key={space.id}

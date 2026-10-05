@@ -255,7 +255,8 @@ describe('crear establecimiento en Super Admin', () => {
 
     await user.type(screen.getByLabelText('Nombre'), 'Pádel Norte');
     await user.type(screen.getByLabelText(/Slug/), 'padel-norte');
-    await user.selectOptions(screen.getByLabelText('Tipo'), 'padel');
+    await user.click(screen.getByRole('button', { name: /Tipo/ }));
+    await user.click(await screen.findByRole('option', { name: 'Pádel' }));
     await user.click(screen.getByRole('button', { name: 'Crear' }));
 
     await waitFor(() => expect(apiMock.createEstablishment).toHaveBeenCalledTimes(1));

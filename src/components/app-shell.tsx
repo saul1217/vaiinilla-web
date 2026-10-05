@@ -11,6 +11,8 @@ import {
   NotebookTabs,
   ShieldCheck,
   Store,
+  Sun,
+  Moon,
   Table2,
   Workflow,
   UserPlus,
@@ -20,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { NavLink, useHistory } from 'react-router-dom';
+import { useAdminTheme } from '../lib/admin-theme';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { Logo } from './brand-mark';
@@ -136,6 +139,8 @@ function Shell({
   onExit: () => Promise<void>;
   children: ReactNode;
 }) {
+  const [adminTheme, setAdminTheme] = useAdminTheme();
+  const dark = surface === 'platform' || adminTheme === 'oscuro';
   return (
     <div className={`app-frame app-frame--${surface}`}>
       <a href="#contenido" className="skip-link">
@@ -143,7 +148,7 @@ function Shell({
       </a>
 
       <header className="mobile-header">
-        <Logo compact theme={surface === 'platform' ? 'dark' : 'light'} />
+        <Logo compact theme={dark ? 'dark' : 'light'} />
         <button
           type="button"
           className="icon-button"
@@ -166,7 +171,7 @@ function Shell({
 
       <aside className={`sidebar ${mobileOpen ? 'sidebar--open' : ''}`}>
         <div className="sidebar__brand">
-          <Logo theme={surface === 'platform' ? 'dark' : 'light'} />
+          <Logo theme={dark ? 'dark' : 'light'} />
           {surface === 'platform' && <span className="platform-chip">Plataforma</span>}
         </div>
 
@@ -203,6 +208,19 @@ function Shell({
               Cambiar acceso
             </Button>
           )}
+          <Button
+            variant="ghost"
+            className="w-full justify-start"
+            onClick={() => setAdminTheme(adminTheme === 'oscuro' ? 'claro' : 'oscuro')}
+            aria-label={adminTheme === 'oscuro' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+          >
+            {adminTheme === 'oscuro' ? (
+              <Sun aria-hidden="true" className="size-5" />
+            ) : (
+              <Moon aria-hidden="true" className="size-5" />
+            )}
+            {adminTheme === 'oscuro' ? 'Tema claro' : 'Tema oscuro'}
+          </Button>
           <Button variant="ghost" className="w-full justify-start" onClick={() => void onExit()}>
             <LogOut aria-hidden="true" className="size-5" />
             Cerrar sesión
