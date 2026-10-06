@@ -14,7 +14,7 @@ export const CALL_REASON_LABEL: Record<CallReason, string> = {
   atencion: 'Necesita atención',
   utensilios: 'Pide cubiertos o servilletas',
   problema: 'Algo está mal con su pedido',
-  cuenta: 'Quiere pagar la cuenta',
+  cuenta: 'Pidió la cuenta',
 };
 
 export interface TableSpace {

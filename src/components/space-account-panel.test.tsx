@@ -217,6 +217,7 @@ describe('cuenta del espacio', () => {
         grupos: [
           { etiqueta: 'Jesús', participante_id: 'part-jesus', pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
           { etiqueta: 'David', participante_id: 'part-david', pedidos: ['p2'], total: 80.5, pagado: 0, pendiente: 80.5 },
+          { etiqueta: 'Miguel', participante_id: 'part-miguel', pedidos: [], total: 0, pagado: 0, pendiente: 0 },
         ],
       },
     });
@@ -224,6 +225,8 @@ describe('cuenta del espacio', () => {
 
     expect(await screen.findByText('JESÚS')).toBeInTheDocument();
     expect(screen.getByText('DAVID')).toBeInTheDocument();
+    expect(screen.queryByText('MIGUEL')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Subtotal Miguel:/)).not.toBeInTheDocument();
     // Cada pedido bajo su persona aunque el nombre del cliente no coincida con la etiqueta.
     const jesus = screen.getByText('JESÚS').closest('.space-account__group') as HTMLElement;
     const david = screen.getByText('DAVID').closest('.space-account__group') as HTMLElement;
@@ -250,6 +253,8 @@ describe('cuenta del espacio', () => {
         grupos: [
           { etiqueta: 'Jesús', participante_id: 'part-jesus', pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
           { etiqueta: 'David', participante_id: 'part-david', pedidos: ['p2'], total: 80.5, pagado: 0, pendiente: 80.5 },
+          { etiqueta: 'David R.', participante_id: 'part-david-r', pedidos: [], total: 0, pagado: 0, pendiente: 0 },
+          { etiqueta: 'Miguel', participante_id: 'part-miguel', pedidos: [], total: 0, pagado: 0, pendiente: 0 },
         ],
       },
     });
@@ -305,11 +310,69 @@ describe('cuenta del espacio', () => {
     apiMock.spaceSession.mockResolvedValue({
       ...openAccount,
       cuenta: {
-        ...openAccount.cuenta!,
-        grupos: [
-          { etiqueta: 'Jesús', participante_id: 'part-jesus', pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
-          { etiqueta: 'David', participante_id: 'part-david', pedidos: ['p2'], total: 80.5, pagado: 0, pendiente: 80.5 },
+        pedidos: [
+          { ...order('p1', 28, 50), items_resumen: '1× Quesadilla' },
+          { ...order('p2', 29, 20), items_resumen: '1× Agua' },
+          { ...order('p3', 27, 20), items_resumen: '1× Agua' },
         ],
+        total: 90,
+        pagado: 15,
+        pendiente: 75,
+        saldada: false,
+        grupos: [
+          { etiqueta: 'Kikin', participante_id: 'part-kikin', pedidos: ['p1', 'p2'], total: 70, pagado: 0, pendiente: 70 },
+          { etiqueta: 'David', participante_id: 'part-david', pedidos: ['p3'], total: 20, pagado: 0, pendiente: 20 },
+          { etiqueta: 'Miguel', participante_id: 'part-miguel', pedidos: [], total: 0, pagado: 0, pendiente: 0 },
+          { etiqueta: 'David R.', participante_id: 'part-david-r', pedidos: [], total: 0, pagado: 0, pendiente: 0 },
+        ],
+      },
+    });
+    const written: string[] = [];
+    const fakeDoc = { write: (html: string) => written.push(html), close: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ document: fakeDoc } as unknown as Window);
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} businessName="USAGI" />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Imprimir cuenta/ }));
+    expect(written).toHaveLength(1);
+    const html = written[0] ?? '';
+    expect(html).toContain('VAIINILLA');
+    expect(html).toContain('USAGI');
+    expect(html).toContain('Mesa 7');
+    expect(html).toContain('KIKIN');
+    expect(html).toContain('DAVID');
+    expect(html).toContain('1× Quesadilla');
+    expect(html).toContain('1× Agua');
+    expect(html).toContain('Subtotal Kikin');
+    expect(html).toContain('Subtotal David');
+    // Kikin's two backend order ids stay inside the same backend participant group.
+    expect(html.match(/#28/g)).toHaveLength(1);
+    expect(html.match(/#29/g)).toHaveLength(1);
+    expect(html).toContain('<td>Total</td><td class="r">$90.00</td>');
+    expect(html).toContain('<td>Pagado</td><td class="r">$15.00</td>');
+    expect(html).toContain('<td>Por pagar</td><td class="r">$75.00</td>');
+    expect(html).not.toContain('DAVID R.');
+    expect(html).not.toContain('MIGUEL');
+    expect(html).not.toContain('Subtotal David R.');
+    expect(html).not.toContain('Subtotal Miguel');
+    expect(html).not.toMatch(/<(?:button|nav|a)(?:\s|>)/i);
+    openSpy.mockRestore();
+  });
+
+  it('imprime una cuenta larga con contenido completo y reglas de ajuste para móvil', async () => {
+    const user = userEvent.setup();
+    const longDescription = 'Producto de temporada con una descripción muy larga para probar que el renglón se envuelve sin recortarse '.repeat(4);
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: {
+        ...openAccount.cuenta!,
+        pedidos: Array.from({ length: 24 }, (_, index) => ({
+          ...order(`long-${index}`, index + 1, 12.5),
+          items_resumen: index === 23 ? longDescription : `1× Artículo ${index + 1}`,
+        })),
+        total: 300,
+        pendiente: 300,
+        pagado: 0,
+        grupos: [{ etiqueta: 'Participante con nombre largo de prueba', participante_id: 'p-long', pedidos: Array.from({ length: 24 }, (_, index) => `long-${index}`), total: 300, pendiente: 300, pagado: 0 }],
       },
     });
     const written: string[] = [];
@@ -318,11 +381,14 @@ describe('cuenta del espacio', () => {
     render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
 
     await user.click(await screen.findByRole('button', { name: /Imprimir cuenta/ }));
-    expect(written).toHaveLength(1);
-    expect(written[0]).toContain('JESÚS');
-    expect(written[0]).toContain('DAVID');
-    expect(written[0]).toContain('Subtotal Jesús');
-    expect(written[0]).toContain('Subtotal David');
+
+    const html = written[0] ?? '';
+    expect(html).toContain(longDescription);
+    expect(html).toContain('viewport');
+    expect(html).toContain('@media(max-width:420px)');
+    expect(html).toContain('overflow-wrap:anywhere');
+    expect(html).toContain('#24');
+    expect(html).toContain('$300.00');
     openSpy.mockRestore();
   });
 
