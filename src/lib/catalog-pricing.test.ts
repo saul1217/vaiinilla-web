@@ -6,7 +6,8 @@ describe('precio que paga el cliente', () => {
     expect(customerCounterPrice(price)).toBe(price);
   });
 
-  it('rechaza dinero sin dos decimales', () => {
-    expect(customerCounterPrice('20')).toBeNull();
+  it('normaliza pesos enteros y rechaza lo que no es dinero', () => {
+    expect(customerCounterPrice('20')).toBe('20.00');
+    expect(customerCounterPrice('20.505')).toBeNull();
   });
 });

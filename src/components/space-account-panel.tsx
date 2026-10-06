@@ -14,7 +14,7 @@ import { api } from '../lib/api';
 import { claimAliases } from '../lib/account-split';
 import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
 import { errorMessage } from '../lib/api-error';
-import { calculateChange, centsToMoney, formatMoney } from '../lib/money';
+import { MONEY_PATTERN, calculateChange, centsToMoney, formatMoney, normalizeMoneyInput } from '../lib/money';
 import { clock, spaceStatusLine } from '../lib/space-status';
 import type {
   AccountPaymentMethod,
@@ -26,7 +26,6 @@ import type {
 } from '../types/api';
 
 const RENTAL_DURATIONS = [60, 90, 120];
-const MONEY_PATTERN = /^\d+\.\d{2}$/;
 
 function durationLabel(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -198,7 +197,7 @@ export function SpaceAccountPanel({
     mutationFn: () =>
       api.collectSpaceAccount(token, spaceId, {
         metodo: method,
-        montoRecibido: method === 'efectivo' ? received : undefined,
+        montoRecibido: method === 'efectivo' ? normalizeMoneyInput(received) : undefined,
         totalEsperado: charge,
         pedidoIds: splitting ? selectedOrders.map((order) => order.id) : undefined,
         propina: tipValue,
@@ -238,7 +237,7 @@ export function SpaceAccountPanel({
   });
 
   const payRental = useMutation({
-    mutationFn: () => api.payCounterRental(token, rental!.id, rentalReceived),
+    mutationFn: () => api.payCounterRental(token, rental!.id, normalizeMoneyInput(rentalReceived)),
     onSuccess: async (result) => {
       setRental(null);
       const changeText = result.cobro && result.cobro.cambio !== '0.00' ? ` Cambio: ${formatMoney(result.cobro.cambio)}.` : '';
@@ -477,7 +476,7 @@ export function SpaceAccountPanel({
               placeholder="500.00"
               value={received}
               onChange={(event) => setReceived(event.target.value.trim())}
-              hint={change !== null ? `Cambio: ${formatMoney(change)}` : 'Usa pesos con dos decimales, por ejemplo 500.00.'}
+              hint={change !== null ? `Cambio: ${formatMoney(change)}` : 'Por ejemplo 500 o 500.50.'}
               error={MONEY_PATTERN.test(received) && change === null ? 'El efectivo no alcanza.' : undefined}
             />
           ) : (
@@ -512,7 +511,7 @@ export function SpaceAccountPanel({
               placeholder="500.00"
               value={rentalReceived}
               onChange={(event) => setRentalReceived(event.target.value.trim())}
-              hint={rentalChange !== null ? `Cambio: ${formatMoney(rentalChange)}` : 'Usa pesos con dos decimales, por ejemplo 500.00.'}
+              hint={rentalChange !== null ? `Cambio: ${formatMoney(rentalChange)}` : 'Por ejemplo 500 o 500.50.'}
               error={MONEY_PATTERN.test(rentalReceived) && rentalChange === null ? 'El efectivo no alcanza.' : undefined}
             />
             <div className="form-actions">

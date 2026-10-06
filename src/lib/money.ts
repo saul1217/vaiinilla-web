@@ -1,8 +1,11 @@
-const MONEY_PATTERN = /^\d+\.\d{2}$/;
+/** Pesos enteros o con hasta dos decimales: "60", "60.5", "60.50". */
+export const MONEY_PATTERN = /^\d+(\.\d{1,2})?$/;
+
 export function moneyToCents(value: string): bigint | null {
-  if (!MONEY_PATTERN.test(value)) return null;
-  const [pesos = '0', centavos = '00'] = value.split('.');
-  return BigInt(pesos) * 100n + BigInt(centavos);
+  const clean = value.trim();
+  if (!MONEY_PATTERN.test(clean)) return null;
+  const [pesos = '0', centavos = ''] = clean.split('.');
+  return BigInt(pesos) * 100n + BigInt(centavos.padEnd(2, '0'));
 }
 
 export function centsToMoney(value: bigint): string {

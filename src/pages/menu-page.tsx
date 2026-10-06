@@ -23,10 +23,10 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { customerCounterPrice } from '../lib/catalog-pricing';
 import { cardPaymentsStep } from '../lib/card-payments';
-import { formatMoney } from '../lib/money';
+import { formatMoney, normalizeMoneyInput } from '../lib/money';
 import type { CatalogCategory, CatalogProduct, CatalogProductInput } from '../types/api';
 
-const moneyPattern = /^\d{1,8}\.\d{2}$/;
+const moneyPattern = /^\d{1,8}(\.\d{1,2})?$/;
 const maxProductImageBytes = 5 * 1024 * 1024;
 const productImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -38,7 +38,7 @@ const categorySchema = z.object({
 const optionSchema = z.object({
   id: z.number().int().positive().optional(),
   nombre: z.string().trim().min(1, 'Captura el nombre de la opción.').max(80),
-  precio_extra: z.string().regex(moneyPattern, 'Usa pesos con dos decimales.'),
+  precio_extra: z.string().trim().regex(moneyPattern, 'Escribe un monto, por ejemplo 60 o 60.50.').transform(normalizeMoneyInput),
 });
 
 const optionGroupSchema = z
@@ -70,7 +70,7 @@ const productSchema = z.object({
   ingredientes: z.string().trim().max(1000),
   alergenos: z.string().trim().max(500),
   tiempo_estimado_min: z.number().int().min(0).max(240),
-  precio_mostrador: z.string().regex(moneyPattern, 'Usa pesos con dos decimales.'),
+  precio_mostrador: z.string().trim().regex(moneyPattern, 'Escribe un monto, por ejemplo 60 o 60.50.').transform(normalizeMoneyInput),
   disponible: z.boolean(),
   grupos_opcion: z.array(optionGroupSchema).max(12),
 });
@@ -729,7 +729,7 @@ function ProductFormModal({
               label="Precio de mostrador *"
               inputMode="decimal"
               placeholder="20.00"
-              hint="Usa pesos con dos decimales."
+              hint="Por ejemplo 60 o 60.50."
               error={form.formState.errors.precio_mostrador?.message}
               {...form.register('precio_mostrador')}
             />

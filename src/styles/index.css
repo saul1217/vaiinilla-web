@@ -1244,6 +1244,15 @@ select:enabled {
   background: color-mix(in srgb, var(--color-white-warm) 95%, transparent);
   padding: 24px 18px 18px;
   backdrop-filter: blur(18px);
+  /* En pantallas bajas (laptop de 740 px) el pie con Tema y Cerrar sesión quedaba fuera. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-height: 820px) {
+  .sidebar__brand { min-height: 80px; }
+  .sidebar__context { margin: 14px 0 12px; }
+  .sidebar .nav-item { min-height: 40px; padding-block: 8px; }
 }
 
 .app-frame--platform .sidebar {
@@ -2142,8 +2151,7 @@ tbody tr:last-child td {
 }
 
 .order-note {
-  border-left: 4px solid var(--color-lime-dark);
-  border-radius: 0 14px 14px 0;
+  border-radius: 14px;
   background: #f3f7e9;
   padding: 13px 15px;
 }
@@ -2594,13 +2602,6 @@ tbody tr:last-child td {
   gap: 16px;
 }
 
-.kitchen-board-grid .queue-column__list {
-  max-height: min(64vh, 760px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: #c7c0b1 transparent;
-  scrollbar-width: thin;
-}
 
 .kitchen-ticket {
   display: grid;
@@ -2611,14 +2612,6 @@ tbody tr:last-child td {
   background: var(--color-white-warm);
   padding: 17px;
   box-shadow: 0 7px 18px rgba(40, 36, 25, 0.05);
-}
-
-.kitchen-ticket--age-medium {
-  border-left: 5px solid #cf9d2d;
-}
-
-.kitchen-ticket--age-high {
-  border-left: 5px solid #a64136;
 }
 
 .kitchen-ticket__header {
@@ -6606,26 +6599,32 @@ tbody tr:last-child td {
 
 .rolling-money > span {
   display: inline-flex;
-  align-items: baseline;
+  align-items: flex-start;
+  line-height: 1.15;
   white-space: pre;
 }
 
 .rolling-money__column {
+  position: relative;
   display: inline-block;
-  height: 1em;
+  height: 1.15em;
   overflow: hidden;
-  line-height: 1;
-  vertical-align: -0.12em;
+  line-height: 1.15;
 }
 
+.rolling-money__sizer { visibility: hidden; }
+
 .rolling-money__reel {
+  position: absolute;
+  inset: 0 0 auto;
   display: grid;
+  justify-items: center;
   transition: transform var(--spring-snappy);
   transition-delay: calc(var(--column, 0) * 18ms);
 }
 
 .rolling-money__reel span {
-  height: 1em;
+  height: 1.15em;
 }
 
 .mesero-tile {
@@ -6862,6 +6861,42 @@ html[data-admin-theme='oscuro'] .field__control { color: #16150f; }
 html[data-admin-theme='oscuro'] .field__control::placeholder { color: rgba(22, 21, 15, 0.45); }
 html[data-admin-theme='oscuro'] select.field__control option { color: #16150f; background: #ffffff; }
 html[data-admin-theme='oscuro'] .category-row strong { background: rgba(244, 241, 231, 0.14); }
+
+/* Superficies "invertidas" (fondo tinta, texto claro): en oscuro la tinta pasa a crema y el
+   texto a casi negro, así que salían crema con texto ilegible. Dentro de ellas se devuelven
+   tinta y texto a sus valores claros: quedan un tono más hondo que el panel. */
+html[data-admin-theme='oscuro'] :is(
+  .app-frame--platform .sidebar,
+  .auth-page--platform .auth-visual,
+  .auth-page--deletion .auth-visual,
+  .dashboard-card--dark,
+  .analytics-kpi--dark,
+  .analytics-secondary,
+  .cashback-help,
+  .invitation-intro,
+  .platform-security-note,
+  .platform-action-card
+) {
+  --color-ink: #121210;
+  --color-white-warm: #f4f1e7;
+}
+html[data-admin-theme='oscuro'] :is(.dashboard-card--dark, .analytics-kpi--dark, .analytics-secondary, .cashback-help, .invitation-intro, .platform-security-note) {
+  border-color: rgba(191, 224, 106, 0.28);
+}
+html[data-admin-theme='oscuro'] .orders-section { background: rgba(244, 241, 231, 0.03); }
+html[data-admin-theme='oscuro'] .stripe-panel { border-color: var(--line-strong); background: rgba(244, 241, 231, 0.04); }
+html[data-admin-theme='oscuro'] .stripe-panel--pending { border-color: rgba(216, 203, 163, 0.4); background: rgba(216, 203, 163, 0.08); }
+html[data-admin-theme='oscuro'] :is(.stripe-panel--ready, .stripe-panel--connected) { border-color: rgba(191, 224, 106, 0.4); background: rgba(180, 224, 77, 0.08); }
+html[data-admin-theme='oscuro'] .stripe-panel--warning { border-color: rgba(243, 154, 144, 0.45); background: rgba(240, 122, 110, 0.1); }
+html[data-admin-theme='oscuro'] :is(.stripe-panel--ready, .stripe-panel--connected) .stripe-panel__icon { color: #16150f; }
+html[data-admin-theme='oscuro'] .stripe-panel__account { background: rgba(244, 241, 231, 0.08); }
+
+/* El logo claro es negro: sobre el fondo oscuro se usa su variante clara, y el ícono compacto
+   oscuro (encabezado móvil) vuelve a su fondo crema para que se vea la V. */
+html[data-admin-theme='oscuro'] .brand-logo--full.brand-logo--light { background: url('/brand/vaiinilla-logo-dark.webp') center / contain no-repeat; }
+html[data-admin-theme='oscuro'] .brand-logo--full.brand-logo--light .brand-logo__image { opacity: 0; }
+html:is([data-admin-theme='oscuro'], [data-staff-ui='nueva']) .brand-logo--compact.brand-logo--dark { background: #f4f1e7; }
+.selection-header .brand-logo { width: 84px; }
 
 .staff-topbar {
   display: flex;
@@ -7188,6 +7223,39 @@ html[data-admin-theme='oscuro'] .category-row strong { background: rgba(244, 241
 
 .staff-details { color: var(--color-muted); }
 
+.staff-cashbar__close .staff-cashbar__when-open,
+.staff-cashbar__close[open] .staff-cashbar__when-closed { display: none; }
+.staff-cashbar__close[open] .staff-cashbar__when-open { display: inline; }
+
+/* Aviso flotante de Caja: uno a la vez, visible aunque se haya desplazado la página. */
+.pos-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 60;
+  width: min(calc(100vw - 32px), 520px);
+  transform: translateX(-50%);
+  animation: arrive 320ms var(--ease) both;
+}
+
+.pos-toast .feedback { box-shadow: 0 18px 40px rgba(18, 18, 16, 0.22); }
+
+.close-cash-summary { display: grid; gap: 16px; margin-top: 20px; }
+.close-cash-summary dl { display: grid; gap: 8px; margin: 0; }
+.close-cash-summary dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+}
+.close-cash-summary dt { color: var(--color-muted); }
+.close-cash-summary dd { margin: 0; font-variant-numeric: tabular-nums; }
+.close-cash-summary__actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: reduce) { .pos-toast { animation: none; } }
+
 @media (prefers-reduced-motion: reduce) {
   .staff-hero, .staff-board > *, .staff-cashbar, .staff-tile, .staff-tile small,
   .staff-cashbar__close[open] form, .staff-details[open] > :not(summary) { animation: none; }
@@ -7216,11 +7284,6 @@ html[data-staff-ui='nueva'], html[data-staff-ui='nueva'] body { background: var(
 html[data-staff-ui='nueva'] .space-account__chip { color: #bfe06a; }
 html[data-staff-ui='nueva'] .space-account__chip--due { background: rgba(224, 92, 76, 0.2); color: #f08a7d; }
 
-/* En teléfono las columnas de Cocina van apiladas: una sola página que se desliza. Una lista con
-   scroll propio atrapaba el dedo a media pantalla y no dejaba bajar. */
-@media (max-width: 900px), (pointer: coarse) {
-  .kitchen-board-grid .queue-column__list { max-height: none; overflow-y: visible; overscroll-behavior: auto; }
-}
 
 /* Avisos del mesero: pedido listo (lleva a la mesa) o mesa llamando. Tocar abre la mesa. */
 .waiter-alerts { display: grid; gap: 8px; margin: 4px 0 14px; }
@@ -7377,7 +7440,8 @@ html[data-staff-ui='nueva'] .operational-signal--inactive {
   border-color: rgba(243, 154, 144, 0.55);
 }
 html[data-staff-ui='nueva'] .operational-signal--inactive > svg { color: #f39a90; }
-html[data-staff-ui='nueva'] .field__control { background: var(--color-white-warm); }
+html[data-staff-ui='nueva'] .field__control { background: var(--color-white-warm); color: var(--color-ink); }
+html[data-staff-ui='nueva'] .field__control::placeholder { color: rgba(244, 241, 231, 0.4); }
 html[data-staff-ui='nueva'] .field__control:hover { border-color: rgba(244, 241, 231, 0.36); }
 
 /* El logo claro es negro y desaparece sobre el menú oscuro: se usa la variante oscura del mismo logo. */

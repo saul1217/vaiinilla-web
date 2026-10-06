@@ -53,7 +53,7 @@ export function TipPicker({
           placeholder="20.00"
           value={value.amount}
           onChange={(event) => onChange({ kind: 'custom', amount: event.target.value.trim() })}
-          hint="Usa pesos con dos decimales, por ejemplo 20.00."
+          hint="Por ejemplo 20 o 20.50."
         />
       )}
       {amount !== '0.00' && !error && <p className="space-account__hint">Propina {formatMoney(amount)}: es del negocio y no paga comisión.</p>}

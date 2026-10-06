@@ -12,7 +12,8 @@ describe('propinas', () => {
     expect(tipAmount('100.00', { kind: 'none' })).toBe('0.00');
     expect(tipAmount('100.00', { kind: 'percent', percent: 20 })).toBe('20.00');
     expect(tipAmount('100.00', { kind: 'custom', amount: '12.50' })).toBe('12.50');
-    expect(tipAmount('100.00', { kind: 'custom', amount: '12.5' })).toBe('0.00');
+    expect(tipAmount('100.00', { kind: 'custom', amount: '12.5' })).toBe('12.50');
+    expect(tipAmount('100.00', { kind: 'custom', amount: '12.505' })).toBe('0.00');
   });
 
   it('suma montos', () => {

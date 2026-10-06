@@ -14,7 +14,10 @@ export function tipForPercent(base: string, percent: number): string {
 /** El monto de la propina elegida, con dos decimales; "0.00" si no hay o el texto no es válido. */
 export function tipAmount(base: string, choice: TipChoice): string {
   if (choice.kind === 'percent') return tipForPercent(base, choice.percent);
-  if (choice.kind === 'custom') return moneyToCents(choice.amount) === null ? '0.00' : choice.amount;
+  if (choice.kind === 'custom') {
+    const cents = moneyToCents(choice.amount);
+    return cents === null ? '0.00' : centsToMoney(cents);
+  }
   return '0.00';
 }
 

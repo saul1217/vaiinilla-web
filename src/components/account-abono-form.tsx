@@ -8,10 +8,9 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { partAmountCents } from '../lib/account-split';
 import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
-import { calculateChange, centsToMoney, formatMoney, moneyToCents } from '../lib/money';
+import { MONEY_PATTERN, calculateChange, centsToMoney, formatMoney, moneyToCents, normalizeMoneyInput } from '../lib/money';
 import type { AbonoMode, AccountAbonoResult, AccountPaymentMethod } from '../types/api';
 
-const MONEY_PATTERN = /^\d+\.\d{2}$/;
 const MAX_PARTS = 50;
 
 /**
@@ -56,9 +55,9 @@ export function AccountAbonoForm({
       api.abonarSpaceAccount(token, spaceId, {
         metodo: method,
         modo: mode,
-        monto: mode === 'monto' ? amount : undefined,
+        monto: mode === 'monto' ? normalizeMoneyInput(amount) : undefined,
         partes: mode === 'partes' ? parts : undefined,
-        montoRecibido: method === 'efectivo' ? received : undefined,
+        montoRecibido: method === 'efectivo' ? normalizeMoneyInput(received) : undefined,
         restanteEsperado: restante,
         propina: tipValue,
       }),
@@ -80,7 +79,7 @@ export function AccountAbonoForm({
           value={amount}
           onChange={(event) => setAmount(event.target.value.trim())}
           error={tooMuch ? 'Es más de lo que falta.' : undefined}
-          hint="Usa pesos con dos decimales, por ejemplo 100.00."
+          hint="Por ejemplo 100 o 100.50."
         />
       ) : (
         <div className="split-parts" role="group" aria-label="Personas que faltan por pagar">
@@ -134,7 +133,7 @@ export function AccountAbonoForm({
           placeholder="500.00"
           value={received}
           onChange={(event) => setReceived(event.target.value.trim())}
-          hint={change !== null ? `Cambio: ${formatMoney(change)}` : 'Usa pesos con dos decimales, por ejemplo 500.00.'}
+          hint={change !== null ? `Cambio: ${formatMoney(change)}` : 'Por ejemplo 500 o 500.50.'}
           error={MONEY_PATTERN.test(received) && change === null ? 'El efectivo no alcanza.' : undefined}
         />
       ) : (

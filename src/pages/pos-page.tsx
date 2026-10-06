@@ -11,7 +11,7 @@ import {
   WalletCards,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { RejectOrderDialog } from '../components/reject-order-dialog';
 import { itemRejectionNotice } from '../lib/rejection-notice';
 import { TipPicker } from '../components/tip-picker';
@@ -30,12 +30,12 @@ import { useSessions } from '../context/session-context';
 import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
-import { calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
+import { MONEY_PATTERN, calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
 import { isCashierCashOrder, isCashierDeliveryOrder } from '../lib/cashier-queue';
-import type { CashPaymentResult, OrderDetail } from '../types/api';
+import type { OrderDetail } from '../types/api';
 
 const moneySchema = z.object({
-  amount: z.string().regex(/^\d+\.\d{2}$/, 'Usa pesos con dos decimales, por ejemplo 500.00.'),
+  amount: z.string().trim().regex(MONEY_PATTERN, 'Escribe un monto, por ejemplo 500 o 500.50.').transform(normalizeMoneyInput),
 });
 
 type MoneyForm = z.infer<typeof moneySchema>;
@@ -55,10 +55,12 @@ export function PosPage() {
   const businessName = tenant?.access.establecimiento.nombre;
   const queryClient = useQueryClient();
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
-  const [cashReceipt, setCashReceipt] = useState<CashPaymentResult | null>(null);
+  // Un solo aviso a la vez, que se va solo: los avisos no se acumulan en la página.
+  const [notice, setNotice] = useState<ReactNode>(null);
+  // Monto final capturado, esperando que Caja confirme el cierre.
+  const [closingAmount, setClosingAmount] = useState<string | null>(null);
   const [deliveryOrder, setDeliveryOrder] = useState<OrderDetail | null>(null);
   const [qrToken, setQrToken] = useState('');
-  const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null);
   // Caja quita un artículo que no se puede entregar; si ya se pagó, se devuelve esa parte.
   const [removingFrom, setRemovingFrom] = useState<OrderDetail | null>(null);
 
@@ -104,20 +106,36 @@ export function PosPage() {
 
   const openMutation = useMutation({
     mutationFn: ({ amount }: MoneyForm) => api.openCashSession(token, amount),
-    onSuccess: refreshOperation,
+    onSuccess: async (_session, { amount }) => {
+      closeMutation.reset();
+      setNotice(<>Caja abierta con fondo de <strong>{formatMoney(amount)}</strong>.</>);
+      await refreshOperation();
+    },
   });
   const closeMutation = useMutation({
     mutationFn: ({ amount }: MoneyForm) => {
       if (!session.data) throw new Error('No existe una sesión abierta.');
       return api.closeCashSession(token, session.data.id, amount);
     },
-    onSuccess: refreshOperation,
+    onSuccess: async (_session, { amount }) => {
+      openMutation.reset();
+      setClosingAmount(null);
+      closeForm.reset({ amount: '' });
+      setNotice(<>Caja cerrada con <strong>{formatMoney(amount)}</strong> en efectivo.</>);
+      await refreshOperation();
+    },
   });
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   const collectMutation = useMutation({
     mutationFn: ({ order, amount, propina }: { order: OrderDetail; amount: string; propina: string }) =>
       api.collectCash(token, order.id, amount, order.version, propina),
     onSuccess: async (result) => {
-      setCashReceipt(result);
+      setNotice(<>Cobro registrado. Cambio para el cliente: <strong>{formatMoney(result.cambio)}</strong>.</>);
       setCashOrder(null);
       cashForm.reset({ amount: '' });
       await refreshOperation();
@@ -127,7 +145,7 @@ export function PosPage() {
     mutationFn: ({ order, pickupToken }: { order: OrderDetail; pickupToken: string }) =>
       api.deliverOrder(token, order.id, order.version, pickupToken),
     onSuccess: async (order) => {
-      setDeliveryNotice(`Pedido ${order.folio} entregado correctamente.`);
+      setNotice(`Pedido ${order.folio} entregado correctamente.`);
       setDeliveryOrder(null);
       setQrToken('');
       await refreshOperation();
@@ -174,7 +192,6 @@ export function PosPage() {
 
   function beginCash(order: OrderDetail) {
     collectMutation.reset();
-    setCashReceipt(null);
     setTip({ kind: 'none' });
     setCashOrder(order);
     cashForm.reset({ amount: '' });
@@ -182,7 +199,6 @@ export function PosPage() {
 
   function beginDelivery(order: OrderDetail) {
     deliveryMutation.reset();
-    setDeliveryNotice(null);
     setQrToken('');
     setDeliveryOrder(order);
   }
@@ -218,14 +234,11 @@ export function PosPage() {
       {session.isError && <Feedback tone="error">{errorMessage(session.error)}</Feedback>}
       {openMutation.isError && <Feedback tone="error">{errorMessage(openMutation.error)}</Feedback>}
       {closeMutation.isError && <Feedback tone="error">{errorMessage(closeMutation.error)}</Feedback>}
-      {openMutation.isSuccess && <Feedback tone="success">La sesión de Caja quedó abierta.</Feedback>}
-      {closeMutation.isSuccess && <Feedback tone="success">La sesión de Caja quedó cerrada.</Feedback>}
-      {cashReceipt && (
-        <Feedback tone="success">
-          Cobro registrado. Cambio para el cliente: <strong>{formatMoney(cashReceipt.cambio)}</strong>.
-        </Feedback>
+      {notice && (
+        <div className="pos-toast" role="status" aria-live="polite">
+          <Feedback tone="success">{notice}</Feedback>
+        </div>
       )}
-      {deliveryNotice && <Feedback tone="success">{deliveryNotice}</Feedback>}
       {heartbeat.isError && (
         <Feedback tone="error">
           {roleLabel(role)} perdió su conexión operativa. Revisa internet; intentaremos reconectar automáticamente.
@@ -262,19 +275,22 @@ export function PosPage() {
           </div>
           {active ? (
             <details className="staff-cashbar__close">
-              <summary>Cerrar caja</summary>
+              <summary>
+                <span className="staff-cashbar__when-closed">Cerrar caja</span>
+                <span className="staff-cashbar__when-open">Cancelar</span>
+              </summary>
               <form
                 className="operation-form"
-                onSubmit={(event) => void closeForm.handleSubmit((data) => closeMutation.mutate(data))(event)}
+                onSubmit={(event) => void closeForm.handleSubmit((data) => setClosingAmount(data.amount))(event)}
               >
                 <Field
                   label="Monto final (MXN)"
                   inputMode="decimal"
-                  placeholder="725.50"
+                  placeholder="0.00"
                   error={closeForm.formState.errors.amount?.message}
                   {...closeForm.register('amount')}
                 />
-                <Button type="submit" variant="dark" loading={closeMutation.isPending}>Cerrar Caja</Button>
+                <Button type="submit" variant="dark">Revisar cierre</Button>
               </form>
             </details>
           ) : (
@@ -347,16 +363,16 @@ export function PosPage() {
           </div>
           <form
             className="operation-form"
-            onSubmit={(event) => void closeForm.handleSubmit((data) => closeMutation.mutate(data))(event)}
+            onSubmit={(event) => void closeForm.handleSubmit((data) => setClosingAmount(data.amount))(event)}
           >
             <Field
               label="Monto final (MXN)"
               inputMode="decimal"
-              placeholder="725.50"
+              placeholder="0.00"
               error={closeForm.formState.errors.amount?.message}
               {...closeForm.register('amount')}
             />
-            <Button type="submit" variant="dark" loading={closeMutation.isPending}>Cerrar Caja</Button>
+            <Button type="submit" variant="dark">Revisar cierre</Button>
           </form>
         </section>
       ) : (
@@ -588,11 +604,37 @@ export function PosPage() {
         onClose={() => setRemovingFrom(null)}
         onRejected={async (order, target, result) => {
           setRemovingFrom(null);
-          setDeliveryNotice(target.kind === 'item' ? itemRejectionNotice(order, target.name, result) : null);
+          setNotice(target.kind === 'item' ? itemRejectionNotice(order, target.name, result) : null);
           await refreshOperation();
           await queryClient.invalidateQueries({ queryKey: ['pending-refunds'] });
         }}
       />
+      <Modal
+        open={closingAmount !== null}
+        onOpenChange={(open) => { if (!open) setClosingAmount(null); }}
+        title="¿Cerrar la caja?"
+        description="Los pedidos en efectivo que sigan por cobrar se cancelarán y ya no se recibirán pedidos."
+      >
+        {closingAmount !== null && active && (
+          <div className="close-cash-summary">
+            <dl>
+              <div><dt>Fondo inicial</dt><dd>{formatMoney(active.monto_inicial)}</dd></div>
+              <div><dt>Efectivo al cerrar</dt><dd><strong>{formatMoney(closingAmount)}</strong></dd></div>
+            </dl>
+            {closeMutation.isError && <Feedback tone="error">{errorMessage(closeMutation.error)}</Feedback>}
+            <div className="close-cash-summary__actions">
+              <Button variant="secondary" onClick={() => setClosingAmount(null)}>Volver</Button>
+              <Button
+                variant="dark"
+                loading={closeMutation.isPending}
+                onClick={() => closeMutation.mutate({ amount: closingAmount })}
+              >
+                Cerrar caja
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

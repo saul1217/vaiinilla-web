@@ -15,7 +15,9 @@ export function RollingMoney({ value, suffix = ' MXN' }: { value: string; suffix
           if (digit < 0) return <span key={key} className="rolling-money__static">{char}</span>;
           return (
             <span key={key} className="rolling-money__column" style={{ ['--column' as string]: key }}>
-              <span className="rolling-money__reel" style={{ transform: `translateY(${-digit}em)` }}>
+              {/* El dígito actual, invisible, da el ancho real de la columna: Poppins no tiene cifras tabulares. */}
+              <span className="rolling-money__sizer">{char}</span>
+              <span className="rolling-money__reel" style={{ transform: `translateY(${-digit * 1.15}em)` }}>
                 {DIGITS.map((d) => <span key={d}>{d}</span>)}
               </span>
             </span>
