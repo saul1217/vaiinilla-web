@@ -171,6 +171,8 @@ export interface OrderItem {
   precio_digital_unitario: string;
   subtotal: string;
   opciones: OrderItemOption[];
+  /** Instrucciones o comentarios especiales del artículo. */
+  notas?: string | null;
   /** Rechazo por artículo: ya no cuenta en el total. */
   rechazo?: { motivo: string; monto: string } | null;
 }
@@ -417,6 +419,8 @@ export interface BusinessSettings {
   tipo: string;
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
+  /** Si el negocio permite recargas y compras con saldo / wallet. */
+  permite_saldo?: boolean;
   gracia_liberacion_min: number;
   /** Un backend anterior no lo manda: se toma como sin límite de horario. */
   franjas_pedido?: { desde: string; hasta: string }[];

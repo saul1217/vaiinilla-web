@@ -89,6 +89,7 @@ function OrderItems({ order, expanded = false }: { order: OrderDetail; expanded?
           <span className="order-items__name">
             <strong>{item.nombre_producto}</strong>
             {item.opciones.length > 0 && <small>{item.opciones.map((option) => option.nombre).join(', ')}</small>}
+            {item.notas && <small className="order-items__note" style={{ display: 'block', fontStyle: 'italic', color: 'var(--color-ink-muted, #71717a)' }}>Nota: {item.notas}</small>}
             {item.rechazo && <small className="item-rejection">Quitado: {item.rechazo.motivo}</small>}
           </span>
           {expanded && <span className="order-items__subtotal">{formatMoney(item.subtotal)}</span>}

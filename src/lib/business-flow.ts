@@ -13,6 +13,8 @@ export interface FlowSettings {
   tipo: BusinessType;
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
+  /** Permite recargas y compras con saldo / wallet (por defecto true). */
+  permite_saldo?: boolean;
   gracia_liberacion_min: number;
   /** Horas en las que se reciben pedidos; vacío = a cualquier hora. */
   franjas_pedido: Franja[];
@@ -100,6 +102,7 @@ export function sameSettings(a: FlowSettings, b: FlowSettings): boolean {
     a.tipo === b.tipo &&
     a.entrega_requiere_qr === b.entrega_requiere_qr &&
     a.permite_pago_al_final === b.permite_pago_al_final &&
+    (a.permite_saldo ?? true) === (b.permite_saldo ?? true) &&
     a.gracia_liberacion_min === b.gracia_liberacion_min &&
     JSON.stringify(a.franjas_pedido) === JSON.stringify(b.franjas_pedido)
   );

@@ -96,6 +96,7 @@ export function KitchenOrderCard({
               </strong>
               <div className="kitchen-ticket__product">
                 <strong>{item.nombre_producto}</strong>
+                {item.notas && <small className="kitchen-ticket__item-note" style={{ display: 'block', fontStyle: 'italic', color: 'var(--color-ink-muted, #71717a)' }}>Nota: {item.notas}</small>}
                 {item.rechazo && <small className="item-rejection">Quitado: {item.rechazo.motivo}</small>}
                 {item.opciones.length > 0 && (
                   <ul className="kitchen-ticket__options" aria-label={`Opciones de ${item.nombre_producto}`}>
