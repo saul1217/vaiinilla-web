@@ -97,7 +97,7 @@ export function TenantDashboardPage() {
               Contexto restringido: {tenant.context.modo_restringido.replace('_', ' ')}
             </strong>
             <p>
-              El backend permitirá únicamente las acciones de cierre compatibles con la suspensión.
+              El sistema permitirá únicamente las acciones de cierre compatibles con la suspensión.
             </p>
           </div>
         </div>

@@ -171,6 +171,8 @@ export interface OrderItem {
   precio_digital_unitario: string;
   subtotal: string;
   opciones: OrderItemOption[];
+  /** Instrucciones o comentarios especiales del artículo. */
+  notas?: string | null;
   /** Rechazo por artículo: ya no cuenta en el total. */
   rechazo?: { motivo: string; monto: string } | null;
 }
@@ -417,6 +419,8 @@ export interface BusinessSettings {
   tipo: string;
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
+  /** Si el negocio permite recargas y compras con saldo / wallet. */
+  permite_saldo?: boolean;
   gracia_liberacion_min: number;
   /** Un backend anterior no lo manda: se toma como sin límite de horario. */
   franjas_pedido?: { desde: string; hasta: string }[];
@@ -484,6 +488,33 @@ export interface SpaceAccountAbono {
   creado_en: string;
 }
 
+/** Un grupo de la cuenta por persona (GET /espacios/:id/sesion, GET /espacios/:id/sesiones/:sesionId/cuenta). */
+export interface SpaceAccountGroup {
+  etiqueta: string;
+  participante_id: string | null;
+  /** Ids de pedidos del grupo (agrupación por id, nunca por texto). */
+  pedidos: string[];
+  total: number;
+  pagado: number;
+  pendiente: number;
+}
+
+/** La cuenta de una sesión (abierta o cerrada): sus pedidos y, si el backend lo manda, sus grupos por persona. */
+export interface SpaceAccount {
+  pedidos: SpaceAccountOrder[];
+  /** Opcional: un backend anterior no lo manda y el panel se ve como hoy. */
+  grupos?: SpaceAccountGroup[];
+  total: number;
+  pendiente: number;
+  pagado: number;
+  saldada: boolean;
+  /** Ya recibido en abonos; los pedidos se cobran al cubrir todo. */
+  abonado?: number;
+  /** Pendiente menos abonado. */
+  restante?: number;
+  abonos?: SpaceAccountAbono[];
+}
+
 /** La sesión abierta de un espacio y su cuenta (GET /espacios/:id/sesion). */
 export interface SpaceSessionDetail {
   espacio: OrderSpace;
@@ -491,18 +522,14 @@ export interface SpaceSessionDetail {
   saldada: boolean;
   fin_previsto: string | null;
   sesion: { id: string; estado: string; inicio: string; fin_previsto: string | null; version: number } | null;
-  cuenta: {
-    pedidos: SpaceAccountOrder[];
-    total: number;
-    pendiente: number;
-    pagado: number;
-    saldada: boolean;
-    /** Ya recibido en abonos; los pedidos se cobran al cubrir todo. */
-    abonado?: number;
-    /** Pendiente menos abonado. */
-    restante?: number;
-    abonos?: SpaceAccountAbono[];
-  } | null;
+  cuenta: SpaceAccount | null;
+}
+
+/** La cuenta de una sesión cerrada (GET /espacios/:id/sesiones/:sesionId/cuenta): mismo `cuenta` con `grupos`. */
+export interface ClosedSpaceSessionDetail {
+  espacio: OrderSpace;
+  sesion: NonNullable<SpaceSessionDetail['sesion']>;
+  cuenta: SpaceAccount;
 }
 
 export type AccountPaymentMethod = 'efectivo' | 'terminal';

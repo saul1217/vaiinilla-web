@@ -92,7 +92,9 @@ describe('configuracion de cashback', () => {
     expect(await screen.findByDisplayValue('5.00')).toBeVisible();
     expect(await screen.findByText('Sin diferencias detectadas')).toBeVisible();
     expect(screen.getByText('3 wallets comparadas contra su ledger completo.')).toBeVisible();
-    expect(screen.getAllByText('Recargas en efectivo')).toHaveLength(2);
+    expect(screen.getAllByText('Recargas en efectivo')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: /Tipo de movimiento/ }));
+    expect(await screen.findByRole('option', { name: 'Recargas en efectivo' })).toBeVisible();
 
     const percentage = screen.getByLabelText('Porcentaje');
     await user.clear(percentage);

@@ -52,6 +52,7 @@ import type {
   CounterRentalPayment,
   SpaceAvailability,
   SpaceSessionDetail,
+  ClosedSpaceSessionDetail,
   TenantCardPayments,
   ItemRejectionResult,
   PendingRefund,
@@ -670,6 +671,19 @@ export const api = {
 
   async spaceSession(token: string, spaceId: number): Promise<SpaceSessionDetail> {
     return (await request<SpaceSessionDetail>(`/espacios/${spaceId}/sesion`, { token })).data;
+  },
+
+  /** Cuenta de una sesión cerrada (reimpresión del ticket histórico, agrupada por persona). */
+  async getClosedSessionAccount(
+    token: string,
+    spaceId: number,
+    sessionId: string,
+  ): Promise<ClosedSpaceSessionDetail> {
+    return (
+      await request<ClosedSpaceSessionDetail>(`/espacios/${spaceId}/sesiones/${sessionId}/cuenta`, {
+        token,
+      })
+    ).data;
   },
 
   /**

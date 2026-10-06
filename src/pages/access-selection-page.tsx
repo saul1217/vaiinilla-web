@@ -76,7 +76,7 @@ export function AccessSelectionPage() {
         <p className="eyebrow">Accesos autorizados</p>
         <h1>¿Dónde vas a trabajar?</h1>
         <p className="selection-intro">
-          Estos accesos vienen del backend. Vaiinilla emitirá una sesión nueva para una sola membresía y un solo rol.
+          Estos accesos están autorizados en el sistema. Vaiinilla emitirá una sesión nueva para una sola membresía y un solo rol.
         </p>
 
         {error && <Feedback tone="error">{error}</Feedback>}
@@ -116,7 +116,7 @@ export function AccessSelectionPage() {
           <EmptyState
             icon={<ShieldAlert aria-hidden="true" />}
             title="No hay accesos Web disponibles"
-            description="Tu identidad está activa, pero el backend no devolvió una membresía de Administración o POS. Pide al administrador que revise tu invitación."
+            description="Tu identidad está activa, pero no se encontró una membresía de Administración o POS para esta cuenta. Pide al administrador que revise tu invitación."
           />
         )}
       </section>

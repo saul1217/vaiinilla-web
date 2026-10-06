@@ -2,10 +2,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MailPlus, MoreHorizontal, RefreshCw, UserPlus, UserX, Pencil } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { InvitationStatusBadge } from '../components/status-badge';
-import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { Button, CustomSelect, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -220,7 +220,7 @@ export function InvitationsPage() {
           <EmptyState
             icon={<UserPlus aria-hidden="true" />}
             title="No hay invitaciones en este estado"
-            description="Cuando invites personal, el backend mostrará aquí su estado real y vigencia."
+            description="Cuando invites personal, aquí se mostrará su estado real y vigencia."
             action={<Button onClick={() => setCreateOpen(true)}>Crear invitación</Button>}
           />
         )}
@@ -282,7 +282,21 @@ export function InvitationsPage() {
       >
         {membershipMutation.isError && <Feedback tone="error">{errorMessage(membershipMutation.error)}</Feedback>}
         <p className="rounded-2xl bg-cream-2 p-4 text-sm font-semibold text-ink">{selectedMembership?.email}</p>
-        {membershipAction === 'editar' && <label className="field mt-5"><span className="field__label">Rol autorizado</span><select className="field__control" value={membershipRole} onChange={(event) => setMembershipRole(event.target.value as InvitationRole)}><option value="cajero">Caja</option><option value="cocina">Cocina</option><option value="mesero">Servicio en mesa</option><option value="admin">Administración</option></select></label>}
+        {membershipAction === 'editar' && (
+          <div className="mt-5">
+            <CustomSelect
+              label="Rol autorizado"
+              value={membershipRole}
+              onChange={(next) => setMembershipRole(next as InvitationRole)}
+              options={[
+                { value: 'cajero', label: 'Caja' },
+                { value: 'cocina', label: 'Cocina' },
+                { value: 'mesero', label: 'Servicio en mesa' },
+                { value: 'admin', label: 'Administración' },
+              ]}
+            />
+          </div>
+        )}
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button variant="ghost" onClick={() => { setSelectedMembership(null); setMembershipAction(null); }}>Cancelar</Button><Button variant={membershipAction === 'desactivar' ? 'danger' : 'primary'} loading={membershipMutation.isPending} onClick={() => membershipMutation.mutate()}>{membershipAction === 'editar' ? 'Guardar cambios' : 'Desactivar acceso'}</Button></div>
       </Modal>
     </div>
@@ -378,6 +392,8 @@ function CreateInvitationModal({
     register,
     handleSubmit,
     reset,
+    control,
+    setValue,
     formState: { errors },
   } = useForm<InvitationForm>({
     resolver: zodResolver(invitationSchema),
@@ -404,16 +420,18 @@ function CreateInvitationModal({
           error={errors.email?.message}
           {...register('email')}
         />
-        <label className="field">
-          <span className="field__label">Rol autorizado</span>
-          <select className="field__control" {...register('rol')}>
-            <option value="cajero">Caja</option>
-            <option value="cocina">Cocina</option>
-            <option value="mesero">Servicio en mesa</option>
-            <option value="admin">Administración</option>
-          </select>
-          {errors.rol?.message && <span className="field__error">{errors.rol.message}</span>}
-        </label>
+        <CustomSelect
+          label="Rol autorizado"
+          value={useWatch({ control, name: 'rol' })}
+          onChange={(next) => setValue('rol', next as InvitationRole, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+          error={errors.rol?.message}
+          options={[
+            { value: 'cajero', label: 'Caja' },
+            { value: 'cocina', label: 'Cocina' },
+            { value: 'mesero', label: 'Servicio en mesa' },
+            { value: 'admin', label: 'Administración' },
+          ]}
+        />
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button type="submit" loading={mutation.isPending}>Enviar invitación</Button>

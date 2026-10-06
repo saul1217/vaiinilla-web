@@ -35,6 +35,7 @@ function toSettings(data: BusinessSettings): FlowSettings | null {
     tipo,
     entrega_requiere_qr: data.entrega_requiere_qr,
     permite_pago_al_final: data.permite_pago_al_final,
+    permite_saldo: data.permite_saldo ?? true,
     gracia_liberacion_min: data.gracia_liberacion_min,
     franjas_pedido: data.franjas_pedido ?? [],
   };
@@ -163,6 +164,22 @@ export function StoreFlowPage() {
                         value: true,
                         label: 'Al final, con cuenta abierta',
                         hint: 'Piden varias rondas en su mesa o cancha y pagan todo al irse.',
+                      },
+                    ]}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <p className="field__label">¿Permitir pagos con saldo / cartera?</p>
+                  <Choice
+                    name="¿Permitir pagos con saldo?"
+                    value={settings.permite_saldo ?? true}
+                    onChange={(value) => change({ permite_saldo: value })}
+                    options={[
+                      { value: true, label: 'Sí, permitir saldo', hint: 'Los clientes pueden recargar y pagar usando su cartera Vaiinilla.' },
+                      {
+                        value: false,
+                        label: 'Desactivar saldo',
+                        hint: 'Solo se puede desactivar si ningún cliente tiene saldo a favor acumulado en el negocio.',
                       },
                     ]}
                   />

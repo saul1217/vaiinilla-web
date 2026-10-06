@@ -22,11 +22,11 @@ import {
   StopCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { useHistory } from 'react-router-dom';
 import { z } from 'zod';
 import { EstablishmentStatusBadge } from '../components/status-badge';
-import { Button, EmptyState, Feedback, Field, Modal, PageHeader, SelectField } from '../components/ui';
+import { Button, CustomSelect, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { VaiinillaApiError, errorMessage } from '../lib/api-error';
@@ -560,7 +560,7 @@ function StripeStatusPanel({
   const refreshStatus = useMutation({
     mutationFn: () => api.getPlatformStripeConfiguration(token, establishment.id),
     onSuccess: () => {
-      void onChanged('Estado de Stripe actualizado desde el backend.');
+      void onChanged('Estado de Stripe actualizado.');
     },
     onError: (error) => {
       if (isUnauthorized(error)) onUnauthorized(establishment.id);
@@ -844,28 +844,26 @@ function EstablishmentFormModal({
       <form className="form-grid" onSubmit={(event) => void form.handleSubmit(submitForm)(event)}>
         <Field label="Nombre" error={form.formState.errors.nombre?.message} {...form.register('nombre')} />
         <Field label="Slug" hint="Ejemplo: cafeteria-centro" error={form.formState.errors.slug?.message} {...form.register('slug')} />
-        <SelectField label="Tipo" error={form.formState.errors.tipo?.message} {...form.register('tipo')}>
-          {ESTABLISHMENT_TYPES.map(({ value, label }) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </SelectField>
-        <SelectField
+        <CustomSelect
+          label="Tipo"
+          error={form.formState.errors.tipo?.message}
+          value={useWatch({ control: form.control, name: 'tipo' })}
+          onChange={(next) => form.setValue('tipo', next as EstablishmentType, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+          options={ESTABLISHMENT_TYPES.map(({ value, label }) => ({ value, label }))}
+        />
+        <CustomSelect
           label="Zona horaria"
           hint="Selecciona la ciudad más cercana; se usa para cierres, reportes y cashback."
           error={form.formState.errors.zona_horaria?.message}
-          {...form.register('zona_horaria')}
-        >
-          {hasTimeZoneOutsideMexicoList && currentTimeZone && (
-            <optgroup label="Configuración actual">
-              <option value={currentTimeZone}>{currentTimeZone}</option>
-            </optgroup>
-          )}
-          <optgroup label="México">
-            {MEXICO_TIME_ZONES.map(({ value, label }) => (
-              <option key={value} value={value}>{label} — {value}</option>
-            ))}
-          </optgroup>
-        </SelectField>
+          value={useWatch({ control: form.control, name: 'zona_horaria' })}
+          onChange={(next) => form.setValue('zona_horaria', next, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+          options={[
+            ...(hasTimeZoneOutsideMexicoList && currentTimeZone
+              ? [{ value: currentTimeZone, label: currentTimeZone, group: 'Configuración actual' }]
+              : []),
+            ...MEXICO_TIME_ZONES.map(({ value, label }) => ({ value, label: `${label} — ${value}`, group: 'México' })),
+          ]}
+        />
         <Field label="Cierre forzado" inputMode="numeric" error={form.formState.errors.hora_cierre_forzado?.message} {...form.register('hora_cierre_forzado')} />
         {mode === 'edit' && (
           <>

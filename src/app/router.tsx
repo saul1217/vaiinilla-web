@@ -3,6 +3,7 @@ import { BrowserRouter, Redirect, Route, Switch } from 'react-router-dom';
 import { PlatformShell, TenantShell } from '../components/app-shell';
 import { PlatformGuard, RoleGuard, TenantGuard } from '../components/route-guards';
 import { Spinner } from '../components/brand-mark';
+import { useAdminTheme } from '../lib/admin-theme';
 
 const AuthPage = lazy(() => import('../pages/auth-page').then((module) => ({ default: module.AuthPage })));
 const AccessSelectionPage = lazy(() => import('../pages/access-selection-page').then((module) => ({ default: module.AccessSelectionPage })));
@@ -109,6 +110,7 @@ function PlatformArea() {
 }
 
 export function AppRouter() {
+  useAdminTheme();
   return (
     <BrowserRouter>
       <Deferred>

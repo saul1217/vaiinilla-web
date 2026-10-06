@@ -16,7 +16,7 @@ import {
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useFieldArray, useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
-import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { Button, CustomSelect, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { looksLikeRental, rentsSpaces } from '../lib/rental-product';
 import { api } from '../lib/api';
@@ -680,26 +680,23 @@ function ProductFormModal({
               error={form.formState.errors.nombre?.message}
               {...form.register('nombre')}
             />
-            <label className="field">
-              <span className="field__label">Categoría *</span>
-              <select
-                className="field__control"
-                {...form.register('categoria_id', { valueAsNumber: true })}
-              >
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.nombre}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field__label">Estación de preparación *</span>
-              <select className="field__control" {...form.register('estacion_preparacion')}>
-                <option value="caja">Caja</option>
-                <option value="cocina">Cocina</option>
-              </select>
-            </label>
+            <CustomSelect
+              label="Categoría *"
+              value={String(useWatch({ control: form.control, name: 'categoria_id' }) ?? '')}
+              onChange={(next) => form.setValue('categoria_id', Number(next), { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+              error={form.formState.errors.categoria_id?.message}
+              options={categories.map((category) => ({ value: String(category.id), label: category.nombre }))}
+            />
+            <CustomSelect
+              label="Estación de preparación *"
+              value={useWatch({ control: form.control, name: 'estacion_preparacion' })}
+              onChange={(next) => form.setValue('estacion_preparacion', next as 'caja' | 'cocina', { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+              error={form.formState.errors.estacion_preparacion?.message}
+              options={[
+                { value: 'caja', label: 'Caja' },
+                { value: 'cocina', label: 'Cocina' },
+              ]}
+            />
             <Field
               label="Tiempo estimado (minutos) *"
               type="number"

@@ -343,7 +343,7 @@ export function PosPage() {
           <div>
             <p className="eyebrow">Cierre manual</p>
             <h2>Cerrar sesión de Caja</h2>
-            <p>Al cerrar, el backend expira los pedidos en efectivo que sigan por cobrar y registra el movimiento.</p>
+            <p>Al cerrar, el sistema expira los pedidos en efectivo que sigan por cobrar y registra el movimiento.</p>
           </div>
           <form
             className="operation-form"
@@ -364,7 +364,7 @@ export function PosPage() {
           <div>
             <p className="eyebrow">Apertura</p>
             <h2>Abrir sesión de Caja</h2>
-            <p>Confirma el fondo inicial. La operación será idempotente y quedará registrada por el backend.</p>
+            <p>Confirma el fondo inicial. El movimiento quedará registrado en el sistema.</p>
           </div>
           <form
             className="operation-form"
@@ -428,7 +428,7 @@ export function PosPage() {
                           <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar
                         </Button>
                         <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
-                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                          <XCircle aria-hidden="true" className="size-5" /> Rechazar o quitar
                         </Button>
                       </>
                     }
@@ -461,7 +461,7 @@ export function PosPage() {
                           <ScanLine aria-hidden="true" className="size-5" /> Validar QR
                         </Button>
                         <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
-                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                          <XCircle aria-hidden="true" className="size-5" /> Rechazar o quitar
                         </Button>
                       </>
                     }
@@ -551,7 +551,7 @@ export function PosPage() {
         open={Boolean(deliveryOrder)}
         onOpenChange={(open) => { if (!open) { setDeliveryOrder(null); setQrToken(''); } }}
         title={deliveryOrder ? `Entregar pedido ${deliveryOrder.folio}` : 'Entregar pedido'}
-        description="Escanea el código del cliente. El backend verificará que corresponda exactamente a este pedido."
+        description="Escanea el código del cliente. El sistema verificará que corresponda exactamente a este pedido."
       >
         {deliveryOrder && (
           <div className="transaction-form">
@@ -584,7 +584,7 @@ export function PosPage() {
       <RejectOrderDialog
         token={token}
         order={removingFrom}
-        allowWholeOrder={false}
+        allowWholeOrder={true}
         onClose={() => setRemovingFrom(null)}
         onRejected={async (order, target, result) => {
           setRemovingFrom(null);

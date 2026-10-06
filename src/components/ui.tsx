@@ -1,7 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { AlertCircle, CheckCircle2, X } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, ChevronDown, X } from 'lucide-react';
 import {
   forwardRef,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -98,6 +103,138 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
     </div>
   );
 });
+
+export interface CustomSelectOption {
+  value: string;
+  label: string;
+  group?: string;
+}
+
+interface CustomSelectProps {
+  id?: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: CustomSelectOption[];
+  error?: string;
+  hint?: string;
+  disabled?: boolean;
+}
+
+/** Desplegable propio (mismo campo, sin el menú del sistema): botón + listbox con
+ * resortes del sistema, navegable por teclado y con la flecha siempre a la orilla. */
+export function CustomSelect({ id, label, value, onChange, options, error, hint, disabled }: CustomSelectProps) {
+  const fallbackId = useId();
+  const fieldId = id ?? fallbackId;
+  const descriptionId = `${fieldId}-description`;
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.value === value) ?? null;
+  const sections = useMemo(() => {
+    const grouped: { group?: string; options: CustomSelectOption[] }[] = [];
+    for (const option of options) {
+      const last = grouped[grouped.length - 1];
+      if (last && last.group === option.group) last.options.push(option);
+      else grouped.push({ group: option.group, options: [option] });
+    }
+    return grouped;
+  }, [options]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open ]);
+
+  function moveFocus(from: HTMLElement, direction: 1 | -1) {
+    const items = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []);
+    const index = items.indexOf(from as HTMLButtonElement);
+    const next = items[(index + direction + items.length) % items.length];
+    next?.focus();
+  }
+
+  return (
+    <div className="field">
+      <span className="field__label" id={`${fieldId}-label`}>{label}</span>
+      <div className={`custom-select ${open ? 'custom-select--open' : ''}`} ref={rootRef}>
+        <button
+          type="button"
+          id={fieldId}
+          className={`field__control custom-select__trigger ${error ? 'field__control--error' : ''}`}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-labelledby={`${fieldId}-label ${fieldId}`}
+          aria-describedby={error || hint ? descriptionId : undefined}
+          disabled={disabled}
+          onClick={() => setOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+              event.preventDefault();
+              setOpen(true);
+            }
+          }}
+        >
+          <span className="custom-select__value">{selected?.label ?? 'Seleccionar'}</span>
+          <ChevronDown aria-hidden="true" className="custom-select__chevron" />
+        </button>
+        {open && (
+          <ul
+            className="custom-select__list"
+            role="listbox"
+            aria-labelledby={`${fieldId}-label`}
+            tabIndex={-1}
+            onKeyDown={(event) => {
+              const focused = document.activeElement as HTMLElement | null;
+              if (event.key === 'ArrowDown' && focused) {
+                event.preventDefault();
+                moveFocus(focused, 1);
+              } else if (event.key === 'ArrowUp' && focused) {
+                event.preventDefault();
+                moveFocus(focused, -1);
+              }
+            }}
+          >
+            {sections.map((section) => (
+              <li key={section.group ?? 'opciones'} role="presentation">
+                {section.group !== undefined && <p className="custom-select__group">{section.group}</p>}
+                {section.options.map((option) => (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={option.value === value}
+                    className={`custom-select__option ${option.value === value ? 'custom-select__option--selected' : ''}`}
+                    onClick={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <span>{option.label}</span>
+                    {option.value === value && <Check aria-hidden="true" className="size-4 shrink-0" />}
+                  </button>
+                ))}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {(error || hint) && (
+        <span id={descriptionId} className={error ? 'field__error' : 'field__hint'}>
+          {error ?? hint}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function Feedback({
   tone,

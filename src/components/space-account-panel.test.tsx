@@ -209,6 +209,123 @@ describe('cuenta del espacio', () => {
     );
   });
 
+  it('agrupa la cuenta por persona con subtotales y el total de la mesa', async () => {
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: {
+        ...openAccount.cuenta!,
+        grupos: [
+          { etiqueta: 'Jesús', participante_id: 'part-jesus', pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
+          { etiqueta: 'David', participante_id: 'part-david', pedidos: ['p2'], total: 80.5, pagado: 0, pendiente: 80.5 },
+        ],
+      },
+    });
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    expect(await screen.findByText('JESÚS')).toBeInTheDocument();
+    expect(screen.getByText('DAVID')).toBeInTheDocument();
+    // Cada pedido bajo su persona aunque el nombre del cliente no coincida con la etiqueta.
+    const jesus = screen.getByText('JESÚS').closest('.space-account__group') as HTMLElement;
+    const david = screen.getByText('DAVID').closest('.space-account__group') as HTMLElement;
+    expect(within(jesus).getByText(/#11/)).toBeInTheDocument();
+    expect(within(david).getByText(/#12/)).toBeInTheDocument();
+    expect(within(jesus).getAllByText('$120.00 MXN')).toHaveLength(2);
+    expect(within(david).getAllByText('$80.50 MXN')).toHaveLength(2);
+    expect(within(jesus).getByText(/Subtotal Jesús:/)).toBeInTheDocument();
+    expect(within(david).getByText(/Subtotal David:/)).toBeInTheDocument();
+    // El total de la mesa se queda igual.
+    expect(screen.getAllByLabelText('$200.50 MXN')).toHaveLength(2);
+  });
+
+  it('agrupa por id aunque dos pedidos tengan el mismo nombre de cliente', async () => {
+    const sameName = (id: string, folio: number, total: number) => ({ ...order(id, folio, total), cliente: { nombre: 'Mismo Nombre' } });
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: {
+        pedidos: [sameName('p1', 11, 120), sameName('p2', 12, 80.5)],
+        total: 200.5,
+        pendiente: 200.5,
+        pagado: 0,
+        saldada: false,
+        grupos: [
+          { etiqueta: 'Jesús', participante_id: 'part-jesus', pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
+          { etiqueta: 'David', participante_id: 'part-david', pedidos: ['p2'], total: 80.5, pagado: 0, pendiente: 80.5 },
+        ],
+      },
+    });
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    const jesus = await screen.findByText('JESÚS').then((el) => el.closest('.space-account__group') as HTMLElement);
+    const david = screen.getByText('DAVID').closest('.space-account__group') as HTMLElement;
+    expect(within(jesus).getByText(/#11/)).toBeInTheDocument();
+    expect(within(jesus).queryByText(/#12/)).toBeNull();
+    expect(within(david).getByText(/#12/)).toBeInTheDocument();
+    expect(within(david).queryByText(/#11/)).toBeNull();
+  });
+
+  it('muestra Persona 1/2 y Pedido general de una sesión cerrada', async () => {
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: {
+        pedidos: [order('p1', 11, 120), order('p2', 12, 50), order('p3', 13, 30.5)],
+        total: 200.5,
+        pendiente: 200.5,
+        pagado: 0,
+        saldada: false,
+        grupos: [
+          { etiqueta: 'Persona 1', participante_id: null, pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
+          { etiqueta: 'Persona 2', participante_id: null, pedidos: ['p2'], total: 50, pagado: 0, pendiente: 50 },
+          { etiqueta: 'Pedido general', participante_id: null, pedidos: ['p3'], total: 30.5, pagado: 0, pendiente: 30.5 },
+        ],
+      },
+    });
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    expect(await screen.findByText('PERSONA 1')).toBeInTheDocument();
+    expect(screen.getByText('PERSONA 2')).toBeInTheDocument();
+    expect(screen.getByText('PEDIDO GENERAL')).toBeInTheDocument();
+    expect(screen.getByText(/Subtotal Persona 1:/)).toBeInTheDocument();
+    expect(screen.getByText(/Subtotal Pedido general:/)).toBeInTheDocument();
+    expect(screen.getAllByLabelText('$200.50 MXN')).toHaveLength(2);
+  });
+
+  it('sin grupos se ve exactamente como hoy', async () => {
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    expect(await screen.findByText(/#11/)).toBeInTheDocument();
+    expect(screen.getByText(/#12/)).toBeInTheDocument();
+    expect(screen.queryByText('JESÚS')).toBeNull();
+    expect(screen.queryByText(/Subtotal/)).toBeNull();
+    expect(screen.queryByText('.space-account__group')).toBeNull();
+    expect(screen.getAllByLabelText('$200.50 MXN')).toHaveLength(2);
+  });
+
+  it('imprime la cuenta agrupada por persona', async () => {
+    const user = userEvent.setup();
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: {
+        ...openAccount.cuenta!,
+        grupos: [
+          { etiqueta: 'Jesús', participante_id: 'part-jesus', pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
+          { etiqueta: 'David', participante_id: 'part-david', pedidos: ['p2'], total: 80.5, pagado: 0, pendiente: 80.5 },
+        ],
+      },
+    });
+    const written: string[] = [];
+    const fakeDoc = { write: (html: string) => written.push(html), close: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ document: fakeDoc } as unknown as Window);
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Imprimir cuenta/ }));
+    expect(written).toHaveLength(1);
+    expect(written[0]).toContain('JESÚS');
+    expect(written[0]).toContain('DAVID');
+    expect(written[0]).toContain('Subtotal Jesús');
+    expect(written[0]).toContain('Subtotal David');
+    openSpy.mockRestore();
+  });
+
   it('propina del 10 %: el efectivo cubre cuenta más propina y se manda aparte', async () => {
     const user = userEvent.setup();
     apiMock.collectSpaceAccount.mockResolvedValue({ pedidos_cobrados: 2, total: '200.50', metodo_pago: 'efectivo', monto_recibido: '250.00', cambio: '29.45', restante: '0.00', propina: '20.05' });

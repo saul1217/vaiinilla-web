@@ -112,7 +112,7 @@ export function OrdersPage() {
           <EmptyState
             icon={<ReceiptText aria-hidden="true" />}
             title="No hay pedidos en este grupo"
-            description="Los pedidos aparecerán aquí en cuanto el backend registre actividad para este establecimiento."
+            description="Los pedidos aparecerán aquí en cuanto se registre actividad para este establecimiento."
           />
         )}
       </section>
@@ -121,7 +121,7 @@ export function OrdersPage() {
         open={Boolean(selected)}
         onOpenChange={(open) => { if (!open) setSelected(null); }}
         title={selected ? `Pedido ${selected.folio}` : 'Detalle del pedido'}
-        description="Información operativa registrada por el backend."
+        description="Información operativa registrada en el sistema."
       >
         {selected && <OrderDetailContent order={selected} />}
       </Modal>
