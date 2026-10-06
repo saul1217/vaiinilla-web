@@ -50,6 +50,7 @@ function printAccount(detail: SpaceSessionDetail): boolean {
   if (account.grupos?.length) {
     const covered = new Set<string>();
     const groups = account.grupos
+      .filter((grupo) => grupo.pedidos.some((id) => byId.has(id)))
       .map((grupo) => {
         const orders = grupo.pedidos
           .map((id) => byId.get(id))
@@ -84,13 +85,14 @@ tfoot td{border:0;font-weight:700;padding-top:8px}</style></head><body>
 function AccountGroups({ account }: { account: SpaceAccount }) {
   const grupos = account.grupos ?? [];
   const byId = new Map(account.pedidos.map((order) => [order.id, order]));
+  const gruposConConsumo = grupos.filter((grupo) => grupo.pedidos.some((id) => byId.has(id)));
   const leftover = (() => {
     const ids = new Set(grupos.flatMap((grupo) => grupo.pedidos));
     return account.pedidos.filter((order) => !ids.has(order.id));
   })();
   return (
     <div className="space-account__groups">
-      {grupos.map((grupo, index) => {
+      {gruposConConsumo.map((grupo, index) => {
         const orders = grupo.pedidos
           .map((id) => byId.get(id))
           .filter((order): order is SpaceAccountOrder => Boolean(order));

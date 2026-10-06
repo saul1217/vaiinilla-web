@@ -217,6 +217,7 @@ describe('cuenta del espacio', () => {
         grupos: [
           { etiqueta: 'Jesús', participante_id: 'part-jesus', pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
           { etiqueta: 'David', participante_id: 'part-david', pedidos: ['p2'], total: 80.5, pagado: 0, pendiente: 80.5 },
+          { etiqueta: 'Miguel', participante_id: 'part-miguel', pedidos: [], total: 0, pagado: 0, pendiente: 0 },
         ],
       },
     });
@@ -224,6 +225,8 @@ describe('cuenta del espacio', () => {
 
     expect(await screen.findByText('JESÚS')).toBeInTheDocument();
     expect(screen.getByText('DAVID')).toBeInTheDocument();
+    expect(screen.queryByText('MIGUEL')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Subtotal Miguel:/)).not.toBeInTheDocument();
     // Cada pedido bajo su persona aunque el nombre del cliente no coincida con la etiqueta.
     const jesus = screen.getByText('JESÚS').closest('.space-account__group') as HTMLElement;
     const david = screen.getByText('DAVID').closest('.space-account__group') as HTMLElement;
@@ -250,6 +253,8 @@ describe('cuenta del espacio', () => {
         grupos: [
           { etiqueta: 'Jesús', participante_id: 'part-jesus', pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
           { etiqueta: 'David', participante_id: 'part-david', pedidos: ['p2'], total: 80.5, pagado: 0, pendiente: 80.5 },
+          { etiqueta: 'David R.', participante_id: 'part-david-r', pedidos: [], total: 0, pagado: 0, pendiente: 0 },
+          { etiqueta: 'Miguel', participante_id: 'part-miguel', pedidos: [], total: 0, pagado: 0, pendiente: 0 },
         ],
       },
     });
@@ -323,6 +328,10 @@ describe('cuenta del espacio', () => {
     expect(written[0]).toContain('DAVID');
     expect(written[0]).toContain('Subtotal Jesús');
     expect(written[0]).toContain('Subtotal David');
+    expect(written[0]).not.toContain('DAVID R.');
+    expect(written[0]).not.toContain('MIGUEL');
+    expect(written[0]).not.toContain('Subtotal David R.');
+    expect(written[0]).not.toContain('Subtotal Miguel');
     openSpy.mockRestore();
   });
 
