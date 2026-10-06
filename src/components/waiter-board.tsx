@@ -457,7 +457,7 @@ export function WaiterBoard({
         open={Boolean(delivering)}
         onOpenChange={(next) => { if (!next) { setDelivering(null); setQrToken(''); } }}
         title={delivering ? `Entregar pedido ${delivering.folio}` : 'Entregar pedido'}
-        description="Escanea el QR del cliente. El backend verificará que corresponda exactamente a este pedido."
+        description="Escanea el QR del cliente. El sistema verificará que corresponda exactamente a este pedido."
       >
         {delivering && (
           <div className="transaction-form">

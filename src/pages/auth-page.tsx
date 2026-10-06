@@ -171,7 +171,7 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
           <p>
             {isPlatform
               ? 'Una superficie reforzada para administrar establecimientos sin acceder a pedidos, wallet o dinero.'
-              : 'Administra personal y mantén la Caja lista con permisos emitidos por el backend.'}
+              : 'Administra personal y mantén la Caja lista con los accesos autorizados.'}
           </p>
         </div>
       </section>

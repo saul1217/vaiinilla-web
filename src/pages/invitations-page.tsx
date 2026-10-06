@@ -220,7 +220,7 @@ export function InvitationsPage() {
           <EmptyState
             icon={<UserPlus aria-hidden="true" />}
             title="No hay invitaciones en este estado"
-            description="Cuando invites personal, el backend mostrará aquí su estado real y vigencia."
+            description="Cuando invites personal, aquí se mostrará su estado real y vigencia."
             action={<Button onClick={() => setCreateOpen(true)}>Crear invitación</Button>}
           />
         )}

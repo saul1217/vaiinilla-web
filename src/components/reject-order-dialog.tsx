@@ -119,7 +119,7 @@ export function RejectOrderDialog({
             maxLength={240}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            hint={`Mínimo ${MIN_REJECTION_REASON} letras.`}
+            hint={`Mínimo ${MIN_REJECTION_REASON} caracteres.`}
           />
           <div className="form-actions">
             <Button type="button" variant="ghost" onClick={close}>Cancelar</Button>

@@ -1,5 +1,6 @@
 import { Camera, CameraOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import jsQR from 'jsqr';
 import { Button, Field } from './ui';
 
 interface BarcodeResult {
@@ -34,9 +35,10 @@ export function QrTokenField({
     }).BarcodeDetector;
     const video = videoRef.current;
     const stream = streamRef.current;
-    if (!detectorConstructor || !video || !stream) return;
+    if (!video || !stream) return;
 
-    const detector = new detectorConstructor({ formats: ['qr_code'] });
+    const detector = detectorConstructor ? new detectorConstructor({ formats: ['qr_code'] }) : null;
+    const canvas = document.createElement('canvas');
     let cancelled = false;
     let timer: number | undefined;
     video.srcObject = stream;
@@ -45,12 +47,29 @@ export function QrTokenField({
       if (cancelled || !video) return;
       try {
         if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          const result = (await detector.detect(video))[0];
-          if (result?.rawValue) {
-            onChange(result.rawValue);
-            setScannerError(null);
-            setScanning(false);
-            return;
+          if (detector) {
+            const result = (await detector.detect(video))[0];
+            if (result?.rawValue) {
+              onChange(result.rawValue);
+              setScannerError(null);
+              setScanning(false);
+              return;
+            }
+          } else if (video.videoWidth > 0 && video.videoHeight > 0) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (ctx) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const code = jsQR(imgData.data, imgData.width, imgData.height);
+              if (code?.data) {
+                onChange(code.data);
+                setScannerError(null);
+                setScanning(false);
+                return;
+              }
+            }
           }
         }
       } catch {
@@ -75,10 +94,6 @@ export function QrTokenField({
 
   async function startScanner() {
     setScannerError(null);
-    if (!('BarcodeDetector' in window)) {
-      setScannerError('Este navegador no permite leer QR con la cámara. Pega el token manualmente.');
-      return;
-    }
     if (!navigator.mediaDevices?.getUserMedia) {
       setScannerError('La cámara no está disponible. Pega el token manualmente.');
       return;

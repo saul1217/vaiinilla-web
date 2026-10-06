@@ -146,7 +146,7 @@ export function CashbackPage() {
       setValidationError(null);
       setConfirmationOpen(false);
       setSuccessMessage(
-        'La regla quedó guardada y el cambio ya tiene fecha y actor en el backend.',
+        'La regla quedó guardada y el cambio ya fue registrado en el sistema.',
       );
     },
   });
@@ -452,7 +452,7 @@ export function CashbackPage() {
           <p>
             {reconciliation
               ? `${reconciliation.wallets_revisadas} wallets comparadas contra su ledger completo.`
-              : 'El dato aparecerá cuando el backend actualizado esté desplegado.'}
+              : 'El dato aparecerá en cuanto el sistema esté actualizado.'}
           </p>
         </div>
       </section>
@@ -483,7 +483,7 @@ export function CashbackPage() {
           </div>
         </div>
         <Feedback tone="info">
-          El backend conservará la regla anterior como evidencia y registrará quién realizó el
+          El sistema conservará la regla anterior como evidencia y registrará quién realizó el
           cambio.
         </Feedback>
         <div className="modal-actions">

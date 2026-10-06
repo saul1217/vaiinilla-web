@@ -560,7 +560,7 @@ function StripeStatusPanel({
   const refreshStatus = useMutation({
     mutationFn: () => api.getPlatformStripeConfiguration(token, establishment.id),
     onSuccess: () => {
-      void onChanged('Estado de Stripe actualizado desde el backend.');
+      void onChanged('Estado de Stripe actualizado.');
     },
     onError: (error) => {
       if (isUnauthorized(error)) onUnauthorized(establishment.id);
