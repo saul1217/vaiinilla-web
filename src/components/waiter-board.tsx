@@ -447,6 +447,7 @@ export function WaiterBoard({
               token={token}
               spaceId={open.espacio.id}
               availability={spaces.get(open.espacio.id)}
+              businessName={businessName}
               canConfirmRefunds={role === 'cajero'}
             />
           </div>
