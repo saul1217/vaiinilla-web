@@ -443,6 +443,8 @@ export function WaiterBoard({
                       status={order.estado}
                       estadoOperativo={order.estado_operativo}
                       estadoPago={order.estado_pago}
+                      montoPagado={order.monto_pagado}
+                      saldoPendiente={order.saldo_pendiente}
                       pagoPendiente={order.pago_pendiente}
                     />
                   )}

@@ -43,6 +43,9 @@ export interface BoardOrder {
   estado: OrderStatus;
   estado_operativo?: OperationalOrderStatus;
   estado_pago?: PaymentStatus;
+  monto_pagado?: string;
+  saldo_pendiente?: string;
+  total?: string;
   version: number;
   /** Va a la cuenta del espacio (pagar al final). */
   pago_diferido?: boolean;
@@ -123,6 +126,10 @@ export function createWaiterClient(getToken: () => Promise<string>): WaiterClien
           estado: order.estado,
           estado_operativo: order.estado_operativo,
           estado_pago: order.estado_pago,
+          monto_pagado: order.monto_pagado,
+          saldo_pendiente: order.saldo_pendiente,
+          total: order.total,
+          pago_pendiente: order.pago_pendiente,
           version: order.version,
           cliente: order.usuario ? { nombre: order.usuario.nombre } : null,
           items_resumen: summarize(order),

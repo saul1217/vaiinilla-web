@@ -20,7 +20,7 @@ export function OrderCard({
           <p className="order-card__folio"><ReceiptText aria-hidden="true" /> Folio {order.folio}</p>
           <p className="order-card__time"><Clock3 aria-hidden="true" /> {formatTime(order.creado_en)}</p>
         </div>
-        <OrderStatusBadge status={order.estado} estadoOperativo={order.estado_operativo} estadoPago={order.estado_pago} />
+        <OrderStatusBadge status={order.estado} estadoOperativo={order.estado_operativo} estadoPago={order.estado_pago} montoPagado={order.monto_pagado} saldoPendiente={order.saldo_pendiente} />
       </header>
 
       <div className="order-card__customer">
@@ -64,7 +64,7 @@ export function OrderDetailContent({ order }: { order: OrderDetail }) {
     <div className="order-detail">
       <div className="order-detail__summary">
         <div><small>Folio</small><strong>{order.folio}</strong></div>
-        <div><small>Estado / pago</small><OrderStatusBadge status={order.estado} estadoOperativo={order.estado_operativo} estadoPago={order.estado_pago} /></div>
+        <div><small>Estado / pago</small><OrderStatusBadge status={order.estado} estadoOperativo={order.estado_operativo} estadoPago={order.estado_pago} montoPagado={order.monto_pagado} saldoPendiente={order.saldo_pendiente} /></div>
         <div><small>Cliente</small><strong>{order.usuario?.nombre ?? 'Cliente'}</strong></div>
         <div><small>Creado</small><strong>{formatDateTime(order.creado_en)}</strong></div>
       </div>

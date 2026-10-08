@@ -1,4 +1,5 @@
 import type { OrderDetail } from '../types/api';
+import { paymentStatusForOrder } from './order-status';
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({
@@ -34,6 +35,17 @@ function paymentMethodLabel(method: OrderDetail['metodo_pago']): string {
   return ({ efectivo: 'Efectivo', stripe: 'Tarjeta', saldo: 'Saldo Vaiinilla' })[method];
 }
 
+function officialAmount(value: string | undefined): string {
+  return value === undefined ? 'Sin dato' : formatTicketAmount(value);
+}
+
+function paymentStatusLabel(order: OrderDetail): string {
+  const status = paymentStatusForOrder(order);
+  return status
+    ? ({ pendiente: 'Pendiente', parcial: 'Parcial', pagado: 'Pagado', reembolsado: 'Reembolsado', sin_cargo: 'Sin cargo' })[status]
+    : 'No disponible';
+}
+
 export function buildOrderTicketHtml(order: OrderDetail, establishmentName: string): string {
   const items = order.items.map((item) => `
     <li class="product-row"><span class="product-name">${item.cantidad}x ${escapeHtml(item.nombre_producto)}</span><strong class="amount">${formatTicketAmount(item.subtotal)}</strong></li>
@@ -47,13 +59,13 @@ export function buildOrderTicketHtml(order: OrderDetail, establishmentName: stri
 *{box-sizing:border-box}body{font:14px/1.4 Arial,sans-serif;color:#111;margin:0 auto;padding:20px;max-width:380px}
 h1{font-size:24px;line-height:1.15;text-align:center;margin:0 0 16px}.meta{border-bottom:1px dashed #555;padding-bottom:12px;margin-bottom:12px}.meta p{margin:3px 0}.folio,.timestamp{font-size:12px;color:#444}.customer{font-size:16px;line-height:1.25;font-weight:800;letter-spacing:.025em;color:#111;margin:10px 0 0;overflow-wrap:break-word;word-break:normal}
 ul{list-style:none;padding:0;margin:0}.product-row{display:flex;justify-content:space-between;gap:12px;padding:4px 0}.product-name{min-width:0;overflow-wrap:break-word;word-break:normal}.amount{white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}.option{font-size:12px;padding-left:12px;overflow-wrap:break-word;word-break:normal}
-.totals{border-top:1px dashed #555;margin-top:20px;padding-top:12px}.total,.paid{display:flex;justify-content:space-between;gap:8px;margin:0}.total{font-size:18px;font-weight:800}.paid{font-weight:700;margin-top:7px}.method{margin-top:7px}
+.totals{border-top:1px dashed #555;margin-top:20px;padding-top:12px}.total,.paid,.due{display:flex;justify-content:space-between;gap:8px;margin:0}.total{font-size:18px;font-weight:800}.paid{font-weight:700;margin-top:7px}.due{font-weight:700;margin-top:4px}.payment-state,.method{margin-top:7px}
 @media print{@page{size:80mm auto;margin:4mm}body{width:72mm;max-width:none;padding:0}}
 </style></head><body>
 <header><h1>${escapeHtml(establishmentName || 'Establecimiento')}</h1></header>
 <section class="meta"><p class="folio">Folio #${order.folio}</p><p class="timestamp">${escapeHtml(formatTicketDate(order.creado_en))}</p><p class="customer">${escapeHtml((order.usuario?.nombre ?? 'Cliente').toLocaleUpperCase('es-MX'))}</p></section>
 <ul>${items}</ul><section class="totals"><p class="total"><span>TOTAL</span><span class="amount">${formatTicketAmount(order.total)}</span></p>
-<p class="paid"><span>PAGADO</span><span class="amount">${formatTicketAmount(order.monto_pagado ?? order.total)}</span></p><p class="method">Método: ${escapeHtml(paymentMethodLabel(order.metodo_pago))}</p></section>
+<p class="paid"><span>PAGADO</span><span class="amount">${officialAmount(order.monto_pagado)}</span></p><p class="due"><span>POR PAGAR</span><span class="amount">${officialAmount(order.saldo_pendiente)}</span></p><p class="payment-state">Estado de pago: ${escapeHtml(paymentStatusLabel(order))}</p><p class="method">Método: ${escapeHtml(paymentMethodLabel(order.metodo_pago))}</p></section>
 <script>window.addEventListener('load',()=>{window.focus();window.print()})</script></body></html>`;
 }
 

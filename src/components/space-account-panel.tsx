@@ -7,6 +7,7 @@ import { Clock3, CreditCard, Printer, ReceiptText, Unlock, Wallet } from 'lucide
 import { useMemo, useState } from 'react';
 import { AccountAbonoForm } from './account-abono-form';
 import { PendingRefunds } from './pending-refunds';
+import { SessionOrderComposer } from './session-order-composer';
 import { RollingMoney } from './rolling-money';
 import { TipPicker } from './tip-picker';
 import { Button, Feedback, Field, Modal } from './ui';
@@ -146,6 +147,7 @@ export function SpaceAccountPanel({
   const [tip, setTip] = useState<TipChoice>({ kind: 'none' });
   const [rental, setRental] = useState<CounterRental | null>(null);
   const [rentalReceived, setRentalReceived] = useState('');
+  const [addingToSession, setAddingToSession] = useState(false);
 
   const detail = useQuery({
     queryKey: ['space-session', spaceId],
@@ -351,6 +353,23 @@ export function SpaceAccountPanel({
               <Printer aria-hidden="true" className="size-5" /> Imprimir cuenta
             </Button>
           </div>
+        </div>
+      )}
+
+      {data.sesion && (
+        <div className="space-account__staff-order">
+          <Button variant="secondary" onClick={() => setAddingToSession((value) => !value)}>
+            {addingToSession ? 'Cancelar pedido' : 'Agregar pedido'}
+          </Button>
+          {addingToSession ? (
+            <SessionOrderComposer
+              token={token}
+              spaceId={spaceId}
+              sessionId={data.sesion.id}
+              groups={account?.grupos ?? []}
+              onCreated={refresh}
+            />
+          ) : null}
         </div>
       )}
 

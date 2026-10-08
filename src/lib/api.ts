@@ -52,6 +52,7 @@ import type {
   CounterRentalPayment,
   SpaceAvailability,
   SpaceSessionDetail,
+  SessionStaffOrderInput,
   ClosedSpaceSessionDetail,
   TenantCardPayments,
   ItemRejectionResult,
@@ -673,6 +674,27 @@ export const api = {
 
   async spaceSession(token: string, spaceId: number): Promise<SpaceSessionDetail> {
     return (await request<SpaceSessionDetail>(`/espacios/${spaceId}/sesion`, { token })).data;
+  },
+
+  async createSessionOrder(
+    token: string,
+    spaceId: number,
+    input: SessionStaffOrderInput,
+    idempotencyKey: string,
+  ): Promise<OrderDetail> {
+    return (
+      await request<OrderDetail>(`/espacios/${spaceId}/sesion/pedidos`, {
+        method: 'POST',
+        token,
+        idempotencyKey,
+        body: {
+          sesion_id: input.sessionId,
+          participante_id: input.participantId,
+          items: input.items,
+          notas_cocina: input.notas_cocina ?? null,
+        },
+      })
+    ).data;
   },
 
   /** Cuenta de una sesión cerrada (reimpresión del ticket histórico, agrupada por persona). */

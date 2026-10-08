@@ -1,17 +1,16 @@
 import type { OrderDetail } from '../types/api';
 import { moneyToCents } from './money';
-import { operationalOrderStatus } from './order-status';
+import { operationalOrderStatus, paymentStatusForOrder } from './order-status';
 
 export function hasOutstandingCashBalance(order: OrderDetail): boolean {
-  if (order.pago_diferido || order.saldo_pendiente === undefined) return false;
+  if (order.pago_diferido || order.metodo_pago !== 'efectivo' || order.saldo_pendiente === undefined) return false;
   const cents = moneyToCents(order.saldo_pendiente);
-  return cents !== null && cents > 0n;
+  return cents === null || cents > 0n;
 }
 
-function isIndividuallyPaid(order: OrderDetail): boolean {
-  if (order.pago_diferido) return true;
-  if (order.saldo_pendiente === undefined) return false;
-  return moneyToCents(order.saldo_pendiente) === 0n;
+function isPaymentSettled(order: OrderDetail): boolean {
+  const status = paymentStatusForOrder(order);
+  return status === 'pagado' || status === 'sin_cargo';
 }
 
 export function isCashierCashOrder(order: OrderDetail): boolean {
@@ -29,9 +28,19 @@ export function isCashierDeliveryOrder(order: OrderDetail): boolean {
 }
 
 export function isCashierPaidDeliveryOrder(order: OrderDetail): boolean {
-  return isCashierDeliveryOrder(order) && isIndividuallyPaid(order);
+  return isCashierDeliveryOrder(order) && isPaymentSettled(order);
+}
+
+/** A table order may be delivered while the deferred account remains unpaid. */
+export function isCashierDeferredDeliveryOrder(order: OrderDetail): boolean {
+  if (!isCashierDeliveryOrder(order) || order.pago_diferido !== true) return false;
+  const status = paymentStatusForOrder(order);
+  return status === 'pendiente' || status === 'parcial';
 }
 
 export function canConfirmCashierDelivery(order: OrderDetail, qrToken: string): boolean {
-  return isCashierPaidDeliveryOrder(order) && Boolean(qrToken.trim());
+  return (
+    (isCashierPaidDeliveryOrder(order) || isCashierDeferredDeliveryOrder(order)) &&
+    Boolean(qrToken.trim())
+  );
 }

@@ -47,4 +47,17 @@ describe('status badges', () => {
     expect(screen.getByText('Recibido')).toHaveClass('status-badge--order-recibido');
     expect(screen.getByText('Pagado')).toHaveClass('status-badge--payment-pagado');
   });
+
+  it('no muestra pagado si el saldo oficial contradice el estado de pago', () => {
+    render(<OrderStatusBadge
+      status="listo"
+      estadoOperativo="listo"
+      estadoPago="pagado"
+      montoPagado="0.00"
+      saldoPendiente="10.00"
+    />);
+    expect(screen.getByText('Listo')).toBeVisible();
+    expect(screen.getByText('Pago pendiente')).toHaveClass('status-badge--payment-pendiente');
+    expect(screen.queryByText('Pagado')).not.toBeInTheDocument();
+  });
 });
