@@ -58,7 +58,7 @@ export function KitchenPage() {
     initialPageParam: undefined as string | undefined,
     enabled: Boolean(token) && role === 'cocina',
     queryFn: ({ pageParam }) => api.listOrders(token, {
-      estado: ['cobrado', 'preparando', 'listo'],
+      estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'],
       cursor: pageParam,
       limit: 50,
     }),
@@ -135,7 +135,7 @@ export function KitchenPage() {
     [orders.data],
   );
   const pending = useMemo(
-    () => allOrders.filter((order) => order.estado === 'cobrado'),
+    () => allOrders.filter((order) => order.estado === 'por_cobrar' || order.estado === 'cobrado'),
     [allOrders],
   );
   const preparing = useMemo(
@@ -315,7 +315,7 @@ export function KitchenPage() {
               <KitchenEmptyState
                 icon={<TimerReset aria-hidden="true" />}
                 title="Sin pedidos pendientes"
-                description="Las nuevas comandas aparecerán aquí automáticamente después del cobro."
+                description="Las nuevas comandas aparecerán aquí automáticamente, incluso si siguen pendientes de pago."
               />
             )}
           </KitchenColumn>
