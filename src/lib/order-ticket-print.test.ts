@@ -7,6 +7,7 @@ const order: OrderDetail = {
   destino: 'para_llevar', espacio: null, subtotal: '125.00', ahorro_combinado: '0.00',
   cashback_otorgado: '0.00', total: '125.00', monto_pagado: '125.00', saldo_pendiente: '0.00',
   version: 3, creado_en: '2026-10-07T12:00:00.000Z', actualizado_en: '2026-10-07T12:30:00.000Z',
+  estado_pago: 'pagado',
   notas_cocina: null, usuario: { nombre: '<Pepito>', matricula: null }, items: [{
     id: 1, producto_id: 1, nombre_producto: '<Croquetas & papas>', estacion_preparacion: 'cocina',
     cantidad: 1, precio_digital_unitario: '125.00', subtotal: '125.00',
@@ -20,6 +21,8 @@ describe('ticket individual de Caja', () => {
     expect(html.indexOf('<h1>USAGI</h1>')).toBeLessThan(html.indexOf('Folio #14'));
     expect(html).toContain('<span>TOTAL</span><span class="amount">$125.00</span>');
     expect(html).toContain('<span>PAGADO</span><span class="amount">$125.00</span>');
+    expect(html).toContain('<span>POR PAGAR</span><span class="amount">$0.00</span>');
+    expect(html).toContain('Estado de pago: Pagado');
     expect(html).toContain('Método: Efectivo');
     expect(html).toContain('class="customer">&lt;PEPITO&gt;');
     expect(html).toContain('class="product-name">1x &lt;Croquetas &amp; papas&gt;');
@@ -30,6 +33,32 @@ describe('ticket individual de Caja', () => {
     expect(html).not.toContain('<Pepito>');
     expect(html).not.toContain('<button');
     expect(html).toContain('@page{size:80mm auto');
+  });
+
+  it('imprime el saldo oficial de una mesa pendiente sin derivar pago del estado legacy', () => {
+    const deferred = {
+      ...order,
+      estado: 'cobrado' as const,
+      estado_operativo: 'entregado' as const,
+      estado_pago: 'pendiente' as const,
+      pago_diferido: true,
+      monto_pagado: '0.00',
+      saldo_pendiente: '125.00',
+    };
+    const html = buildOrderTicketHtml(deferred, 'USAGI');
+    expect(html).toContain('<span>PAGADO</span><span class="amount">$0.00</span>');
+    expect(html).toContain('<span>POR PAGAR</span><span class="amount">$125.00</span>');
+    expect(html).toContain('Estado de pago: Pendiente');
+    expect(html).not.toContain('PAGADO</span><span class="amount">$125.00</span>');
+  });
+
+  it('no sustituye el pago ausente con el total ni con el estado legacy', () => {
+    const legacy = { ...order, estado: 'cobrado' as const, monto_pagado: undefined, saldo_pendiente: undefined, estado_pago: undefined };
+    const html = buildOrderTicketHtml(legacy, 'USAGI');
+    expect(html).toContain('<span>PAGADO</span><span class="amount">Sin dato</span>');
+    expect(html).toContain('<span>POR PAGAR</span><span class="amount">Sin dato</span>');
+    expect(html).not.toContain('<span class="amount">$125.00</span></p><p class="due">');
+    expect(html).toContain('Estado de pago: No disponible');
   });
 
   it('mantiene legibles los importes grandes y traduce otros métodos de pago', () => {

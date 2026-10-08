@@ -129,7 +129,7 @@ describe('tablero de Cocina', () => {
   });
 
   it('recibe y puede iniciar la preparación de un pedido por cobrar', async () => {
-    const unpaidOrder = { ...pendingOrder, estado: 'por_cobrar' as const, monto_pagado: '0.00', saldo_pendiente: '46.00' };
+    const unpaidOrder = { ...pendingOrder, estado: 'por_cobrar' as const, estado_operativo: 'recibido' as const, estado_pago: 'pendiente' as const, monto_pagado: '0.00', saldo_pendiente: '46.00' };
     apiMock.listOrders.mockResolvedValue({ orders: [unpaidOrder], cursor: null });
     apiMock.transitionOrder.mockResolvedValue({ ...unpaidOrder, estado: 'preparando', version: 3 });
     const user = userEvent.setup();

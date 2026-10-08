@@ -1,5 +1,5 @@
 import type { InvitationStatus, OperationalOrderStatus, OrderStatus, PaymentStatus } from '../types/api';
-import { operationalOrderStatus } from '../lib/order-status';
+import { operationalOrderStatus, paymentStatusForOrder } from '../lib/order-status';
 
 const invitationLabels: Record<InvitationStatus, string> = {
   pendiente: 'Pendiente',
@@ -25,11 +25,15 @@ export function OrderStatusBadge({
   status,
   estadoOperativo,
   estadoPago,
+  montoPagado,
+  saldoPendiente,
   pagoPendiente,
 }: {
   status: OrderStatus;
   estadoOperativo?: OperationalOrderStatus;
   estadoPago?: PaymentStatus;
+  montoPagado?: string;
+  saldoPendiente?: string;
   /** Campo legado: nunca reemplaza el estado operativo. */
   pagoPendiente?: boolean;
 }) {
@@ -43,15 +47,20 @@ export function OrderStatusBadge({
     no_recogido: 'No recogido',
     expirado: 'Expirado',
   };
-  const paymentLabel = estadoPago
-    ? paymentLabels[estadoPago]
+  const paymentState = paymentStatusForOrder({
+    estado_pago: estadoPago,
+    monto_pagado: montoPagado,
+    saldo_pendiente: saldoPendiente,
+  });
+  const paymentLabel = paymentState
+    ? paymentLabels[paymentState]
     : pagoPendiente === true
       ? 'Pendiente'
       : null;
   return (
     <>
       <span className={`status-badge status-badge--order-${operational}`}>{operationalLabels[operational]}</span>
-      {paymentLabel ? <span className={`status-badge status-badge--payment-${estadoPago ?? 'pendiente'}`}>{paymentLabel}</span> : null}
+      {paymentLabel ? <span className={`status-badge status-badge--payment-${paymentState ?? 'pendiente'}`}>{paymentLabel}</span> : null}
     </>
   );
 }

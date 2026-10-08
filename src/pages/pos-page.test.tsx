@@ -92,6 +92,68 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(screen.getByRole('button', { name: 'Validar QR' })).toBeVisible();
   });
 
+  it('entrega una mesa lista con saldo pendiente en la cuenta sin marcarla pagada ni cobrarla individualmente', async () => {
+    const deferredOrder = {
+      ...baseOrder,
+      estado: 'cobrado' as const,
+      estado_operativo: 'listo' as const,
+      estado_pago: 'pendiente' as const,
+      destino: 'en_espacio' as const,
+      espacio: { id: 4, nombre: 'Mesa 4', tipo: 'mesa' as const },
+      pago_diferido: true,
+      pago_pendiente: true,
+      monto_pagado: '0.00',
+      saldo_pendiente: '125.00',
+    };
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: false });
+    apiMock.listOrders.mockResolvedValueOnce({ orders: [deferredOrder], cursor: null })
+      .mockResolvedValue({ orders: [], cursor: null });
+    apiMock.deliverOrder.mockResolvedValue({
+      ...deferredOrder,
+      estado: 'entregado',
+      estado_operativo: 'entregado',
+      estado_pago: 'pendiente',
+      saldo_pendiente: '125.00',
+    });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    expect(await screen.findByText('Pendiente en cuenta')).toBeVisible();
+    expect(screen.queryByText('PAGADO')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /cobrar/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Entregar' })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Entregar' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar entrega' }));
+
+    await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', deferredOrder.id, deferredOrder.version, ''));
+    expect(apiMock.collectCash).not.toHaveBeenCalled();
+    expect(await screen.findByText('Sin entregas pendientes')).toBeVisible();
+  });
+
+  it('mantiene visible la mesa pendiente y exige QR antes de marcarla entregada', async () => {
+    const deferredOrder = {
+      ...baseOrder,
+      estado: 'cobrado' as const,
+      estado_operativo: 'listo' as const,
+      estado_pago: 'pendiente' as const,
+      destino: 'en_espacio' as const,
+      espacio: { id: 4, nombre: 'Mesa 4', tipo: 'mesa' as const },
+      pago_diferido: true,
+      pago_pendiente: true,
+      monto_pagado: '0.00',
+      saldo_pendiente: '125.00',
+    };
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [deferredOrder], cursor: null });
+    render(<PosPage />, { wrapper: Wrapper });
+
+    expect(await screen.findByText('Pendiente en cuenta')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Validar QR' })).toBeVisible();
+    expect(screen.queryByText('PAGADO')).not.toBeInTheDocument();
+    expect(apiMock.deliverOrder).not.toHaveBeenCalled();
+  });
+
   it('un pedido ya pagado aparece al quedar listo y puede entregarse sin QR', async () => {
     const paidOrder = {
       ...baseOrder,

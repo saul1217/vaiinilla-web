@@ -31,7 +31,7 @@ import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operation
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { MONEY_PATTERN, calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
-import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
+import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeferredDeliveryOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
 import { printOrderTicket } from '../lib/order-ticket-print';
 import type { OrderDetail } from '../types/api';
 
@@ -465,7 +465,7 @@ export function PosPage() {
 
               <QueueColumn
                 title="Listos para entregar"
-                description="Cobra lo pendiente; después imprime el ticket y entrega el pedido"
+                description="Cobra los pedidos individuales; los pedidos de mesa conservan su saldo en la cuenta."
                 count={readyOrders.length}
                 icon={<ScanLine aria-hidden="true" />}
               >
@@ -485,6 +485,15 @@ export function PosPage() {
                             <Button variant="secondary" onClick={() => printOrderTicket(order, businessName ?? 'Establecimiento')}>
                               <ReceiptText aria-hidden="true" className="size-5" /> Imprimir ticket
                             </Button>
+                            <Button variant="dark" onClick={() => beginDelivery(order)}>
+                              {deliveryNeedsQr()
+                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
+                                : 'Entregar'}
+                            </Button>
+                          </>
+                        ) : isCashierDeferredDeliveryOrder(order) ? (
+                          <>
+                            <strong className="text-sm" role="status">Pendiente en cuenta</strong>
                             <Button variant="dark" onClick={() => beginDelivery(order)}>
                               {deliveryNeedsQr()
                                 ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>

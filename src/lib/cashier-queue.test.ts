@@ -4,6 +4,7 @@ import {
   canConfirmCashierDelivery,
   hasOutstandingCashBalance,
   isCashierCashOrder,
+  isCashierDeferredDeliveryOrder,
   isCashierDeliveryOrder,
   isCashierPaidDeliveryOrder,
 } from './cashier-queue';
@@ -67,9 +68,25 @@ describe('cashier-queue', () => {
     expect(isCashierPaidDeliveryOrder({ ...unpaid, saldo_pendiente: '0.00', monto_pagado: '125.00' })).toBe(true);
   });
 
-  it('no ofrece cobrar individualmente una cuenta diferida de mesa', () => {
-    const deferred = order({ estado: 'listo', pago_diferido: true, pago_pendiente: true, saldo_pendiente: '10.00' });
+  it('una cuenta diferida no se marca pagada ni se cobra por pedido, pero puede entregarse con saldo', () => {
+    const deferred = order({
+      estado: 'listo', estado_pago: 'pendiente', pago_diferido: true,
+      pago_pendiente: true, monto_pagado: '0.00', saldo_pendiente: '10.00',
+    });
     expect(hasOutstandingCashBalance(deferred)).toBe(false);
+    expect(isCashierPaidDeliveryOrder(deferred)).toBe(false);
+    expect(isCashierDeferredDeliveryOrder(deferred)).toBe(true);
+    expect(canConfirmCashierDelivery(deferred, 'mesa-qr')).toBe(true);
+    expect(canConfirmCashierDelivery(deferred, '')).toBe(false);
+  });
+
+  it('un estado_pago pagado contradictorio no permite imprimir como pagado si el saldo es positivo', () => {
+    const contradictory = order({
+      estado: 'listo', estado_pago: 'pagado', pago_diferido: true,
+      monto_pagado: '0.00', saldo_pendiente: '10.00',
+    });
+    expect(isCashierPaidDeliveryOrder(contradictory)).toBe(false);
+    expect(isCashierDeferredDeliveryOrder(contradictory)).toBe(true);
   });
 
   it('no autoriza la entrega si el backend todavía no informó el saldo', () => {
