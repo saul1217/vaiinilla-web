@@ -7,7 +7,7 @@ const notFound = () => new Response(JSON.stringify({ data: null, meta: {}, error
 afterEach(() => vi.unstubAllGlobals());
 
 describe('createWaiterClient', () => {
-  it('arma el tablero con /espacios y /pedidos cuando el backend aún no tiene tablero ni llamadas', async () => {
+  it('limita el fallback a pedidos listos de una sesión activa y excluye los históricos', async () => {
     const fetchMock = vi.fn((input: string) => {
       const url = input;
       if (url.endsWith('/espacios/tablero') || url.includes('/llamadas')) return Promise.resolve(notFound());
@@ -19,11 +19,17 @@ describe('createWaiterClient', () => {
           ]),
         );
       }
+      if (url.endsWith('/espacios/disponibilidad')) {
+        return Promise.resolve(ok([
+          { espacio: { id: 4, nombre: 'Mesa 4', tipo: 'mesa' }, estado: 'libre', inicio: null },
+          { espacio: { id: 5, nombre: 'Mesa 5', tipo: 'mesa' }, estado: 'ocupada', inicio: '2026-09-25T18:00:00Z' },
+        ]));
+      }
       if (url.includes('/pedidos?estado=listo')) {
         return Promise.resolve(
           ok([
             {
-              id: 'p1',
+              id: 'old',
               folio: 312,
               estado: 'listo',
               version: 3,
@@ -31,6 +37,19 @@ describe('createWaiterClient', () => {
               espacio: { id: 4, nombre: 'Mesa 4', tipo: 'mesa' },
               usuario: { nombre: 'Ana', matricula: null },
               actualizado_en: '2026-09-25T18:00:00Z',
+              creado_en: '2026-09-25T17:59:00Z',
+              items: [{ cantidad: 2, nombre_producto: 'Taco' }],
+            },
+            {
+              id: 'p1',
+              folio: 313,
+              estado: 'listo',
+              version: 3,
+              destino: 'en_espacio',
+              espacio: { id: 5, nombre: 'Mesa 5', tipo: 'mesa' },
+              usuario: { nombre: 'Ana', matricula: null },
+              actualizado_en: '2026-09-25T18:01:00Z',
+              creado_en: '2026-09-25T18:01:00Z',
               items: [{ cantidad: 2, nombre_producto: 'Taco' }],
             },
           ]),
@@ -44,8 +63,8 @@ describe('createWaiterClient', () => {
 
     expect(board.callsEnabled).toBe(false);
     expect(board.tables).toHaveLength(2);
-    expect(board.tables[0]?.pedidos[0]).toMatchObject({ folio: 312, items_resumen: '2× Taco', cliente: { nombre: 'Ana' } });
-    expect(board.tables[1]?.pedidos).toHaveLength(0);
+    expect(board.tables[0]?.pedidos).toHaveLength(0);
+    expect(board.tables[1]?.pedidos[0]).toMatchObject({ folio: 313, items_resumen: '2× Taco', cliente: { nombre: 'Ana' } });
   });
 
   it('toma una llamada con Idempotency-Key y la versión esperada', async () => {

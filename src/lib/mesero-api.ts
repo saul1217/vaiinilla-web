@@ -5,7 +5,7 @@
 import { apiUrl } from './api';
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
-import type { ApiEnvelope, ApiErrorEnvelope, OrderDetail, OrderStatus } from '../types/api';
+import type { ApiEnvelope, ApiErrorEnvelope, OrderDetail, OrderStatus, SpaceAvailability } from '../types/api';
 
 export type CallReason = 'atencion' | 'utensilios' | 'problema' | 'cuenta';
 export type CallStatus = 'pendiente' | 'en_camino' | 'atendida' | 'cancelada' | 'expirada';
@@ -106,15 +106,27 @@ export function createWaiterClient(getToken: () => Promise<string>): WaiterClien
   let boardEndpoint = true;
 
   async function fallbackBoard(token: string): Promise<BoardTable[]> {
-    const [spaces, ready] = await Promise.all([
+    const [spaces, ready, availability] = await Promise.all([
       request<TableSpace[]>('/espacios', { token }),
       request<OrderDetail[]>('/pedidos?estado=listo', { token }),
+      request<SpaceAvailability[]>('/espacios/disponibilidad', { token }),
     ]);
+    const sessionStarts = new Map(
+      availability
+        .filter((space) => space.inicio !== null)
+        .map((space) => [space.espacio.id, Date.parse(space.inicio!)]),
+    );
     return spaces.map((espacio) => ({
       espacio,
       llamada: null,
       pedidos: ready
-        .filter((order) => order.destino === 'en_espacio' && order.espacio?.id === espacio.id)
+        .filter((order) => {
+          const inicio = sessionStarts.get(espacio.id);
+          return order.destino === 'en_espacio'
+            && order.espacio?.id === espacio.id
+            && inicio !== undefined
+            && Date.parse(order.creado_en) >= inicio;
+        })
         .map((order) => ({
           id: order.id,
           folio: order.folio,
