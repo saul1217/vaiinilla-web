@@ -8,6 +8,7 @@ import { SpaceAccountPanel } from './space-account-panel';
 
 const apiMock = vi.hoisted(() => ({
   spaceSession: vi.fn(),
+  getOrder: vi.fn(),
   collectSpaceAccount: vi.fn(),
   abonarSpaceAccount: vi.fn(),
   releaseSpace: vi.fn(),
@@ -51,6 +52,7 @@ describe('cuenta del espacio', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMock.spaceSession.mockResolvedValue(openAccount);
+    apiMock.getOrder.mockRejectedValue(new Error('No hay detalle disponible'));
   });
 
   it('divide la cuenta: cobra solo el pedido marcado con la terminal', async () => {
@@ -329,14 +331,15 @@ describe('cuenta del espacio', () => {
       },
     });
     const written: string[] = [];
-    const fakeDoc = { write: (html: string) => written.push(html), close: vi.fn() };
-    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ document: fakeDoc } as unknown as Window);
+    const fakeDoc = { write: (html: string) => written.push(html), open: vi.fn(), close: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ document: fakeDoc, closed: false } as unknown as Window);
     render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} businessName="USAGI" />, { wrapper: TestProvider });
 
     await user.click(await screen.findByRole('button', { name: /Imprimir cuenta/ }));
-    expect(written).toHaveLength(1);
-    const html = written[0] ?? '';
-    expect(html).toContain('VAIINILLA');
+    await waitFor(() => expect(written.length).toBeGreaterThan(1));
+    const html = written.at(-1) ?? '';
+    expect(html).toContain('<h1>USAGI</h1>');
+    expect(html).not.toContain('VAIINILLA');
     expect(html).toContain('USAGI');
     expect(html).toContain('Mesa 7');
     expect(html).toContain('KIKIN');
@@ -348,9 +351,9 @@ describe('cuenta del espacio', () => {
     // Kikin's two backend order ids stay inside the same backend participant group.
     expect(html.match(/#28/g)).toHaveLength(1);
     expect(html.match(/#29/g)).toHaveLength(1);
-    expect(html).toContain('<td>Total</td><td class="r">$90.00</td>');
-    expect(html).toContain('<td>Pagado</td><td class="r">$15.00</td>');
-    expect(html).toContain('<td>Por pagar</td><td class="r">$75.00</td>');
+    expect(html).toContain('<span>TOTAL</span><span class="amount">$90.00</span>');
+    expect(html).toContain('<span>PAGADO</span><span class="amount">$15.00</span>');
+    expect(html).toContain('<span>POR PAGAR</span><span class="amount">$75.00</span>');
     expect(html).not.toContain('DAVID R.');
     expect(html).not.toContain('MIGUEL');
     expect(html).not.toContain('Subtotal David R.');
@@ -375,8 +378,8 @@ describe('cuenta del espacio', () => {
       },
     });
     const written: string[] = [];
-    const fakeDoc = { write: (html: string) => written.push(html), close: vi.fn() };
-    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ document: fakeDoc } as unknown as Window);
+    const fakeDoc = { write: (html: string) => written.push(html), open: vi.fn(), close: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ document: fakeDoc, closed: false } as unknown as Window);
     render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
 
     const kikinGroup = await screen.findByText('KIKIN');
@@ -384,9 +387,11 @@ describe('cuenta del espacio', () => {
     expect(kikinGroup.closest('.space-account__group')).toHaveTextContent('1× Quesadilla · 1× Hamburguesa');
     await user.click(screen.getByRole('button', { name: /Imprimir cuenta/ }));
 
-    const html = written[0] ?? '';
+    await waitFor(() => expect(written.length).toBeGreaterThan(1));
+    const html = written.at(-1) ?? '';
     expect(html).toContain('KIKIN');
-    expect(html).toContain('#30 1× Quesadilla · 1× Hamburguesa');
+    expect(html).toContain('Pedido #30');
+    expect(html).toContain('1× Quesadilla · 1× Hamburguesa');
     expect(html).not.toContain('PEDIDO GENERAL');
     expect(html).toContain('Subtotal Kikin');
     openSpy.mockRestore();
@@ -410,17 +415,18 @@ describe('cuenta del espacio', () => {
       },
     });
     const written: string[] = [];
-    const fakeDoc = { write: (html: string) => written.push(html), close: vi.fn() };
-    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ document: fakeDoc } as unknown as Window);
+    const fakeDoc = { write: (html: string) => written.push(html), open: vi.fn(), close: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ document: fakeDoc, closed: false } as unknown as Window);
     render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
 
     await user.click(await screen.findByRole('button', { name: /Imprimir cuenta/ }));
 
-    const html = written[0] ?? '';
+    await waitFor(() => expect(written.length).toBeGreaterThan(1));
+    const html = written.at(-1) ?? '';
     expect(html).toContain(longDescription);
     expect(html).toContain('viewport');
-    expect(html).toContain('@media(max-width:420px)');
-    expect(html).toContain('overflow-wrap:anywhere');
+    expect(html).toContain('@media screen and (max-width:420px)');
+    expect(html).toContain('overflow-wrap:break-word');
     expect(html).toContain('#24');
     expect(html).toContain('$300.00');
     openSpy.mockRestore();
