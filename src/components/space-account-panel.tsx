@@ -11,6 +11,7 @@ import { RollingMoney } from './rolling-money';
 import { TipPicker } from './tip-picker';
 import { Button, Feedback, Field, Modal } from './ui';
 import { api } from '../lib/api';
+import { buildSpaceAccountPrintHtml } from '../lib/space-account-print';
 import { claimAliases } from '../lib/account-split';
 import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
 import { errorMessage } from '../lib/api-error';
@@ -18,6 +19,7 @@ import { MONEY_PATTERN, calculateChange, centsToMoney, formatMoney, normalizeMon
 import { clock, spaceStatusLine } from '../lib/space-status';
 import type {
   AccountPaymentMethod,
+  OrderDetail,
   CounterRental,
   SpaceAccount,
   SpaceAccountOrder,
@@ -36,52 +38,29 @@ function durationLabel(minutes: number): string {
 
 const toCents = (amount: number) => BigInt(Math.round(amount * 100));
 
-function printAccount(detail: SpaceSessionDetail, businessName?: string): boolean {
+function printAccount(detail: SpaceSessionDetail, token: string, businessName?: string): boolean {
   const account = detail.cuenta;
   if (!account) return false;
   const win = window.open('', '_blank', 'width=380,height=640');
   if (!win) return false;
-  const escape = (text: string) =>
-    text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
-  const orderRow = (order: SpaceAccountOrder) =>
-    `<tr><td>#${order.folio} ${escape(order.items_resumen)}</td><td class="r">$${order.total.toFixed(2)}</td></tr>`;
-  const byId = new Map(account.pedidos.map((order) => [order.id, order]));
-  let rows: string;
-  if (account.grupos?.length) {
-    const covered = new Set<string>();
-    const groups = account.grupos
-      .filter((grupo) => grupo.pedidos.some((id) => byId.has(id)))
-      .map((grupo) => {
-        const orders = grupo.pedidos
-          .map((id) => byId.get(id))
-          .filter((order): order is SpaceAccountOrder => Boolean(order));
-        orders.forEach((order) => covered.add(order.id));
-        const label = escape(grupo.etiqueta.toLocaleUpperCase('es-MX'));
-        const items = orders.map(orderRow).join('');
-        return `<tr class="g"><td colspan="2">${label}</td></tr>${items}<tr class="s"><td>Subtotal ${escape(grupo.etiqueta)}</td><td class="r">$${grupo.total.toFixed(2)}</td></tr>`;
-      })
-      .join('');
-    const leftover = account.pedidos.filter((order) => !covered.has(order.id)).map(orderRow).join('');
-    rows = `${groups}${leftover}`;
-  } else {
-    rows = account.pedidos.map(orderRow).join('');
-  }
-  const sessionStarted = detail.sesion?.inicio ? new Date(detail.sesion.inicio) : new Date();
-  win.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cuenta ${escape(detail.espacio.nombre)}</title>
-<style>body{font:14px/1.4 ui-monospace,monospace;margin:16px;color:#111}h1{font-size:16px;margin:0 0 4px}p{margin:0 0 12px}
-table{width:100%;table-layout:fixed;border-collapse:collapse}td{padding:4px 0;vertical-align:top;border-bottom:1px dashed #999;overflow-wrap:anywhere;word-break:break-word}td:first-child{width:76%}.r{text-align:right;white-space:nowrap;padding-left:8px;width:24%}
-.g td{font-weight:700;border:0;padding-top:10px}.s td{font-weight:700}
-tfoot td{border:0;font-weight:700;padding-top:8px}@media print{body{margin:8mm}}@media(max-width:420px){body{margin:10px;font-size:12px}}</style></head><body>
-<h1>VAIINILLA</h1><p>${businessName ? `${escape(businessName)} · ` : ''}${escape(detail.espacio.nombre)}<br>Sesión · ${sessionStarted.toLocaleString('es-MX')}</p>
-<table><tbody>${rows}</tbody><tfoot>
-<tr><td>Total</td><td class="r">$${account.total.toFixed(2)}</td></tr>
-<tr><td>Pagado</td><td class="r">$${account.pagado.toFixed(2)}</td></tr>
-<tr><td>Por pagar</td><td class="r">$${account.pendiente.toFixed(2)}</td></tr></tfoot></table>
-<script>window.onload=function(){window.print()}</script></body></html>`);
-  win.document.close();
+  win.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Preparando cuenta</title></head><body>Preparando cuenta…</body></html>');
+  const loadOrderDetails = async () => {
+    const results = await Promise.all(account.pedidos.map(async (order) => {
+      try {
+        const result: OrderDetail = await api.getOrder(token, order.id);
+        return [order.id, result] as const;
+      } catch {
+        return [order.id, null] as const;
+      }
+    }));
+    if (win.closed) return;
+    win.document.open();
+    win.document.write(buildSpaceAccountPrintHtml(detail, businessName, new Map(results)));
+    win.document.close();
+  };
+  void loadOrderDetails();
   return true;
 }
-
 /** Pedidos de la cuenta agrupados por persona (por los ids que manda el backend, nunca por texto). */
 function AccountGroups({ account }: { account: SpaceAccount }) {
   const grupos = account.grupos ?? [];
@@ -366,7 +345,7 @@ export function SpaceAccountPanel({
             <Button
               variant="secondary"
               onClick={() => {
-                if (!printAccount(data, businessName)) setNotice({ tone: 'error', text: 'El navegador bloqueó la ventana de impresión. Permite ventanas emergentes.' });
+                if (!printAccount(data, token, businessName)) setNotice({ tone: 'error', text: 'El navegador bloqueó la ventana de impresión. Permite ventanas emergentes.' });
               }}
             >
               <Printer aria-hidden="true" className="size-5" /> Imprimir cuenta
