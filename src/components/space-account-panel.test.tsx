@@ -271,6 +271,7 @@ describe('cuenta del espacio', () => {
   it('muestra Persona 1/2 y Pedido general de una sesión cerrada', async () => {
     apiMock.spaceSession.mockResolvedValue({
       ...openAccount,
+      sesion: { ...openAccount.sesion!, estado: 'cerrada' },
       cuenta: {
         pedidos: [order('p1', 11, 120), order('p2', 12, 50), order('p3', 13, 30.5)],
         total: 200.5,
@@ -355,6 +356,39 @@ describe('cuenta del espacio', () => {
     expect(html).not.toContain('Subtotal David R.');
     expect(html).not.toContain('Subtotal Miguel');
     expect(html).not.toMatch(/<(?:button|nav|a)(?:\s|>)/i);
+    openSpy.mockRestore();
+  });
+
+  it('imprime el pedido #30 bajo Kikin cuando el backend entrega su grupo, nunca como pedido general', async () => {
+    const user = userEvent.setup();
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: {
+        pedidos: [{ ...order('order-30', 30, 140), items_resumen: '1× Quesadilla · 1× Hamburguesa' }],
+        total: 140,
+        pagado: 0,
+        pendiente: 140,
+        saldada: false,
+        grupos: [
+          { etiqueta: 'Kikin', participante_id: '9c42b167-4785-4f6c-ac30-b11ad86c58a6', pedidos: ['order-30'], total: 140, pagado: 0, pendiente: 140 },
+        ],
+      },
+    });
+    const written: string[] = [];
+    const fakeDoc = { write: (html: string) => written.push(html), close: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ document: fakeDoc } as unknown as Window);
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    const kikinGroup = await screen.findByText('KIKIN');
+    expect(kikinGroup.closest('.space-account__group')).toHaveTextContent('#30');
+    expect(kikinGroup.closest('.space-account__group')).toHaveTextContent('1× Quesadilla · 1× Hamburguesa');
+    await user.click(screen.getByRole('button', { name: /Imprimir cuenta/ }));
+
+    const html = written[0] ?? '';
+    expect(html).toContain('KIKIN');
+    expect(html).toContain('#30 1× Quesadilla · 1× Hamburguesa');
+    expect(html).not.toContain('PEDIDO GENERAL');
+    expect(html).toContain('Subtotal Kikin');
     openSpy.mockRestore();
   });
 
