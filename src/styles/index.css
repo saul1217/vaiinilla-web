@@ -4106,6 +4106,7 @@ tbody tr:last-child td {
   position: sticky;
   top: 22px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   border: 1px solid var(--line);
   border-radius: 24px;
@@ -4199,6 +4200,7 @@ tbody tr:last-child td {
 
 .category-panel__empty {
   display: grid;
+  min-width: 0;
   gap: 14px;
   border-radius: 14px;
   background: var(--color-cream);
@@ -4206,6 +4208,11 @@ tbody tr:last-child td {
   color: var(--color-muted);
   font-size: 0.74rem;
   line-height: 1.55;
+}
+
+.category-panel__empty .button {
+  width: 100%;
+  min-width: 0;
 }
 
 .menu-products {
