@@ -30,8 +30,7 @@ const paymentLabels = {
   stripe: 'Tarjeta',
 } as const;
 const statusLabels = {
-  por_cobrar: 'Por cobrar',
-  cobrado: 'Cobrado',
+  recibido: 'Recibido',
   preparando: 'Preparando',
   listo: 'Listo',
   entregado: 'Entregado',
@@ -69,7 +68,7 @@ export function TenantDashboardPage() {
     enabled: Boolean(token),
     queryFn: () =>
       api.listOrders(token, {
-        estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'],
+        estado_operativo: ['recibido', 'preparando', 'listo'],
         limit: 100,
       }),
     refetchInterval: 10_000,

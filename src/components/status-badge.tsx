@@ -1,4 +1,5 @@
-import type { InvitationStatus, OrderStatus } from '../types/api';
+import type { InvitationStatus, OperationalOrderStatus, OrderStatus, PaymentStatus } from '../types/api';
+import { operationalOrderStatus } from '../lib/order-status';
 
 const invitationLabels: Record<InvitationStatus, string> = {
   pendiente: 'Pendiente',
@@ -20,27 +21,45 @@ export function EstablishmentStatusBadge({ status }: { status: 'activo' | 'suspe
   );
 }
 
-const orderLabels: Record<OrderStatus, string> = {
-  por_cobrar: 'Por cobrar',
-  cobrado: 'Cobrado',
-  preparando: 'Preparando',
-  listo: 'Listo',
-  entregado: 'Entregado',
-  cancelado: 'Cancelado',
-  no_recogido: 'No recogido',
-  expirado: 'Expirado',
-};
-
 export function OrderStatusBadge({
   status,
+  estadoOperativo,
+  estadoPago,
   pagoPendiente,
 }: {
   status: OrderStatus;
-  /** Va a la cuenta y aún no se cobra: se muestra Sin cobrar en vez del estado. */
+  estadoOperativo?: OperationalOrderStatus;
+  estadoPago?: PaymentStatus;
+  /** Campo legado: nunca reemplaza el estado operativo. */
   pagoPendiente?: boolean;
 }) {
-  if (pagoPendiente) {
-    return <span className="status-badge status-badge--order-sin_cobrar">Sin cobrar</span>;
-  }
-  return <span className={`status-badge status-badge--order-${status}`}>{orderLabels[status]}</span>;
+  const operational = operationalOrderStatus({ estado: status, estado_operativo: estadoOperativo });
+  const operationalLabels: Record<OperationalOrderStatus, string> = {
+    recibido: 'Recibido',
+    preparando: 'Preparando',
+    listo: 'Listo',
+    entregado: 'Entregado',
+    cancelado: 'Cancelado',
+    no_recogido: 'No recogido',
+    expirado: 'Expirado',
+  };
+  const paymentLabel = estadoPago
+    ? paymentLabels[estadoPago]
+    : pagoPendiente === true
+      ? 'Pendiente'
+      : null;
+  return (
+    <>
+      <span className={`status-badge status-badge--order-${operational}`}>{operationalLabels[operational]}</span>
+      {paymentLabel ? <span className={`status-badge status-badge--payment-${estadoPago ?? 'pendiente'}`}>{paymentLabel}</span> : null}
+    </>
+  );
 }
+
+const paymentLabels: Record<PaymentStatus, string> = {
+  pendiente: 'Pago pendiente',
+  parcial: 'Pago parcial',
+  pagado: 'Pagado',
+  reembolsado: 'Reembolsado',
+  sin_cargo: 'Sin cargo',
+};

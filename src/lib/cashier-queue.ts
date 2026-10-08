@@ -1,5 +1,6 @@
 import type { OrderDetail } from '../types/api';
 import { moneyToCents } from './money';
+import { operationalOrderStatus } from './order-status';
 
 export function hasOutstandingCashBalance(order: OrderDetail): boolean {
   if (order.pago_diferido || order.saldo_pendiente === undefined) return false;
@@ -14,12 +15,17 @@ function isIndividuallyPaid(order: OrderDetail): boolean {
 }
 
 export function isCashierCashOrder(order: OrderDetail): boolean {
-  return order.estado === 'por_cobrar';
+  return (
+    operationalOrderStatus(order) === 'recibido' &&
+    order.metodo_pago === 'efectivo' &&
+    !order.pago_diferido &&
+    hasOutstandingCashBalance(order)
+  );
 }
 
 /** Caja entrega con QR tanto para llevar como en mesa/espacio. */
 export function isCashierDeliveryOrder(order: OrderDetail): boolean {
-  return order.estado === 'listo';
+  return operationalOrderStatus(order) === 'listo';
 }
 
 export function isCashierPaidDeliveryOrder(order: OrderDetail): boolean {

@@ -34,8 +34,15 @@ function order(overrides: Partial<OrderDetail>): OrderDetail {
 }
 
 describe('cashier-queue', () => {
-  it('cobra solo por_cobrar y entrega cualquier listo, incluida mesa', () => {
-    expect(isCashierCashOrder(order({ estado: 'por_cobrar' }))).toBe(true);
+  it('separa recibido de pago pendiente y entrega cualquier listo, incluida mesa', () => {
+    expect(isCashierCashOrder(order({
+      estado: 'cobrado',
+      estado_operativo: 'recibido',
+      estado_pago: 'pendiente',
+      metodo_pago: 'efectivo',
+      monto_pagado: '0.00',
+      saldo_pendiente: '10.00',
+    }))).toBe(true);
     expect(isCashierDeliveryOrder(order({ estado: 'listo', destino: 'para_llevar' }))).toBe(true);
     expect(
       isCashierDeliveryOrder(
@@ -46,7 +53,7 @@ describe('cashier-queue', () => {
         }),
       ),
     ).toBe(true);
-    expect(isCashierDeliveryOrder(order({ estado: 'preparando' }))).toBe(false);
+    expect(isCashierDeliveryOrder(order({ estado: 'cobrado', estado_operativo: 'preparando' }))).toBe(false);
     expect(canConfirmCashierDelivery(order({ estado: 'listo' }), '  token  ')).toBe(true);
     expect(canConfirmCashierDelivery(order({ estado: 'listo' }), '   ')).toBe(false);
     expect(canConfirmCashierDelivery(order({ estado: 'preparando' }), 'token')).toBe(false);

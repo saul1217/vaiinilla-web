@@ -27,8 +27,7 @@ const paymentLabels = {
   stripe: 'Tarjeta',
 } as const;
 const statusLabels = {
-  por_cobrar: 'Por cobrar',
-  cobrado: 'Cobrado',
+  recibido: 'Recibido',
   preparando: 'Preparando',
   listo: 'Listo',
   entregado: 'Entregado',

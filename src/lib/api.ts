@@ -335,6 +335,7 @@ export const api = {
     token: string,
     options: {
       estado?: OrderStatus[];
+      estado_operativo?: import('../types/api').OperationalOrderStatus[];
       actualizadoDesde?: string;
       cursor?: string;
       limit?: number;
@@ -343,6 +344,7 @@ export const api = {
     const response = await request<OrderDetail[]>(
       `/pedidos${params({
         estado: options.estado?.join(','),
+        estado_operativo: options.estado_operativo?.join(','),
         actualizado_desde: options.actualizadoDesde,
         cursor: options.cursor,
         limit: options.limit,
