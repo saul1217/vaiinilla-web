@@ -81,7 +81,42 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, monto_pagado: '125.00', saldo_pendiente: '0.00' }], cursor: null });
     render(<PosPage />, { wrapper: Wrapper });
     expect(await screen.findByRole('button', { name: 'Validar QR' })).toBeVisible();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Validar QR' }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Validar QR' }));
     expect(await screen.findByLabelText('Token QR de entrega')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Confirmar entrega' })).toBeDisabled();
+    expect(apiMock.deliverOrder).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Entregar pedido 14');
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.getByRole('button', { name: 'Imprimir ticket' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Validar QR' })).toBeVisible();
+  });
+
+  it('un pedido ya pagado aparece al quedar listo y puede entregarse sin QR', async () => {
+    const paidOrder = {
+      ...baseOrder,
+      destino: 'en_espacio',
+      monto_pagado: '125.00',
+      saldo_pendiente: '0.00',
+    };
+    apiMock.listOrders.mockResolvedValueOnce({ orders: [paidOrder], cursor: null })
+      .mockResolvedValue({ orders: [], cursor: null });
+    apiMock.deliverOrder.mockResolvedValue({ ...paidOrder, estado: 'entregado', version: 5 });
+
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    expect(await screen.findByRole('button', { name: 'Imprimir ticket' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Entregar' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /cobrar/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Entregar' }));
+    expect(screen.queryByLabelText('Token QR de entrega')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirmar entrega' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Confirmar entrega' }));
+
+    await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', paidOrder.id, paidOrder.version, ''));
+    expect(await screen.findByText('Sin entregas pendientes')).toBeVisible();
+    expect(screen.queryByText('Pedido 14')).not.toBeInTheDocument();
   });
 });
