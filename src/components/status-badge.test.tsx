@@ -24,17 +24,27 @@ describe('status badges', () => {
   });
 
   it('muestra un pedido pendiente de cobro sin depender solo del color', () => {
-    render(<OrderStatusBadge status="por_cobrar" />);
-    expect(screen.getByText('Por cobrar')).toHaveClass('status-badge--order-por_cobrar');
+    render(<OrderStatusBadge status="cobrado" estadoOperativo="recibido" estadoPago="pendiente" />);
+    expect(screen.getByText('Recibido')).toHaveClass('status-badge--order-recibido');
+    expect(screen.getByText('Pago pendiente')).toHaveClass('status-badge--payment-pendiente');
   });
 
-  it('un pagar-al-final dice Sin cobrar aunque su estado sea cobrado', () => {
+  it('un pedido a la cuenta mantiene recibido aunque su estado legado sea cobrado', () => {
+    render(<OrderStatusBadge status="cobrado" estadoOperativo="recibido" estadoPago="pendiente" pagoPendiente />);
+    expect(screen.getByText('Recibido')).toHaveClass('status-badge--order-recibido');
+    expect(screen.getByText('Pago pendiente')).toHaveClass('status-badge--payment-pendiente');
+  });
+
+  it('la compatibilidad con una respuesta anterior nunca muestra cobrado como estado operativo', () => {
     render(<OrderStatusBadge status="cobrado" pagoPendiente />);
-    expect(screen.getByText('Sin cobrar')).toHaveClass('status-badge--order-sin_cobrar');
+    expect(screen.getByText('Recibido')).toHaveClass('status-badge--order-recibido');
+    expect(screen.getByText('Pendiente')).toHaveClass('status-badge--payment-pendiente');
+    expect(screen.queryByText('Cobrado')).not.toBeInTheDocument();
   });
 
-  it('cobrado de verdad sigue diciendo Cobrado', () => {
-    render(<OrderStatusBadge status="cobrado" />);
-    expect(screen.getByText('Cobrado')).toHaveClass('status-badge--order-cobrado');
+  it('un pedido efectivamente pagado muestra pago y avance operativo por separado', () => {
+    render(<OrderStatusBadge status="cobrado" estadoOperativo="recibido" estadoPago="pagado" />);
+    expect(screen.getByText('Recibido')).toHaveClass('status-badge--order-recibido');
+    expect(screen.getByText('Pagado')).toHaveClass('status-badge--payment-pagado');
   });
 });

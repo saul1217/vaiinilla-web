@@ -9,6 +9,15 @@ export type OrderStatus =
   | 'cancelado'
   | 'no_recogido'
   | 'expirado';
+export type OperationalOrderStatus =
+  | 'recibido'
+  | 'preparando'
+  | 'listo'
+  | 'entregado'
+  | 'cancelado'
+  | 'no_recogido'
+  | 'expirado';
+export type PaymentStatus = 'pendiente' | 'parcial' | 'pagado' | 'reembolsado' | 'sin_cargo';
 export type PaymentMethod = 'stripe' | 'efectivo' | 'saldo';
 export type OrderDestination = 'para_llevar' | 'en_espacio';
 export type InvitationStatus = 'pendiente' | 'aceptada' | 'revocada' | 'reemplazada' | 'expirada';
@@ -182,6 +191,8 @@ export interface OrderDetail {
   folio: number;
   fecha_operativa: string;
   estado: OrderStatus;
+  estado_operativo?: OperationalOrderStatus;
+  estado_pago?: PaymentStatus;
   metodo_pago: PaymentMethod;
   destino: OrderDestination;
   espacio: OrderSpace | null;
@@ -191,6 +202,7 @@ export interface OrderDetail {
   total: string;
   /** Importes oficiales derivados en backend del ledger de pagos y reembolsos. */
   monto_pagado?: string;
+  monto_reembolsado?: string;
   saldo_pendiente?: string;
   /** Cuenta diferida: se liquida desde la cuenta de mesa, no por pedido. */
   pago_diferido?: boolean;
@@ -337,7 +349,7 @@ export interface PaymentMethodMetric {
 }
 
 export interface OrderStatusMetric {
-  estado: OrderStatus;
+  estado: OperationalOrderStatus;
   pedidos: number;
 }
 
@@ -476,7 +488,12 @@ export interface SpaceAccountOrder {
   id: string;
   folio: number;
   estado: OrderStatus;
+  estado_operativo?: OperationalOrderStatus;
+  estado_pago?: PaymentStatus;
   total: number;
+  monto_pagado?: number;
+  monto_reembolsado?: number;
+  saldo_pendiente?: number;
   pago_diferido: boolean;
   pendiente_cobro: boolean;
   cliente: { nombre: string } | null;

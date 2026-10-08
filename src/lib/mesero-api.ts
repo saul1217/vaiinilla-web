@@ -5,7 +5,7 @@
 import { apiUrl } from './api';
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
-import type { ApiEnvelope, ApiErrorEnvelope, OrderDetail, OrderStatus } from '../types/api';
+import type { ApiEnvelope, ApiErrorEnvelope, OperationalOrderStatus, OrderDetail, OrderStatus, PaymentStatus } from '../types/api';
 
 export type CallReason = 'atencion' | 'utensilios' | 'problema' | 'cuenta';
 export type CallStatus = 'pendiente' | 'en_camino' | 'atendida' | 'cancelada' | 'expirada';
@@ -41,6 +41,8 @@ export interface BoardOrder {
   id: string;
   folio: number;
   estado: OrderStatus;
+  estado_operativo?: OperationalOrderStatus;
+  estado_pago?: PaymentStatus;
   version: number;
   /** Va a la cuenta del espacio (pagar al final). */
   pago_diferido?: boolean;
@@ -119,6 +121,8 @@ export function createWaiterClient(getToken: () => Promise<string>): WaiterClien
           id: order.id,
           folio: order.folio,
           estado: order.estado,
+          estado_operativo: order.estado_operativo,
+          estado_pago: order.estado_pago,
           version: order.version,
           cliente: order.usuario ? { nombre: order.usuario.nombre } : null,
           items_resumen: summarize(order),

@@ -6,16 +6,16 @@ import { Button, EmptyState, Feedback, Modal, PageHeader } from '../components/u
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
-import type { OrderDetail, OrderStatus } from '../types/api';
+import type { OperationalOrderStatus, OrderDetail } from '../types/api';
 
 type OrderFilter = 'todos' | 'activos' | 'finalizados' | 'incidencias';
 
-const filters: Array<{ value: OrderFilter; label: string; states?: OrderStatus[] }> = [
+const filters: Array<{ value: OrderFilter; label: string; states?: OperationalOrderStatus[] }> = [
   { value: 'todos', label: 'Todos' },
   {
     value: 'activos',
     label: 'Activos',
-    states: ['por_cobrar', 'cobrado', 'preparando', 'listo'],
+    states: ['recibido', 'preparando', 'listo'],
   },
   { value: 'finalizados', label: 'Entregados', states: ['entregado'] },
   {
@@ -38,7 +38,7 @@ export function OrdersPage() {
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       api.listOrders(token, {
-        estado: selectedFilter?.states,
+        estado_operativo: selectedFilter?.states,
         cursor: pageParam,
         limit: 20,
       }),

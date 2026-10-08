@@ -1766,7 +1766,8 @@ tbody tr:last-child td {
   color: #514b40;
 }
 
-.status-badge--order-por_cobrar {
+.status-badge--order-por_cobrar,
+.status-badge--order-recibido {
   border-color: #e5c866;
   background: #fff7d7;
   color: #6b4c00;
@@ -1777,6 +1778,26 @@ tbody tr:last-child td {
   border-color: #a9c8de;
   background: #edf6fb;
   color: #24516c;
+}
+
+.status-badge--payment-pendiente,
+.status-badge--payment-parcial {
+  border-color: #e5c866;
+  background: #fff7d7;
+  color: #6b4c00;
+}
+
+.status-badge--payment-pagado,
+.status-badge--payment-sin_cargo {
+  border-color: #b9d877;
+  background: #edf6dc;
+  color: #3b5706;
+}
+
+.status-badge--payment-reembolsado {
+  border-color: #c8c1b3;
+  background: #eeeae1;
+  color: #514b40;
 }
 
 .status-badge--order-listo,

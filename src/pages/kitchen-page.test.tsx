@@ -97,7 +97,7 @@ describe('tablero de Cocina', () => {
     expect(screen.getByRole('heading', { name: 'En preparación' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Listos' })).toBeVisible();
     expect(apiMock.listOrders).toHaveBeenCalledWith('tenant-token', {
-      estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'],
+      estado_operativo: ['recibido', 'preparando', 'listo'],
       cursor: undefined,
       limit: 50,
     });
