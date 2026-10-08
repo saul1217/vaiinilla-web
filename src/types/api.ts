@@ -189,6 +189,12 @@ export interface OrderDetail {
   ahorro_combinado: string;
   cashback_otorgado: string;
   total: string;
+  /** Importes oficiales derivados en backend del ledger de pagos y reembolsos. */
+  monto_pagado?: string;
+  saldo_pendiente?: string;
+  /** Cuenta diferida: se liquida desde la cuenta de mesa, no por pedido. */
+  pago_diferido?: boolean;
+  pago_pendiente?: boolean;
   version: number;
   creado_en: string;
   actualizado_en: string;

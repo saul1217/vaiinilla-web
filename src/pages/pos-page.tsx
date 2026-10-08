@@ -31,7 +31,8 @@ import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operation
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { MONEY_PATTERN, calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
-import { isCashierCashOrder, isCashierDeliveryOrder } from '../lib/cashier-queue';
+import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
+import { printOrderTicket } from '../lib/order-ticket-print';
 import type { OrderDetail } from '../types/api';
 
 const moneySchema = z.object({
@@ -72,16 +73,14 @@ export function PosPage() {
   });
 
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
-  // Igual que el tablero del mesero: en un espacio el negocio puede dispensar el QR.
-  // Para llevar siempre lo exige (regla del backend).
+  // La configuración del establecimiento aplica a cualquier destino.
   const deliveryQr = useQuery({
     queryKey: ['operational-status', 'delivery-qr'],
     enabled: Boolean(token),
     queryFn: () => api.operationalStatus(token),
     staleTime: 60_000,
   });
-  const deliveryNeedsQr = (order: OrderDetail) =>
-    order.destino === 'para_llevar' || deliveryQr.data?.entrega_requiere_qr !== false;
+  const deliveryNeedsQr = () => deliveryQr.data?.entrega_requiere_qr !== false;
 
   const cashierQueue = useInfiniteQuery({
     queryKey: ['orders', 'cashier-queue', scopeId],
@@ -168,12 +167,13 @@ export function PosPage() {
   const receivedAmount = cashForm.watch('amount');
   const cashAmountField = cashForm.register('amount');
   const [tip, setTip] = useState<TipChoice>({ kind: 'none' });
-  const tipValue = cashOrder ? tipAmount(cashOrder.total, tip) : '0.00';
+  const cashAmountDue = cashOrder?.saldo_pendiente ?? cashOrder?.total ?? '0.00';
+  const tipValue = cashOrder ? tipAmount(cashAmountDue, tip) : '0.00';
   // La propina no puede ser mayor a lo que se cobra (misma regla del servidor).
-  const tipTooBig = cashOrder ? tipExceedsTotal(cashOrder.total, tipValue) : false;
+  const tipTooBig = cashOrder ? tipExceedsTotal(cashAmountDue, tipValue) : false;
   const tipError = tipTooBig ? 'La propina no puede ser mayor a lo que se cobra.' : null;
   // El efectivo cubre el pedido más la propina; el cambio se calcula después.
-  const cashToCollect = cashOrder ? addMoney(cashOrder.total, tipValue) : '0.00';
+  const cashToCollect = cashOrder ? addMoney(cashAmountDue, tipValue) : '0.00';
   const change = cashOrder ? calculateChange(receivedAmount, cashToCollect) : null;
   const active = session.data;
   const queuedOrders = useMemo(
@@ -284,6 +284,7 @@ export function PosPage() {
                 onSubmit={(event) => void closeForm.handleSubmit((data) => setClosingAmount(data.amount))(event)}
               >
                 <Field
+                  id="close-amount"
                   label="Monto final (MXN)"
                   inputMode="decimal"
                   placeholder="0.00"
@@ -299,6 +300,7 @@ export function PosPage() {
               onSubmit={(event) => void openForm.handleSubmit((data) => openMutation.mutate(data))(event)}
             >
               <Field
+                id="open-amount"
                 label="Monto inicial (MXN)"
                 inputMode="decimal"
                 placeholder="500.00"
@@ -463,7 +465,7 @@ export function PosPage() {
 
               <QueueColumn
                 title="Listos para entregar"
-                description="Para llevar y mesa: valida el QR del cliente"
+                description="Cobra lo pendiente; después imprime el ticket y entrega el pedido"
                 count={readyOrders.length}
                 icon={<ScanLine aria-hidden="true" />}
               >
@@ -473,9 +475,25 @@ export function PosPage() {
                     order={order}
                     actions={
                       <>
-                        <Button variant="dark" onClick={() => beginDelivery(order)}>
-                          <ScanLine aria-hidden="true" className="size-5" /> Validar QR
-                        </Button>
+                        {hasOutstandingCashBalance(order) ? (
+                          <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
+                            <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar {formatMoney(order.saldo_pendiente!)}
+                          </Button>
+                        ) : isCashierPaidDeliveryOrder(order) ? (
+                          <>
+                            <strong className="text-sm" role="status">PAGADO</strong>
+                            <Button variant="secondary" onClick={() => printOrderTicket(order, businessName ?? 'Establecimiento')}>
+                              <ReceiptText aria-hidden="true" className="size-5" /> Imprimir ticket
+                            </Button>
+                            <Button variant="dark" onClick={() => beginDelivery(order)}>
+                              {deliveryNeedsQr()
+                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
+                                : 'Entregar'}
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-sm" role="status">Pago pendiente</span>
+                        )}
                         <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
                           <XCircle aria-hidden="true" className="size-5" /> Rechazar o quitar
                         </Button>
@@ -520,7 +538,7 @@ export function PosPage() {
         open={Boolean(cashOrder)}
         onOpenChange={(open) => { if (!open) setCashOrder(null); }}
         title={cashOrder ? `Cobrar pedido ${cashOrder.folio}` : 'Cobrar pedido'}
-        description="Confirma el efectivo recibido antes de registrar el cobro."
+        description={`Saldo pendiente: ${formatMoney(cashAmountDue)}. Confirma el efectivo recibido antes de registrar el cobro.`}
       >
         {cashOrder && (
           <form
@@ -532,11 +550,13 @@ export function PosPage() {
           >
             {collectMutation.isError && <Feedback tone="error">{errorMessage(collectMutation.error)}</Feedback>}
             <OrderDetailContent order={cashOrder} />
-            <TipPicker base={cashOrder.total} value={tip} onChange={setTip} error={tipError} />
+            <p><strong>Por cobrar: {formatMoney(cashAmountDue)}</strong></p>
+            <TipPicker base={cashAmountDue} value={tip} onChange={setTip} error={tipError} />
             <Field
+              id="cash-amount"
               label="Efectivo recibido (MXN)"
               inputMode="decimal"
-              placeholder={cashOrder.total}
+              placeholder={cashAmountDue}
               autoFocus
               error={cashForm.formState.errors.amount?.message}
               hint={receivedAmount && change === null ? `Debe ser igual o mayor a ${formatMoney(cashToCollect)}.` : undefined}
@@ -567,13 +587,15 @@ export function PosPage() {
         open={Boolean(deliveryOrder)}
         onOpenChange={(open) => { if (!open) { setDeliveryOrder(null); setQrToken(''); } }}
         title={deliveryOrder ? `Entregar pedido ${deliveryOrder.folio}` : 'Entregar pedido'}
-        description="Escanea el código del cliente. El sistema verificará que corresponda exactamente a este pedido."
+        description={deliveryOrder && deliveryNeedsQr()
+          ? 'Escanea el código del cliente. El sistema verificará que corresponda exactamente a este pedido.'
+          : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
       >
         {deliveryOrder && (
           <div className="transaction-form">
             {deliveryMutation.isError && <Feedback tone="error">{errorMessage(deliveryMutation.error)}</Feedback>}
             <OrderDetailContent order={deliveryOrder} />
-            {deliveryNeedsQr(deliveryOrder) && (
+            {deliveryNeedsQr() && (
               <QrTokenField
                 value={qrToken}
                 onChange={updateQrToken}
@@ -588,7 +610,7 @@ export function PosPage() {
                 type="button"
                 variant="dark"
                 loading={deliveryMutation.isPending}
-                disabled={deliveryNeedsQr(deliveryOrder) && !qrToken.trim()}
+                disabled={deliveryMutation.isPending || (deliveryNeedsQr() && !qrToken.trim())}
                 onClick={() => deliveryMutation.mutate({ order: deliveryOrder, pickupToken: qrToken.trim() })}
               >
                 Confirmar entrega
@@ -673,13 +695,13 @@ function pageTitle(role: string | undefined): string {
 
 function pageDescription(role: string | undefined): string {
   if (role === 'cajero') {
-    return 'Cobra efectivo y entrega con QR (mesa o para llevar). Mantén la Caja en línea.';
+    return 'Cobra pedidos, imprime tickets y entrega con o sin QR según la configuración del local.';
   }
   if (role === 'cocina') {
     return 'Mantén esta ventana abierta para que el establecimiento detecte Cocina en línea.';
   }
   if (role === 'mesero') {
-    return 'Atiende las mesas y entrega con QR los pedidos listos. Mantén esta ventana abierta.';
+    return 'Atiende las mesas y entrega los pedidos listos según la configuración del local.';
   }
   return 'Consulta, abre o cierra la sesión operativa del establecimiento.';
 }
