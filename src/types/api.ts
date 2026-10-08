@@ -548,6 +548,13 @@ export interface SpaceSessionDetail {
   cuenta: SpaceAccount | null;
 }
 
+export interface SessionStaffOrderInput {
+  sessionId: string;
+  participantId: string | null;
+  items: Array<{ producto_id: number; cantidad: number; opcion_ids: number[]; notas?: string }>;
+  notas_cocina?: string | null;
+}
+
 /** La cuenta de una sesión cerrada (GET /espacios/:id/sesiones/:sesionId/cuenta): mismo `cuenta` con `grupos`. */
 export interface ClosedSpaceSessionDetail {
   espacio: OrderSpace;

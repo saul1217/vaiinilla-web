@@ -15,6 +15,8 @@ const apiMock = vi.hoisted(() => ({
   startCounterRental: vi.fn(),
   payCounterRental: vi.fn(),
   cancelCounterRental: vi.fn(),
+  catalog: vi.fn(),
+  createSessionOrder: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
@@ -53,6 +55,61 @@ describe('cuenta del espacio', () => {
     vi.clearAllMocks();
     apiMock.spaceSession.mockResolvedValue(openAccount);
     apiMock.getOrder.mockRejectedValue(new Error('No hay detalle disponible'));
+    apiMock.catalog.mockResolvedValue({
+      categorias: [],
+      productos: [{
+        id: 91, categoria_id: 1, estacion_preparacion: 'cocina', nombre: 'Quesadilla',
+        descripcion: null, ingredientes: null, alergenos: null, tiempo_estimado_min: 10,
+        precio_mostrador: '50.00', precio_digital: '50.00', disponible: true,
+        imagen_url: null, grupos_opcion: [],
+      }],
+    });
+    apiMock.createSessionOrder.mockResolvedValue({ id: 'p3', folio: 13 });
+  });
+
+  it('permite al mesero crear un pedido para Kikin en la sesión abierta', async () => {
+    const user = userEvent.setup();
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: {
+        ...openAccount.cuenta!,
+        grupos: [
+          { etiqueta: 'Kikin', participante_id: 'participant-kikin', pedidos: ['p1'], total: 120, pagado: 0, pendiente: 120 },
+          { etiqueta: 'David', participante_id: 'participant-david', pedidos: ['p2'], total: 80.5, pagado: 0, pendiente: 80.5 },
+        ],
+      },
+    });
+    render(<SpaceAccountPanel token="staff-token" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: 'Agregar pedido' }));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Para' }), 'participant-kikin');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Producto' }), '91');
+    await user.click(screen.getByRole('button', { name: 'Agregar producto' }));
+    await user.click(screen.getByRole('button', { name: 'Enviar a la cuenta' }));
+
+    await waitFor(() => expect(apiMock.createSessionOrder).toHaveBeenCalledWith(
+      'staff-token',
+      7,
+      expect.objectContaining({ sessionId: 's1', participantId: 'participant-kikin', items: [{ producto_id: 91, cantidad: 1, opcion_ids: [] }] }),
+      expect.any(String),
+    ));
+  });
+
+  it('permite al mesero mandar a la cuenta un pedido general de la sesión', async () => {
+    const user = userEvent.setup();
+    render(<SpaceAccountPanel token="staff-token" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: 'Agregar pedido' }));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Producto' }), '91');
+    await user.click(screen.getByRole('button', { name: 'Agregar producto' }));
+    await user.click(screen.getByRole('button', { name: 'Enviar a la cuenta' }));
+
+    await waitFor(() => expect(apiMock.createSessionOrder).toHaveBeenCalledWith(
+      'staff-token',
+      7,
+      expect.objectContaining({ sessionId: 's1', participantId: null }),
+      expect.any(String),
+    ));
   });
 
   it('divide la cuenta: cobra solo el pedido marcado con la terminal', async () => {
