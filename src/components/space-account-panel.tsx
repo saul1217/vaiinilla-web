@@ -127,6 +127,7 @@ export function SpaceAccountPanel({
   availability,
   businessName,
   canConfirmRefunds = false,
+  onReleased,
 }: {
   token: string;
   spaceId: number;
@@ -134,6 +135,8 @@ export function SpaceAccountPanel({
   businessName?: string;
   /** Caja confirma devoluciones; el mesero solo las ve. */
   canConfirmRefunds?: boolean;
+  /** El espacio quedó libre: el contenedor puede cerrar el modal. */
+  onReleased?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -202,6 +205,7 @@ export function SpaceAccountPanel({
     onSuccess: async () => {
       setNotice({ tone: 'success', text: 'Espacio liberado.' });
       await refresh();
+      onReleased?.();
     },
     onError: (error) => setNotice({ tone: 'error', text: errorMessage(error) }),
   });

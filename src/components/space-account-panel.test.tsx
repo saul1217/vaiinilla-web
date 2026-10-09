@@ -76,6 +76,20 @@ describe('cuenta del espacio', () => {
     expect(await screen.findByText(/Falta por cobrar \$80\.50 MXN/)).toBeVisible();
   });
 
+  it('al liberar el espacio avisa al contenedor para que cierre el modal', async () => {
+    const user = userEvent.setup();
+    const onReleased = vi.fn();
+    const settled = { ...openAccount, cuenta: { ...openAccount.cuenta!, pedidos: [], total: 0, pendiente: 0, pagado: 0, saldada: true } };
+    apiMock.spaceSession.mockResolvedValue(settled);
+    apiMock.releaseSpace.mockResolvedValue({});
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} onReleased={onReleased} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Liberar espacio/ }));
+
+    await waitFor(() => expect(onReleased).toHaveBeenCalledTimes(1));
+    expect(apiMock.releaseSpace).toHaveBeenCalledWith('t', 7, 4);
+  });
+
   it('en efectivo no deja confirmar hasta que alcance y cobra la cuenta completa', async () => {
     const user = userEvent.setup();
     apiMock.collectSpaceAccount.mockResolvedValue({ pedidos_cobrados: 2, total: '200.50', metodo_pago: 'efectivo', monto_recibido: '300.00', cambio: '99.50', restante: '0.00' });

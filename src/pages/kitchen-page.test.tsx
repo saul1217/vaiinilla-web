@@ -142,6 +142,19 @@ describe('tablero de Cocina', () => {
     ));
   });
 
+  it('pone todas las comandas pendientes en preparación con su versión vigente', async () => {
+    const otherOrder: OrderDetail = { ...pendingOrder, id: 'otro-pedido', folio: 43, version: 5 };
+    apiMock.listOrders.mockResolvedValue({ orders: [pendingOrder, otherOrder], cursor: null });
+    const user = userEvent.setup();
+    render(<KitchenPage />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: 'Poner todo en preparación' }));
+
+    await waitFor(() => expect(apiMock.transitionOrder).toHaveBeenCalledTimes(2));
+    expect(apiMock.transitionOrder).toHaveBeenCalledWith('tenant-token', pendingOrder.id, 'preparando', 2);
+    expect(apiMock.transitionOrder).toHaveBeenCalledWith('tenant-token', 'otro-pedido', 'preparando', 5);
+  });
+
   it('marca como listo un pedido que estaba en preparación', async () => {
     const preparingOrder: OrderDetail = {
       ...pendingOrder,

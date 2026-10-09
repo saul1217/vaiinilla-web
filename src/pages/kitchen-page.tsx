@@ -290,28 +290,40 @@ export function KitchenPage() {
             count={pending.length}
             icon={<TimerReset aria-hidden="true" />}
           >
-            {pending.length ? pending.map((order) => (
-              <KitchenOrderCard
-                key={order.id}
-                order={order}
-                stage="pending"
-                now={now}
-                leaving={leavingId === order.id}
-                action={(
-                  <>
-                    <Button
-                      className="kitchen-ticket__button"
-                      loading={changingOrderId === order.id}
-                      disabled={transition.isPending}
-                      onClick={() => transition.mutate({ order, target: 'preparando' })}
-                    >
-                      <Flame aria-hidden="true" /> Comenzar preparación
-                    </Button>
-                    {rejectButton(order)}
-                  </>
-                )}
-              />
-            )) : (
+            {pending.length ? (
+              <>
+                <Button
+                  className="kitchen-ticket__button"
+                  loading={transition.isPending}
+                  disabled={transition.isPending}
+                  onClick={() => pending.forEach((order) => transition.mutate({ order, target: 'preparando' }))}
+                >
+                  <Flame aria-hidden="true" /> Poner todo en preparación
+                </Button>
+                {pending.map((order) => (
+                  <KitchenOrderCard
+                    key={order.id}
+                    order={order}
+                    stage="pending"
+                    now={now}
+                    leaving={leavingId === order.id}
+                    action={(
+                      <>
+                        <Button
+                          className="kitchen-ticket__button"
+                          loading={changingOrderId === order.id}
+                          disabled={transition.isPending}
+                          onClick={() => transition.mutate({ order, target: 'preparando' })}
+                        >
+                          <Flame aria-hidden="true" /> Comenzar preparación
+                        </Button>
+                        {rejectButton(order)}
+                      </>
+                    )}
+                  />
+                ))}
+              </>
+            ) : (
               <KitchenEmptyState
                 icon={<TimerReset aria-hidden="true" />}
                 title="Sin pedidos pendientes"
