@@ -101,10 +101,10 @@ describe('Flujo de mi tienda', () => {
     expect(screen.getByText('Recibe pedidos solo de 12:00 a 15:00')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Agregar otra franja' }));
     expect(screen.getByText('Recibe pedidos solo de 12:00 a 15:00 y 18:00 a 20:00')).toBeInTheDocument();
-    // Una franja al revés bloquea el guardado.
+    // Una franja que termina a la misma hora en que empieza bloquea el guardado.
     const to = screen.getByLabelText('Franja 2: hasta');
-    fireEvent.change(to, { target: { value: '17:00' } });
-    expect(screen.getByRole('alert')).toHaveTextContent('después de la inicial');
+    fireEvent.change(to, { target: { value: '18:00' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('distinta de la inicial');
     expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeDisabled();
     fireEvent.change(to, { target: { value: '20:00' } });
     await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
@@ -184,5 +184,36 @@ describe('Flujo de mi tienda', () => {
     await waitFor(() =>
       expect(screen.getByRole('radio', { name: /También en la lista de Vaiinilla/ })).toHaveAttribute('aria-checked', 'true'),
     );
+  });
+
+  it('un error de franjas no borra lo que ya se capturó en el formulario', async () => {
+    const user = userEvent.setup();
+    render(<StoreFlowPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('radio', { name: /Solo en ciertas horas/ }));
+    const grace = screen.getByLabelText('Gracia al terminar un turno (minutos)');
+    await user.clear(grace);
+    await user.type(grace, '10');
+    fireEvent.change(screen.getByLabelText('Franja 1: hasta'), { target: { value: '12:00' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('distinta de la inicial');
+    expect(screen.getByLabelText('Gracia al terminar un turno (minutos)')).toHaveValue(10);
+    expect(screen.queryByText(/entero de 0 a 60/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Franja 1: desde')).toHaveValue('12:00');
+    expect(screen.getByLabelText('Franja 1: hasta')).toHaveValue('12:00');
+  });
+
+  it('si el servidor rechaza el guardado, el formulario conserva lo capturado', async () => {
+    const user = userEvent.setup();
+    apiMock.saveBusinessSettings.mockRejectedValueOnce(new Error('Las franjas no pueden empalmarse.'));
+    render(<StoreFlowPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('radio', { name: /Solo en ciertas horas/ }));
+    const grace = screen.getByLabelText('Gracia al terminar un turno (minutos)');
+    await user.clear(grace);
+    await user.type(grace, '10');
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    expect(await screen.findByText('Las franjas no pueden empalmarse.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Gracia al terminar un turno (minutos)')).toHaveValue(10);
+    expect(screen.getByLabelText('Franja 1: desde')).toHaveValue('12:00');
+    expect(screen.getByLabelText('Franja 1: hasta')).toHaveValue('15:00');
+    expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeEnabled();
   });
 });

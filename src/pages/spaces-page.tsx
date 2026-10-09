@@ -421,6 +421,7 @@ function SpaceCard({
   space,
   onToggle,
   onRotate,
+  onDelete,
   onRename,
   onChangeType,
   onChangePrice,
@@ -432,6 +433,7 @@ function SpaceCard({
   space: ManagedSpace;
   onToggle: () => void;
   onRotate: () => void;
+  onDelete: () => void;
   onRename: (nombre: string) => void;
   onChangeType: (tipo: SpaceType) => void;
   onChangePrice: (price: string | null) => void;
@@ -445,6 +447,7 @@ function SpaceCard({
   const [qr, setQr] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(space.nombre);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const nameValue = editing ? draftName : space.nombre;
 
   useEffect(() => {
@@ -605,7 +608,32 @@ function SpaceCard({
         <Button type="button" variant="ghost" onClick={onToggle}>
           {space.activo ? 'Desactivar' : 'Activar'}
         </Button>
+        <Button type="button" variant="ghost" onClick={() => setConfirmingDelete(true)}>
+          Eliminar
+        </Button>
       </div>
+      {confirmingDelete && (
+        <div className="mt-4 grid gap-3 rounded-2xl bg-cream p-4">
+          <p className="text-sm leading-6 text-ink">
+            ¿Eliminar «{space.nombre}»? Deja de aparecer en esta lista. Sus pedidos y cuentas anteriores se conservan.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                setConfirmingDelete(false);
+                onDelete();
+              }}
+            >
+              Sí, eliminar
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setConfirmingDelete(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
     </article>
   );
 }
@@ -646,7 +674,12 @@ export function SpacesPage() {
     onSuccess: () => setFeedback('QR rotado. El enlace anterior dejó de resolver.'),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
   });
-  const mutationError = create.error || update.error || rotate.error || image.error;
+  const remove = useMutation({
+    mutationFn: (id: number) => api.deleteSpace(token, id),
+    onSuccess: () => setFeedback('Espacio eliminado. Su nombre queda libre para uno nuevo.'),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
+  });
+  const mutationError = create.error || update.error || rotate.error || image.error || remove.error;
   function submit(event: FormEvent) {
     event.preventDefault();
     setFeedback(null);
@@ -725,6 +758,7 @@ export function SpacesPage() {
               space={space}
               onToggle={() => update.mutate({ id: space.id, activo: !space.activo })}
               onRotate={() => rotate.mutate(space.id)}
+              onDelete={() => remove.mutate(space.id)}
               onRename={(nombre) => update.mutate({ id: space.id, nombre })}
               onChangeType={(tipo) => update.mutate({ id: space.id, tipo })}
               onChangePrice={(precio_hora) => update.mutate({ id: space.id, precio_hora })}

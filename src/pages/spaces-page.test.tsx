@@ -13,6 +13,7 @@ const apiMock = vi.hoisted(() => ({
   rotateSpaceQr: vi.fn(),
   uploadSpaceImage: vi.fn(),
   deleteSpaceImage: vi.fn(),
+  deleteSpace: vi.fn(),
   bookingSettings: vi.fn(),
   saveBookingSettings: vi.fn(),
 }));
@@ -43,6 +44,45 @@ function TestProvider({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
+
+describe('eliminar un espacio desde el panel', () => {
+  beforeEach(() => {
+    apiMock.listManagedSpaces.mockReset().mockResolvedValue([table]);
+    apiMock.deleteSpace.mockReset().mockResolvedValue({ id: 3, eliminado: true });
+    apiMock.bookingSettings.mockReset().mockResolvedValue(settings);
+  });
+
+  it('pide confirmación y elimina solo al confirmar', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    expect(screen.getByText(/¿Eliminar «Mesa 1»\?/)).toBeInTheDocument();
+    expect(apiMock.deleteSpace).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Sí, eliminar' }));
+    await waitFor(() => expect(apiMock.deleteSpace).toHaveBeenCalledWith('tenant-token', 3));
+    expect(await screen.findByText(/Espacio eliminado/)).toBeInTheDocument();
+  });
+
+  it('cancelar no elimina nada', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByText(/¿Eliminar «Mesa 1»\?/)).not.toBeInTheDocument();
+    expect(apiMock.deleteSpace).not.toHaveBeenCalled();
+  });
+
+  it('si hay una cuenta abierta, muestra el motivo del servidor', async () => {
+    apiMock.deleteSpace.mockRejectedValue(
+      new Error('Este espacio tiene una cuenta abierta. Ciérrala antes de eliminarlo.'),
+    );
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    await user.click(screen.getByRole('button', { name: 'Sí, eliminar' }));
+    expect(await screen.findByText(/Ciérrala antes de eliminarlo/)).toBeInTheDocument();
+  });
+});
 
 describe('reservas de canchas en el panel', () => {
   beforeEach(() => {

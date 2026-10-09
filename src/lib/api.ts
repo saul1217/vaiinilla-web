@@ -878,6 +878,10 @@ export const api = {
     return (await request<ManagedSpace>(`/espacios/${id}/imagen`, { method: 'DELETE', token, idempotent: true })).data;
   },
 
+  async deleteSpace(token: string, id: number): Promise<{ id: number; eliminado: boolean }> {
+    return (await request<{ id: number; eliminado: boolean }>(`/espacios/${id}`, { method: 'DELETE', token, idempotent: true })).data;
+  },
+
   async bookingSettings(token: string): Promise<BookingSettings> {
     return (await request<BookingSettings>('/reservas/configuracion', { token })).data;
   },
