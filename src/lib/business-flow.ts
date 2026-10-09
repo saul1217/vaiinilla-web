@@ -120,18 +120,39 @@ export function validGrace(value: number): boolean {
 export const MAX_FRANJAS = 6;
 const HOUR_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-/** Mismas reglas que el backend: HH:MM, hasta después de desde, sin empalmarse, máximo 6. */
+const MINUTOS_DEL_DIA = 1440;
+
+/** Llamar solo con horas ya validadas por HOUR_PATTERN; los valores por defecto solo calman al tipo. */
+function minutosDelDia(hora: string): number {
+  const [horas = 0, minutos = 0] = hora.split(':').map(Number);
+  return horas * 60 + minutos;
+}
+
+/** Una franja que cruza la medianoche ocupa dos tramos: hasta el final del día y desde las 00:00. */
+function tramosDeFranja(franja: Franja): { inicio: number; fin: number }[] {
+  const inicio = minutosDelDia(franja.desde);
+  const fin = minutosDelDia(franja.hasta);
+  if (fin > inicio) return [{ inicio, fin }];
+  return fin > 0
+    ? [
+        { inicio, fin: MINUTOS_DEL_DIA },
+        { inicio: 0, fin },
+      ]
+    : [{ inicio, fin: MINUTOS_DEL_DIA }];
+}
+
+/** Mismas reglas que el backend: HH:MM, hasta distinta de desde (si es antes, cruza la medianoche), sin empalmarse, máximo 6. */
 export function franjasError(franjas: Franja[]): string | null {
   if (franjas.length > MAX_FRANJAS) return `Máximo ${MAX_FRANJAS} franjas.`;
   for (const franja of franjas) {
     if (!HOUR_PATTERN.test(franja.desde) || !HOUR_PATTERN.test(franja.hasta)) return 'Escribe las dos horas de cada franja.';
-    if (franja.hasta <= franja.desde) return 'En cada franja, la hora final debe ser después de la inicial.';
+    if (franja.hasta === franja.desde) return 'En cada franja, la hora final debe ser distinta de la inicial.';
   }
-  const sorted = [...franjas].sort((a, b) => a.desde.localeCompare(b.desde));
-  let previousEnd = '';
-  for (const franja of sorted) {
-    if (franja.desde < previousEnd) return 'Las franjas no pueden empalmarse.';
-    previousEnd = franja.hasta;
+  const tramos = franjas.flatMap(tramosDeFranja).sort((a, b) => a.inicio - b.inicio);
+  let finAnterior = 0;
+  for (const tramo of tramos) {
+    if (tramo.inicio < finAnterior) return 'Las franjas no pueden empalmarse.';
+    finAnterior = Math.max(finAnterior, tramo.fin);
   }
   return null;
 }

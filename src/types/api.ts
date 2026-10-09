@@ -420,6 +420,12 @@ export interface SpaceUpdateInput {
   caracteristicas?: string[];
 }
 
+/** Video del local: enlace https que la página del negocio muestra a los clientes. */
+export interface StoreVideo {
+  titulo: string;
+  url: string;
+}
+
 /** Cómo funciona el negocio (guía "Flujo de mi tienda"). Solo la administración. */
 export interface BusinessSettings {
   tipo: string;
@@ -434,6 +440,8 @@ export interface BusinessSettings {
   visible_en_directorio?: boolean;
   /** Enlace al menú de la tienda, para su QR general. Solo lectura. */
   tienda_url?: string | null;
+  /** Videos del local (hasta 5). Un backend anterior no lo manda: se toma como lista vacía. */
+  videos_local?: StoreVideo[];
   tipos_disponibles: string[];
 }
 

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CardPaymentsCard } from '../components/card-payments-card';
 import { StoreDirectoryCard } from '../components/store-directory-card';
+import { StoreVideosCard } from '../components/store-videos-card';
 import { Choice } from '../components/choice';
 import { Button, Feedback, Field, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
@@ -76,7 +77,8 @@ export function StoreFlowPage() {
 
   const changed = Boolean(settings && current && !sameSettings(settings, current));
   const slotsError = settings && settings.franjas_pedido.length > 0 ? franjasError(settings.franjas_pedido) : null;
-  const valid = Boolean(settings && validGrace(settings.gracia_liberacion_min) && !slotsError);
+  const graceValid = Boolean(settings && validGrace(settings.gracia_liberacion_min));
+  const valid = graceValid && !slotsError;
   const template = settings ? matchingTemplate(settings) : null;
   const steps = settings ? buildFlow(settings) : [];
   const summary = flowSummary(steps);
@@ -101,6 +103,7 @@ export function StoreFlowPage() {
 
       <CardPaymentsCard token={token} scopeId={scopeId} />
       {query.data && <StoreDirectoryCard token={token} scopeId={scopeId} settings={query.data} />}
+      {query.data && <StoreVideosCard token={token} scopeId={scopeId} settings={query.data} />}
 
       {(settings || unknownType) && (
         <>
@@ -205,7 +208,7 @@ export function StoreFlowPage() {
                     max={MAX_GRACE_MINUTES}
                     value={Number.isNaN(settings.gracia_liberacion_min) ? '' : settings.gracia_liberacion_min}
                     onChange={(event) => change({ gracia_liberacion_min: event.target.valueAsNumber })}
-                    error={valid ? undefined : `Escribe un número entero de 0 a ${MAX_GRACE_MINUTES}.`}
+                    error={graceValid ? undefined : `Escribe un número entero de 0 a ${MAX_GRACE_MINUTES}.`}
                     hint="Tiempo para renovar o liberar una cancha o mesa después de que termina su turno."
                   />
                 </div>
