@@ -200,12 +200,12 @@ export function buildFlow(settings: FlowSettings): FlowStep[] {
   const where = place(tipo);
   const delivery: FlowStep = {
     role: 'Mesero',
-    text: qr ? 'Escanea el QR del pedido y lo entrega' : 'Lo entrega sin escanear nada',
+    text: qr ? 'En mesa lo entrega sin QR; para llevar valida el QR' : 'Entrega sin QR en mesa y para llevar',
     status: 'works',
   };
   const pickup: FlowStep = {
     role: 'Caja',
-    text: qr ? 'Escanea el QR y entrega' : 'Entrega el pedido',
+    text: qr ? 'En mesa entrega sin QR; para llevar valida el QR' : 'Entrega sin QR en mesa y para llevar',
     status: 'works',
   };
   const hours: FlowStep | null =
