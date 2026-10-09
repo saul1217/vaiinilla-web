@@ -4989,6 +4989,14 @@ tbody tr:last-child td {
     background: #fff;
   }
 
+  html:is([data-admin-theme='oscuro'], [data-staff-ui='nueva']) tbody tr {
+    background: var(--color-cream-2);
+  }
+
+  html:is([data-admin-theme='oscuro'], [data-staff-ui='nueva']) tbody tr:hover {
+    background: var(--color-cream-2);
+  }
+
   tbody td {
     display: flex;
     align-items: center;
@@ -6868,6 +6876,15 @@ html[data-admin-theme='oscuro'] .field__control { color: #16150f; }
 html[data-admin-theme='oscuro'] .field__control::placeholder { color: rgba(22, 21, 15, 0.45); }
 html[data-admin-theme='oscuro'] select.field__control option { color: #16150f; background: #ffffff; }
 html[data-admin-theme='oscuro'] .category-row strong { background: rgba(244, 241, 231, 0.14); }
+html:is([data-admin-theme='oscuro'], [data-staff-ui='nueva']) tbody tr:hover {
+  background: rgba(244, 241, 231, 0.04);
+}
+html:is([data-admin-theme='oscuro'], [data-staff-ui='nueva']) .table-action:hover {
+  background: rgba(180, 224, 77, 0.12);
+}
+html:is([data-admin-theme='oscuro'], [data-staff-ui='nueva']) .table-action--danger:hover {
+  background: rgba(240, 122, 110, 0.14);
+}
 
 /* Superficies "invertidas" (fondo tinta, texto claro): en oscuro la tinta pasa a crema y el
    texto a casi negro, así que salían crema con texto ilegible. Dentro de ellas se devuelven
