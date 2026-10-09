@@ -1,46 +1,31 @@
 import type { OrderDetail } from '../types/api';
 import { moneyToCents } from './money';
-import { operationalOrderStatus, paymentStatusForOrder } from './order-status';
 
 export function hasOutstandingCashBalance(order: OrderDetail): boolean {
-  if (order.pago_diferido || order.metodo_pago !== 'efectivo' || order.saldo_pendiente === undefined) return false;
+  if (order.pago_diferido || order.saldo_pendiente === undefined) return false;
   const cents = moneyToCents(order.saldo_pendiente);
-  return cents === null || cents > 0n;
+  return cents !== null && cents > 0n;
 }
 
-function isPaymentSettled(order: OrderDetail): boolean {
-  const status = paymentStatusForOrder(order);
-  return status === 'pagado' || status === 'sin_cargo';
+function isIndividuallyPaid(order: OrderDetail): boolean {
+  if (order.pago_diferido) return true;
+  if (order.saldo_pendiente === undefined) return false;
+  return moneyToCents(order.saldo_pendiente) === 0n;
 }
 
 export function isCashierCashOrder(order: OrderDetail): boolean {
-  return (
-    operationalOrderStatus(order) === 'recibido' &&
-    order.metodo_pago === 'efectivo' &&
-    !order.pago_diferido &&
-    hasOutstandingCashBalance(order)
-  );
+  return order.estado === 'por_cobrar';
 }
 
 /** Caja entrega con QR tanto para llevar como en mesa/espacio. */
 export function isCashierDeliveryOrder(order: OrderDetail): boolean {
-  return operationalOrderStatus(order) === 'listo';
+  return order.estado === 'listo';
 }
 
 export function isCashierPaidDeliveryOrder(order: OrderDetail): boolean {
-  return isCashierDeliveryOrder(order) && isPaymentSettled(order);
-}
-
-/** A table order may be delivered while the deferred account remains unpaid. */
-export function isCashierDeferredDeliveryOrder(order: OrderDetail): boolean {
-  if (!isCashierDeliveryOrder(order) || order.pago_diferido !== true) return false;
-  const status = paymentStatusForOrder(order);
-  return status === 'pendiente' || status === 'parcial';
+  return isCashierDeliveryOrder(order) && isIndividuallyPaid(order);
 }
 
 export function canConfirmCashierDelivery(order: OrderDetail, qrToken: string): boolean {
-  return (
-    (isCashierPaidDeliveryOrder(order) || isCashierDeferredDeliveryOrder(order)) &&
-    Boolean(qrToken.trim())
-  );
+  return isCashierPaidDeliveryOrder(order) && Boolean(qrToken.trim());
 }

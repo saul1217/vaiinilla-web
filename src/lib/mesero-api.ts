@@ -5,7 +5,7 @@
 import { apiUrl } from './api';
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
-import type { ApiEnvelope, ApiErrorEnvelope, OperationalOrderStatus, OrderDetail, OrderStatus, PaymentStatus } from '../types/api';
+import type { ApiEnvelope, ApiErrorEnvelope, OrderDetail, OrderStatus, SpaceAvailability } from '../types/api';
 
 export type CallReason = 'atencion' | 'utensilios' | 'problema' | 'cuenta';
 export type CallStatus = 'pendiente' | 'en_camino' | 'atendida' | 'cancelada' | 'expirada';
@@ -41,11 +41,6 @@ export interface BoardOrder {
   id: string;
   folio: number;
   estado: OrderStatus;
-  estado_operativo?: OperationalOrderStatus;
-  estado_pago?: PaymentStatus;
-  monto_pagado?: string;
-  saldo_pendiente?: string;
-  total?: string;
   version: number;
   /** Va a la cuenta del espacio (pagar al final). */
   pago_diferido?: boolean;
@@ -111,25 +106,31 @@ export function createWaiterClient(getToken: () => Promise<string>): WaiterClien
   let boardEndpoint = true;
 
   async function fallbackBoard(token: string): Promise<BoardTable[]> {
-    const [spaces, ready] = await Promise.all([
+    const [spaces, ready, availability] = await Promise.all([
       request<TableSpace[]>('/espacios', { token }),
       request<OrderDetail[]>('/pedidos?estado=listo', { token }),
+      request<SpaceAvailability[]>('/espacios/disponibilidad', { token }),
     ]);
+    const sessionStarts = new Map(
+      availability
+        .filter((space) => space.inicio !== null)
+        .map((space) => [space.espacio.id, Date.parse(space.inicio!)]),
+    );
     return spaces.map((espacio) => ({
       espacio,
       llamada: null,
       pedidos: ready
-        .filter((order) => order.destino === 'en_espacio' && order.espacio?.id === espacio.id)
+        .filter((order) => {
+          const inicio = sessionStarts.get(espacio.id);
+          return order.destino === 'en_espacio'
+            && order.espacio?.id === espacio.id
+            && inicio !== undefined
+            && Date.parse(order.creado_en) >= inicio;
+        })
         .map((order) => ({
           id: order.id,
           folio: order.folio,
           estado: order.estado,
-          estado_operativo: order.estado_operativo,
-          estado_pago: order.estado_pago,
-          monto_pagado: order.monto_pagado,
-          saldo_pendiente: order.saldo_pendiente,
-          total: order.total,
-          pago_pendiente: order.pago_pendiente,
           version: order.version,
           cliente: order.usuario ? { nombre: order.usuario.nombre } : null,
           items_resumen: summarize(order),

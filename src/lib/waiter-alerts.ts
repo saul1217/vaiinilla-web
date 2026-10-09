@@ -1,7 +1,6 @@
 // Avisos del mesero: qué pasó desde la última vez que se vio el tablero. Un pedido que
 // cocina acaba de marcar listo (hay que llevarlo a su mesa) o una mesa que empezó a llamar.
 import { CALL_REASON_LABEL, type BoardTable } from './mesero-api';
-import { operationalOrderStatus } from './order-status';
 
 export interface WaiterAlert {
   key: string;
@@ -16,7 +15,7 @@ export function alertKeys(tables: BoardTable[]): Set<string> {
   const keys = new Set<string>();
   for (const table of tables) {
     if (table.llamada?.estado === 'pendiente') keys.add(`call:${table.llamada.id}`);
-    for (const order of table.pedidos) if (operationalOrderStatus(order) === 'listo') keys.add(`ready:${order.id}`);
+    for (const order of table.pedidos) if (order.estado === 'listo') keys.add(`ready:${order.id}`);
   }
   return keys;
 }
@@ -29,7 +28,7 @@ export function newAlerts(tables: BoardTable[], seen: Set<string>): WaiterAlert[
     const place = table.espacio.nombre;
     for (const order of table.pedidos) {
       const key = `ready:${order.id}`;
-      if (operationalOrderStatus(order) !== 'listo' || seen.has(key)) continue;
+      if (order.estado !== 'listo' || seen.has(key)) continue;
       ready.push({
         key,
         kind: 'ready',

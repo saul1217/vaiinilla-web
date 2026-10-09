@@ -27,7 +27,6 @@ import { useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { kitchenOrderUnits, minutesSince } from '../lib/kitchen';
-import { operationalOrderStatus } from '../lib/order-status';
 import type { ItemRejectionResult, OrderDetail, OrderStatus } from '../types/api';
 
 type KitchenTargetStatus = Extract<OrderStatus, 'preparando' | 'listo'>;
@@ -59,7 +58,7 @@ export function KitchenPage() {
     initialPageParam: undefined as string | undefined,
     enabled: Boolean(token) && role === 'cocina',
     queryFn: ({ pageParam }) => api.listOrders(token, {
-      estado_operativo: ['recibido', 'preparando', 'listo'],
+      estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'],
       cursor: pageParam,
       limit: 50,
     }),
@@ -88,7 +87,7 @@ export function KitchenPage() {
         }) : current,
       );
       setNotice(
-        operationalOrderStatus(updatedOrder) === 'preparando'
+        updatedOrder.estado === 'preparando'
           ? `Pedido ${updatedOrder.folio} enviado a preparación.`
           : `Pedido ${updatedOrder.folio} marcado como listo.`,
       );
@@ -136,15 +135,15 @@ export function KitchenPage() {
     [orders.data],
   );
   const pending = useMemo(
-    () => allOrders.filter((order) => operationalOrderStatus(order) === 'recibido'),
+    () => allOrders.filter((order) => order.estado === 'por_cobrar' || order.estado === 'cobrado'),
     [allOrders],
   );
   const preparing = useMemo(
-    () => allOrders.filter((order) => operationalOrderStatus(order) === 'preparando'),
+    () => allOrders.filter((order) => order.estado === 'preparando'),
     [allOrders],
   );
   const ready = useMemo(
-    () => allOrders.filter((order) => operationalOrderStatus(order) === 'listo'),
+    () => allOrders.filter((order) => order.estado === 'listo'),
     [allOrders],
   );
   const activeUnits = useMemo(

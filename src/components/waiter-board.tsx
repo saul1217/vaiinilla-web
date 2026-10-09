@@ -10,7 +10,6 @@ import { SpaceAccountPanel } from './space-account-panel';
 import { spaceStatusLine } from '../lib/space-status';
 import { splitSpaceName, type StaffUi } from '../lib/staff-ui';
 import { OrderStatusBadge } from './status-badge';
-import { operationalOrderStatus } from '../lib/order-status';
 import { alertKeys, newAlerts, type WaiterAlert } from '../lib/waiter-alerts';
 import { playAlert, systemNotify, unlockAlertSound } from '../lib/alert-sound';
 import { QrTokenField } from './qr-token-field';
@@ -33,7 +32,7 @@ const STATE_RANK: Record<TableState, number> = { call: 0, ready: 1, active: 2, f
 
 function stateOf(table: BoardTable, space?: SpaceAvailability): TableState {
   if (table.llamada) return 'call';
-  if (table.pedidos.some((order) => operationalOrderStatus(order) === 'listo')) return 'ready';
+  if (table.pedidos.some((order) => order.estado === 'listo')) return 'ready';
   if (table.pedidos.length > 0 || (space && space.estado !== 'libre')) return 'active';
   return 'free';
 }
@@ -173,7 +172,7 @@ export function WaiterBoard({
     : null;
   const open = tables.find((table) => table.espacio.id === openId) ?? null;
   const calling = tables.filter((table) => stateOf(table) === 'call').length;
-  const ready = tables.reduce((sum, table) => sum + table.pedidos.filter((order) => operationalOrderStatus(order) === 'listo').length, 0);
+  const ready = tables.reduce((sum, table) => sum + table.pedidos.filter((order) => order.estado === 'listo').length, 0);
   const active = tables.filter((table) => stateOf(table, spaces.get(table.espacio.id)) === 'active').length;
   const nueva = variant === 'nueva';
   const shownTables = nueva && onlyPending
@@ -184,7 +183,7 @@ export function WaiterBoard({
     : tables;
 
   const tileCaption = (table: BoardTable, state: TableState, space?: SpaceAvailability) => {
-    const readyOrders = table.pedidos.filter((order) => operationalOrderStatus(order) === 'listo');
+    const readyOrders = table.pedidos.filter((order) => order.estado === 'listo');
     if (state === 'call' && table.llamada) {
       return `${table.llamada.estado === 'en_camino' ? `Va ${table.llamada.tomada_por?.nombre ?? 'alguien'}` : 'Llamando'} · ${since(table.llamada.creado_en, now)}`;
     }
@@ -357,7 +356,7 @@ export function WaiterBoard({
           {tables.map((table) => {
             const space = spaces.get(table.espacio.id);
             const state = stateOf(table, space);
-            const readyOrders = table.pedidos.filter((order) => operationalOrderStatus(order) === 'listo');
+            const readyOrders = table.pedidos.filter((order) => order.estado === 'listo');
             return (
               <button
                 key={table.espacio.id}
@@ -423,7 +422,7 @@ export function WaiterBoard({
                     <strong>#{order.folio} · {order.cliente?.nombre ?? 'Cliente'}</strong>
                     <p>{order.items_resumen}</p>
                   </div>
-                  {operationalOrderStatus(order) === 'listo' && canDeliver ? (
+                  {order.estado === 'listo' && canDeliver ? (
                     deliveryRequiresQr ? (
                       <Button variant="dark" onClick={() => { deliverMutation.reset(); setDelivering(order); setQrToken(''); }}>
                         <ScanLine aria-hidden="true" className="size-5" /> Entregar
@@ -439,14 +438,7 @@ export function WaiterBoard({
                       </Button>
                     )
                   ) : (
-                    <OrderStatusBadge
-                      status={order.estado}
-                      estadoOperativo={order.estado_operativo}
-                      estadoPago={order.estado_pago}
-                      montoPagado={order.monto_pagado}
-                      saldoPendiente={order.saldo_pendiente}
-                      pagoPendiente={order.pago_pendiente}
-                    />
+                    <OrderStatusBadge status={order.estado} pagoPendiente={order.pago_pendiente} />
                   )}
                 </li>
               ))}
