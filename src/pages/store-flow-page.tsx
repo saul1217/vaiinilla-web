@@ -194,8 +194,8 @@ export function StoreFlowPage() {
                     value={settings.entrega_requiere_qr}
                     onChange={(value) => change({ entrega_requiere_qr: value })}
                     options={[
-                      { value: true, label: 'Escaneando el QR del pedido', hint: 'Más control: quien entrega confirma que es el pedido correcto.' },
-                      { value: false, label: 'Sin escanear nada', hint: 'Más rápido en mesa o cancha. Para llevar siempre se escanea.' },
+                      { value: true, label: 'Escanear QR para pedidos para llevar', hint: 'En una sesión abierta de mesa, el pedido se entrega sin QR.' },
+                      { value: false, label: 'Entregar sin QR', hint: 'Aplica también a pedidos para llevar. En mesa con sesión abierta nunca se exige QR.' },
                     ]}
                   />
                 </div>

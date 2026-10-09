@@ -41,6 +41,12 @@ export interface BoardOrder {
   id: string;
   folio: number;
   estado: OrderStatus;
+  monto_pagado?: string;
+  saldo_pendiente?: string;
+  total?: string;
+  destino: 'en_espacio';
+  sesion_espacio_id: string | null;
+  sesion_espacio_estado: 'abierta' | 'cerrada' | null;
   version: number;
   /** Va a la cuenta del espacio (pagar al final). */
   pago_diferido?: boolean;
@@ -131,6 +137,13 @@ export function createWaiterClient(getToken: () => Promise<string>): WaiterClien
           id: order.id,
           folio: order.folio,
           estado: order.estado,
+          destino: 'en_espacio',
+          sesion_espacio_id: order.sesion_espacio_id ?? null,
+          sesion_espacio_estado: order.sesion_espacio_estado ?? null,
+          monto_pagado: order.monto_pagado,
+          saldo_pendiente: order.saldo_pendiente,
+          total: order.total,
+          pago_pendiente: order.pago_pendiente,
           version: order.version,
           cliente: order.usuario ? { nombre: order.usuario.nombre } : null,
           items_resumen: summarize(order),

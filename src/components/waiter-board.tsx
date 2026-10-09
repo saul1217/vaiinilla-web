@@ -14,6 +14,7 @@ import { alertKeys, newAlerts, type WaiterAlert } from '../lib/waiter-alerts';
 import { playAlert, systemNotify, unlockAlertSound } from '../lib/alert-sound';
 import { QrTokenField } from './qr-token-field';
 import { api } from '../lib/api';
+import { deliveryRequiresQr as orderRequiresQr } from '../lib/delivery-policy';
 import { errorMessage } from '../lib/api-error';
 import type { SpaceAvailability } from '../types/api';
 import {
@@ -95,7 +96,7 @@ export function WaiterBoard({
     queryFn: () => api.operationalStatus(token),
     staleTime: 60_000,
   });
-  const deliveryRequiresQr = status.data?.entrega_requiere_qr !== false;
+  const deliveryRequiresQr = (order: BoardOrder) => orderRequiresQr(order, status.data?.entrega_requiere_qr);
   const canDeliver = role === 'mesero';
 
   const transition = useMutation({
@@ -124,8 +125,8 @@ export function WaiterBoard({
       await queryClient.invalidateQueries({ queryKey: ['mesero-board'] });
     },
     // A version conflict leaves `delivering` stale; the refetched board supplies the new version on retry.
-    onError: async (error) => {
-      if (!deliveryRequiresQr) setNotice({ tone: 'error', text: errorMessage(error) });
+    onError: async (error, variables) => {
+      if (!deliveryRequiresQr(variables.order)) setNotice({ tone: 'error', text: errorMessage(error) });
       await queryClient.invalidateQueries({ queryKey: ['mesero-board'] });
     },
   });
@@ -423,7 +424,7 @@ export function WaiterBoard({
                     <p>{order.items_resumen}</p>
                   </div>
                   {order.estado === 'listo' && canDeliver ? (
-                    deliveryRequiresQr ? (
+                    deliveryRequiresQr(order) ? (
                       <Button variant="dark" onClick={() => { deliverMutation.reset(); setDelivering(order); setQrToken(''); }}>
                         <ScanLine aria-hidden="true" className="size-5" /> Entregar
                       </Button>
@@ -459,16 +460,20 @@ export function WaiterBoard({
         open={Boolean(delivering)}
         onOpenChange={(next) => { if (!next) { setDelivering(null); setQrToken(''); } }}
         title={delivering ? `Entregar pedido ${delivering.folio}` : 'Entregar pedido'}
-        description="Escanea el QR del cliente. El sistema verificará que corresponda exactamente a este pedido."
+        description={delivering && deliveryRequiresQr(delivering)
+          ? 'Escanea el QR del cliente. El sistema verificará que corresponda exactamente a este pedido.'
+          : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
       >
         {delivering && (
           <div className="transaction-form">
             {deliverMutation.isError && <Feedback tone="error">{errorMessage(deliverMutation.error)}</Feedback>}
-            <QrTokenField
-              value={qrToken}
-              onChange={setQrToken}
-              error={!qrToken.trim() && deliverMutation.isError ? 'Captura el token de entrega.' : undefined}
-            />
+            {deliveryRequiresQr(delivering) && (
+              <QrTokenField
+                value={qrToken}
+                onChange={setQrToken}
+                error={!qrToken.trim() && deliverMutation.isError ? 'Captura el token de entrega.' : undefined}
+              />
+            )}
             <div className="form-actions">
               <Button type="button" variant="ghost" onClick={() => { setDelivering(null); setQrToken(''); }}>
                 Cancelar
@@ -477,7 +482,7 @@ export function WaiterBoard({
                 type="button"
                 variant="dark"
                 loading={deliverMutation.isPending}
-                disabled={!qrToken.trim()}
+                disabled={deliveryRequiresQr(delivering) && !qrToken.trim()}
                 onClick={() => latestDelivering && deliverMutation.mutate({ order: latestDelivering, qr: qrToken.trim() })}
               >
                 Confirmar entrega

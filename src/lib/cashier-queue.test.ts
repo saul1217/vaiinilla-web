@@ -3,6 +3,7 @@ import type { OrderDetail } from '../types/api';
 import {
   canConfirmCashierDelivery,
   hasOutstandingCashBalance,
+  isCashierDeferredDeliveryOrder,
   isCashierCashOrder,
   isCashierDeliveryOrder,
   isCashierPaidDeliveryOrder,
@@ -61,8 +62,23 @@ describe('cashier-queue', () => {
   });
 
   it('no ofrece cobrar individualmente una cuenta diferida de mesa', () => {
-    const deferred = order({ estado: 'listo', pago_diferido: true, pago_pendiente: true, saldo_pendiente: '10.00' });
+    const deferred = order({
+      estado: 'listo', pago_diferido: true, pago_pendiente: true, saldo_pendiente: '10.00',
+      destino: 'en_espacio', sesion_espacio_id: 'session-1', sesion_espacio_estado: 'abierta',
+    });
     expect(hasOutstandingCashBalance(deferred)).toBe(false);
+    expect(isCashierDeferredDeliveryOrder(deferred)).toBe(true);
+    expect(canConfirmCashierDelivery(deferred, '', true)).toBe(true);
+  });
+
+  it('omite el QR solo para pedidos ligados a una sesión activa de mesa', () => {
+    const tableOrder = order({
+      destino: 'en_espacio',
+      sesion_espacio_id: 'session-1',
+      sesion_espacio_estado: 'abierta',
+    });
+    expect(canConfirmCashierDelivery(tableOrder, '', true)).toBe(true);
+    expect(canConfirmCashierDelivery(order({ destino: 'para_llevar' }), '', true)).toBe(false);
   });
 
   it('no autoriza la entrega si el backend todavía no informó el saldo', () => {
