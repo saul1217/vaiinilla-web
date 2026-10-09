@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { OrderCard, OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
+import { StaffOrderForm } from '../components/staff-order-form';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
 import { WaiterBoard } from '../components/waiter-board';
@@ -33,13 +34,34 @@ import { errorMessage } from '../lib/api-error';
 import { MONEY_PATTERN, calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
 import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
 import { printOrderTicket } from '../lib/order-ticket-print';
-import type { OrderDetail } from '../types/api';
+import type { OrderDetail, StaffOrderResult } from '../types/api';
 
 const moneySchema = z.object({
   amount: z.string().trim().regex(MONEY_PATTERN, 'Escribe un monto, por ejemplo 500 o 500.50.').transform(normalizeMoneyInput),
 });
 
 type MoneyForm = z.infer<typeof moneySchema>;
+
+/** Lo que ve quien registró el pedido: el folio y, si Caja cobró, el cambio o el motivo de no cobrar. */
+function avisoDeAlta(pedido: StaffOrderResult): ReactNode {
+  const cobro = pedido.cobro;
+  if (cobro?.estado === 'cobrado') {
+    return (
+      <>
+        Pedido <strong>{pedido.folio}</strong> cobrado. Cambio{' '}
+        <strong>{formatMoney(cobro.cambio)}</strong>.
+      </>
+    );
+  }
+  if (cobro?.estado === 'pendiente') {
+    return (
+      <>
+        Pedido <strong>{pedido.folio}</strong> registrado sin cobrar. {cobro.mensaje}
+      </>
+    );
+  }
+  return <>Pedido <strong>{pedido.folio}</strong> registrado.</>;
+}
 
 export function PosPage() {
   const { tenant } = useSessions();
@@ -64,6 +86,9 @@ export function PosPage() {
   const [qrToken, setQrToken] = useState('');
   // Caja quita un artículo que no se puede entregar; si ya se pagó, se devuelve esa parte.
   const [removingFrom, setRemovingFrom] = useState<OrderDetail | null>(null);
+  // El staff registra pedidos de quien no usa la app (mesero, cajero y admin).
+  const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const canCreateStaffOrder = role === 'mesero' || role === 'cajero' || role === 'admin';
 
   const session = useQuery({
     queryKey: ['cash-session', scopeId],
@@ -212,6 +237,11 @@ export function PosPage() {
               <span /> {heartbeat.isSuccess ? `${roleLabel(role)} en línea` : `Conectando ${roleLabel(role)}`}
             </span>
           )}
+          {nueva && canCreateStaffOrder && (
+            <Button variant="dark" onClick={() => setNewOrderOpen(true)}>
+              Nuevo pedido
+            </Button>
+          )}
           <StaffUiSwitch mode={ui} onChange={setUi} />
         </div>
       )}
@@ -220,6 +250,11 @@ export function PosPage() {
           eyebrow="Operación POS"
           title={pageTitle(role)}
           description={pageDescription(role)}
+          action={
+            canCreateStaffOrder ? (
+              <Button onClick={() => setNewOrderOpen(true)}>Nuevo pedido</Button>
+            ) : undefined
+          }
         />
       ) : isCashier ? (
         <header className="staff-hero">
@@ -533,6 +568,30 @@ export function PosPage() {
           <OperationalStatusPanel />
         </details>
       )}
+
+      <Modal
+        open={newOrderOpen}
+        onOpenChange={setNewOrderOpen}
+        title="Nuevo pedido"
+        description="Lo registras tú: llega a cocina y a la cuenta de la mesa como cualquier otro pedido."
+        contentClassName="staff-order-dialog"
+      >
+        {newOrderOpen && (
+          <StaffOrderForm
+            token={token}
+            rol={role ?? ''}
+            onCreated={async (pedido) => {
+              setNewOrderOpen(false);
+              setNotice(avisoDeAlta(pedido));
+              await Promise.all([
+                refreshOperation(),
+                queryClient.invalidateQueries({ queryKey: ['mesero-board'] }),
+                queryClient.invalidateQueries({ queryKey: ['space-availability'] }),
+              ]);
+            }}
+          />
+        )}
+      </Modal>
 
       <Modal
         open={Boolean(cashOrder)}

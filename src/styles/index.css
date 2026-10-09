@@ -7454,3 +7454,232 @@ html[data-staff-ui='nueva'] .field__control:hover { border-color: rgba(244, 241,
 /* El logo claro es negro y desaparece sobre el menú oscuro: se usa la variante oscura del mismo logo. */
 html[data-staff-ui='nueva'] .brand-logo--full.brand-logo--light { background: url('/brand/vaiinilla-logo-dark.webp') center / contain no-repeat; }
 html[data-staff-ui='nueva'] .brand-logo--full.brand-logo--light .brand-logo__image { opacity: 0; }
+
+/* Nuevo pedido del staff: el diálogo es más ancho y el formulario va en bloques. */
+.staff-order-dialog { width: min(760px, calc(100vw - 32px)); }
+
+.staff-order {
+  display: grid;
+  gap: 18px;
+}
+
+.staff-order__bloque {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.staff-order__bloque > legend {
+  padding: 0;
+  margin-bottom: 8px;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.staff-order__errores {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.staff-order__segmentos,
+.staff-order__espacios,
+.staff-order__grupo > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.staff-order__segmentos button,
+.staff-order__espacios button,
+.staff-order__grupo button,
+.staff-order__agregar,
+.staff-order__quitar,
+.staff-order__cantidad button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(22, 21, 15, 0.16);
+  border-radius: 999px;
+  background: var(--color-white-warm);
+  padding: 8px 14px;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition:
+    transform 160ms var(--ease),
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.staff-order__segmentos button:active,
+.staff-order__espacios button:active,
+.staff-order__grupo button:active,
+.staff-order__agregar:active,
+.staff-order__quitar:active,
+.staff-order__cantidad button:active {
+  transform: scale(0.96);
+}
+
+.staff-order__segmentos button[aria-pressed='true'],
+.staff-order__espacios button[aria-pressed='true'],
+.staff-order__grupo button[aria-pressed='true'] {
+  border-color: var(--color-ink);
+  background: var(--color-lime);
+}
+
+.staff-order__espacios button {
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 120px;
+  border-radius: 16px;
+}
+
+.staff-order__espacios button small {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.staff-order__categoria {
+  display: grid;
+  gap: 8px;
+}
+
+.staff-order__categoria h3 {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.staff-order__producto {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border-radius: 16px;
+  background: var(--color-cream);
+  padding: 12px 14px;
+}
+
+.staff-order__producto > div {
+  display: grid;
+  gap: 2px;
+}
+
+.staff-order__producto span {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.staff-order__producto[data-agregado='true'] {
+  background: var(--color-white-warm);
+  outline: 1px solid rgba(22, 21, 15, 0.12);
+}
+
+.staff-order__linea {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+}
+
+.staff-order__cantidad {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: start;
+}
+
+.staff-order__cantidad output {
+  min-width: 2ch;
+  text-align: center;
+  font-weight: 800;
+}
+
+.staff-order__cantidad button {
+  width: 40px;
+  padding: 0;
+}
+
+.staff-order__cantidad button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.staff-order__grupo {
+  display: grid;
+  gap: 6px;
+}
+
+.staff-order__grupo > span {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.staff-order__grupo button small {
+  color: var(--color-muted);
+}
+
+.staff-order__check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.staff-order__check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-ink);
+}
+
+.staff-order__metodo {
+  margin: 0;
+  font-weight: 800;
+}
+
+.staff-order__metodo span {
+  display: block;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.staff-order__pie {
+  position: sticky;
+  bottom: -26px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgba(22, 21, 15, 0.12);
+  background: var(--color-white-warm);
+  padding: 14px 0 0;
+}
+
+.staff-order__pie p {
+  display: grid;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.staff-order__pie small {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}

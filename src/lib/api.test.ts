@@ -3,6 +3,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { api } from './api';
 import { VaiinillaApiError } from './api-error';
+import type { StaffOrderInput } from '../types/api';
 
 const baseUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
 
@@ -784,5 +785,28 @@ describe('Vaiinilla API client', () => {
 
     await api.rejectOrder('tenant-token', orderFixture.id, 2, 'Se terminó');
     expect(body).toEqual({ version_esperada: 2, motivo: 'Se terminó' });
+  });
+
+  it('crea un pedido de staff con la llave que pone quien llama', async () => {
+    const key = '7d0c3a52-6a4e-4d1e-9b47-1f0c2a9e8b10';
+    const input: StaffOrderInput = {
+      metodo_pago: 'efectivo',
+      destino: 'en_espacio',
+      espacio_id: 5,
+      pago_diferido: true,
+      items: [{ producto_id: 101, cantidad: 2, opcion_ids: [201] }],
+    };
+    server.use(
+      http.post(`${baseUrl}/pedidos`, async ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        expect(request.headers.get('Idempotency-Key')).toBe(key);
+        await expect(request.json()).resolves.toEqual(input);
+        return HttpResponse.json({ data: orderFixture, meta: {}, error: null }, { status: 201 });
+      }),
+    );
+
+    await expect(api.createStaffOrder('tenant-token', input, key)).resolves.toMatchObject({
+      folio: 42,
+    });
   });
 });

@@ -1,21 +1,24 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import userEvent, { type UserEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { OrderDetail } from '../types/api';
+import type { CatalogResponse, OrderDetail } from '../types/api';
 import { PosPage } from './pos-page';
 
 const apiMock = vi.hoisted(() => ({
   activeCashSession: vi.fn(), operationalStatus: vi.fn(), listOrders: vi.fn(),
   collectCash: vi.fn(), deliverOrder: vi.fn(),
+  catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
 }));
+
+const sesion = vi.hoisted(() => ({ rol: 'cajero' }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
 vi.mock('../context/session-context', () => ({
   useSessions: () => ({
     tenant: {
-      token: 'token', context: { establecimiento_id: 'store-1', rol: 'cajero' },
+      token: 'token', context: { establecimiento_id: 'store-1', rol: sesion.rol },
       access: { establecimiento: { nombre: 'USAGI' } },
     },
   }),
@@ -40,14 +43,53 @@ const baseOrder: OrderDetail = {
   notas_cocina: null, usuario: { nombre: 'Pepito', matricula: null }, items: [],
 };
 
+const CATALOGO: CatalogResponse = {
+  categorias: [{ id: 10, nombre: 'Bebidas', orden: 1 }],
+  productos: [
+    {
+      id: 1,
+      categoria_id: 10,
+      estacion_preparacion: 'cocina',
+      nombre: 'Chocolate caliente',
+      descripcion: null,
+      ingredientes: null,
+      alergenos: null,
+      tiempo_estimado_min: 5,
+      precio_mostrador: '23.00',
+      precio_digital: '23.00',
+      disponible: true,
+      imagen_url: null,
+      grupos_opcion: [],
+    },
+  ],
+};
+
+const PEDIDO_CREADO = {
+  id: 'pedido-7',
+  folio: 7,
+  estado: 'por_cobrar',
+  version: 1,
+} as OrderDetail;
+
 function Wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 
+async function enviarCobroAlInstante(user: UserEvent) {
+  await user.click(await screen.findByRole('button', { name: 'Nuevo pedido' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Nuevo pedido' });
+  await user.click(await within(dialog).findByRole('button', { name: 'Agregar' }));
+  await user.click(within(dialog).getByLabelText('Cobrar ahora en efectivo'));
+  await user.type(within(dialog).getByLabelText(/Efectivo recibido/), '50');
+  await user.click(within(dialog).getByRole('button', { name: 'Enviar y cobrar' }));
+  await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
+}
+
 describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sesion.rol = 'cajero';
     apiMock.activeCashSession.mockResolvedValue({ id: 'cash-1', fecha_operativa: '2026-10-07', monto_inicial: '500.00', monto_final: null, abierta_en: '2026-10-07T10:00:00.000Z', cerrada_en: null, cierre_automatico: false });
     apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: false });
     apiMock.listOrders.mockResolvedValue({ orders: [baseOrder], cursor: null });
@@ -83,5 +125,78 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(await screen.findByRole('button', { name: 'Validar QR' })).toBeVisible();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Validar QR' }));
     expect(await screen.findByLabelText('Token QR de entrega')).toBeVisible();
+  });
+});
+
+describe('POS: Nuevo pedido del staff', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sesion.rol = 'mesero';
+    apiMock.activeCashSession.mockResolvedValue(null);
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [], cursor: null });
+    apiMock.catalog.mockResolvedValue(CATALOGO);
+    apiMock.spaceAvailability.mockResolvedValue([]);
+    apiMock.createStaffOrder.mockResolvedValue(PEDIDO_CREADO);
+  });
+
+  it('el mesero abre el formulario de Nuevo pedido desde el POS', async () => {
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Nuevo pedido' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo pedido' });
+    expect(within(dialog).getByRole('button', { name: 'Enviar pedido' })).toBeVisible();
+  });
+
+  it('al registrar el pedido cierra el formulario y avisa con su folio', async () => {
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Nuevo pedido' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo pedido' });
+    await user.click(await within(dialog).findByRole('button', { name: 'Agregar' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar pedido' }));
+
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Nuevo pedido' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText(/registrado\./)).toHaveTextContent('Pedido 7 registrado.');
+  });
+
+  it('al cobrar ahora, Caja ve el cambio que debe dar', async () => {
+    sesion.rol = 'cajero';
+    apiMock.createStaffOrder.mockResolvedValue({
+      ...PEDIDO_CREADO,
+      cobro: { estado: 'cobrado', monto_recibido: '50.00', cambio: '27.00' },
+    });
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await enviarCobroAlInstante(userEvent.setup());
+
+    expect(await screen.findByText(/cobrado\./)).toHaveTextContent(
+      'Pedido 7 cobrado. Cambio $27.00 MXN.',
+    );
+  });
+
+  it('si Caja no puede cobrar al instante, el pedido queda registrado sin cobrar y lo dice', async () => {
+    sesion.rol = 'cajero';
+    apiMock.createStaffOrder.mockResolvedValue({
+      ...PEDIDO_CREADO,
+      cobro: {
+        estado: 'pendiente',
+        codigo: 'ESTABLISHMENT_NOT_RECEIVING',
+        mensaje: 'La caja está cerrada.',
+      },
+    });
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await enviarCobroAlInstante(userEvent.setup());
+
+    expect(await screen.findByText(/sin cobrar/)).toHaveTextContent(
+      'Pedido 7 registrado sin cobrar. La caja está cerrada.',
+    );
   });
 });
