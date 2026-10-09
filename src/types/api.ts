@@ -184,6 +184,9 @@ export interface OrderDetail {
   estado: OrderStatus;
   metodo_pago: PaymentMethod;
   destino: OrderDestination;
+  /** Contexto de la sesión de mesa a la que pertenece el pedido. */
+  sesion_espacio_id?: string | null;
+  sesion_espacio_estado?: 'abierta' | 'cerrada' | null;
   espacio: OrderSpace | null;
   subtotal: string;
   ahorro_combinado: string;

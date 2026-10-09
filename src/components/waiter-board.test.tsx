@@ -16,6 +16,7 @@ const { waiterClient, apiMock, state } = vi.hoisted(() => ({
     spaceSession: vi.fn(),
     collectSpaceAccount: vi.fn(),
     releaseSpace: vi.fn(),
+    deliverOrder: vi.fn(),
   },
   state: { call: null as null | Record<string, unknown> },
 }));
@@ -69,7 +70,11 @@ function table() {
   return {
     espacio: space,
     llamada: state.call,
-    pedidos: [{ id: 'order-28', folio: 28, estado: 'listo', version: 1, cliente: { nombre: 'Kikin' }, items_resumen: '1× Quesadilla', actualizado_en: '2026-10-06T11:30:00.000Z' }],
+  pedidos: [{
+    id: 'order-28', folio: 28, estado: 'listo', version: 1, destino: 'en_espacio',
+    sesion_espacio_id: 'session-67', sesion_espacio_estado: 'abierta',
+    cliente: { nombre: 'Kikin' }, items_resumen: '1× Quesadilla', actualizado_en: '2026-10-06T11:30:00.000Z',
+  }],
   };
 }
 
@@ -90,6 +95,7 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     apiMock.spaceAvailability.mockResolvedValue([]);
     apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: false });
     apiMock.spaceSession.mockResolvedValue(account);
+    apiMock.deliverOrder.mockResolvedValue({ folio: 28 });
   });
 
   it('expone la solicitud, permite Voy y Atendida, y deja la cuenta intacta para imprimir', async () => {
@@ -120,5 +126,18 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     expect(apiMock.spaceSession).toHaveBeenCalledWith('staff-token', 67);
     expect(account.sesion).toMatchObject({ id: 'session-67', estado: 'abierta' });
     expect(account.cuenta).toMatchObject({ total: 90, pagado: 0, pendiente: 90 });
+  });
+
+  it('entrega un pedido de sesión activa sin QR aunque el ajuste global esté habilitado', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    state.call = null;
+    const user = userEvent.setup();
+    render(<WaiterBoard token="staff-token" role="mesero" />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Mesa 67\. Pedido listo/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Entregar' })).toBeVisible();
+    await user.click(within(dialog).getByRole('button', { name: 'Entregar' }));
+    await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('staff-token', 'order-28', 1, ''));
   });
 });

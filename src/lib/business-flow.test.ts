@@ -57,7 +57,7 @@ describe('vista previa del flujo', () => {
       'Paga con saldo, tarjeta o efectivo al pedir',
       'Cobra si fue efectivo',
       'Prepara y marca listo',
-      'Escanea el QR y entrega',
+      'En mesa entrega sin QR; para llevar valida el QR',
       'Acredita el cashback',
     ]);
     expect(flowSummary(steps)).toEqual({ works: 6, soon: 0 });
@@ -66,7 +66,7 @@ describe('vista previa del flujo', () => {
   it('pagar al final: cocina prepara sin esperar el cobro y se cobra la cuenta al irse', () => {
     const text = buildFlow({ ...base, tipo: 'restaurante', entrega_requiere_qr: false, permite_pago_al_final: true }).map((s) => s.text);
     expect(text).toContain('Prepara en cuanto llega el pedido, sin esperar el cobro');
-    expect(text).toContain('Lo entrega sin escanear nada');
+    expect(text).toContain('Entrega sin QR en mesa y para llevar');
     expect(text).toContain('Cobra la cuenta en efectivo o con la terminal, completa o dividida por pedido');
     expect(text).not.toContain('Paga con saldo, tarjeta o efectivo al pedir');
   });
@@ -109,11 +109,11 @@ describe('vista previa del flujo', () => {
     expect(buildFlow({ ...base, tipo: 'comedor' }).some((s) => s.text.startsWith('Recibe pedidos solo'))).toBe(false);
   });
 
-  it('el QR al entregar cambia el paso de entrega', () => {
+  it('el QR se conserva para llevar pero no se pide por pedido en una sesión de mesa', () => {
     const withQr = buildFlow({ ...base, tipo: 'padel', permite_pago_al_final: true, entrega_requiere_qr: true }).map((s) => s.text);
     const noQr = buildFlow({ ...base, tipo: 'padel', permite_pago_al_final: true, entrega_requiere_qr: false }).map((s) => s.text);
-    expect(withQr).toContain('Escanea el QR del pedido y lo entrega');
-    expect(noQr).toContain('Lo entrega sin escanear nada');
+    expect(withQr).toContain('En mesa lo entrega sin QR; para llevar valida el QR');
+    expect(noQr).toContain('Entrega sin QR en mesa y para llevar');
     expect(noQr).toContain('La cancha se libera al quedar saldada');
   });
 
