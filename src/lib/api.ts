@@ -6,6 +6,8 @@ import type {
   AccountDeletion,
   CashSession,
   CashPaymentResult,
+  StaffOrderInput,
+  StaffOrderResult,
   CashbackRule,
   CashbackRuleInput,
   CatalogCategory,
@@ -373,6 +375,22 @@ export const api = {
           version_esperada: versionEsperada,
           ...(propina && propina !== '0.00' ? { propina } : {}),
         },
+      })
+    ).data;
+  },
+
+  /** La llave la pone quien llama: los reintentos del mismo pedido deben reenviar la misma. */
+  async createStaffOrder(
+    token: string,
+    input: StaffOrderInput,
+    idempotencyKey: string,
+  ): Promise<StaffOrderResult> {
+    return (
+      await request<StaffOrderResult>('/pedidos', {
+        method: 'POST',
+        token,
+        idempotencyKey,
+        body: input,
       })
     ).data;
   },

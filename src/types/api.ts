@@ -218,6 +218,28 @@ export interface CashPaymentResult {
   cambio: string;
 }
 
+/** Pedido que registra el staff (POST /pedidos con rol mesero, cajero o admin). Solo efectivo. */
+export interface StaffOrderInput {
+  metodo_pago: 'efectivo';
+  destino: OrderDestination;
+  espacio_id: number | null;
+  items: Array<{ producto_id: number; cantidad: number; opcion_ids: number[] }>;
+  nombre_cliente?: string;
+  pago_diferido?: true;
+  cobrar_ahora?: true;
+  monto_recibido?: string;
+}
+
+/** Qué pasó con el cobro al instante: cobrado (con su cambio) o pendiente, con el motivo. */
+export type StaffOrderCharge =
+  | { estado: 'cobrado'; monto_recibido: string; cambio: string }
+  | { estado: 'pendiente'; codigo: string; mensaje: string };
+
+/** Pedido creado por staff. `cobro` solo viene cuando se pidió cobrar al instante. */
+export interface StaffOrderResult extends OrderDetail {
+  cobro?: StaffOrderCharge;
+}
+
 export interface PlatformContextResponse {
   access_token: string;
   token_type: 'Bearer';
