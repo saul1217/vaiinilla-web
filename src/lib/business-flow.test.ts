@@ -129,11 +129,12 @@ describe('franjas de pedidos (mismas reglas que el backend)', () => {
   it('acepta franjas válidas y vacío', () => {
     expect(franjasError([])).toBeNull();
     expect(franjasError([{ desde: '12:00', hasta: '15:00' }, { desde: '15:00', hasta: '16:00' }])).toBeNull();
+    expect(franjasError([{ desde: '22:00', hasta: '01:00' }, { desde: '02:00', hasta: '09:00' }])).toBeNull();
   });
 
   it.each([
-    [[{ desde: '15:00', hasta: '12:00' }], /después/],
-    [[{ desde: '12:00', hasta: '12:00' }], /después/],
+    [[{ desde: '12:00', hasta: '12:00' }], /distinta/],
+    [[{ desde: '22:00', hasta: '02:00' }, { desde: '01:00', hasta: '03:00' }], /empalmar/],
     [[{ desde: '', hasta: '12:00' }], /dos horas/],
     [[{ desde: '12:00', hasta: '15:00' }, { desde: '14:00', hasta: '16:00' }], /empalmar/],
     [Array.from({ length: 7 }, (_, i) => ({ desde: `0${i}:00`, hasta: `0${i}:30` })), /Máximo 6/],
