@@ -32,7 +32,8 @@ import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operation
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { MONEY_PATTERN, calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
-import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
+import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeferredDeliveryOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
+import { deliveryRequiresQr } from '../lib/delivery-policy';
 import { printOrderTicket } from '../lib/order-ticket-print';
 import type { OrderDetail, StaffOrderResult } from '../types/api';
 
@@ -98,14 +99,14 @@ export function PosPage() {
   });
 
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
-  // La configuración del establecimiento aplica a cualquier destino.
+  // La configuración aplica a entrega para llevar; una sesión activa de mesa no requiere QR.
   const deliveryQr = useQuery({
     queryKey: ['operational-status', 'delivery-qr'],
     enabled: Boolean(token),
     queryFn: () => api.operationalStatus(token),
     staleTime: 60_000,
   });
-  const deliveryNeedsQr = () => deliveryQr.data?.entrega_requiere_qr !== false;
+  const deliveryNeedsQr = (order: OrderDetail) => deliveryRequiresQr(order, deliveryQr.data?.entrega_requiere_qr);
 
   const cashierQueue = useInfiniteQuery({
     queryKey: ['orders', 'cashier-queue', scopeId],
@@ -521,7 +522,16 @@ export function PosPage() {
                               <ReceiptText aria-hidden="true" className="size-5" /> Imprimir ticket
                             </Button>
                             <Button variant="dark" onClick={() => beginDelivery(order)}>
-                              {deliveryNeedsQr()
+                              {deliveryNeedsQr(order)
+                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
+                                : 'Entregar'}
+                            </Button>
+                          </>
+                        ) : isCashierDeferredDeliveryOrder(order) ? (
+                          <>
+                            <strong className="text-sm" role="status">Pendiente en cuenta</strong>
+                            <Button variant="dark" onClick={() => beginDelivery(order)}>
+                              {deliveryNeedsQr(order)
                                 ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
                                 : 'Entregar'}
                             </Button>
@@ -646,7 +656,7 @@ export function PosPage() {
         open={Boolean(deliveryOrder)}
         onOpenChange={(open) => { if (!open) { setDeliveryOrder(null); setQrToken(''); } }}
         title={deliveryOrder ? `Entregar pedido ${deliveryOrder.folio}` : 'Entregar pedido'}
-        description={deliveryOrder && deliveryNeedsQr()
+        description={deliveryOrder && deliveryNeedsQr(deliveryOrder)
           ? 'Escanea el código del cliente. El sistema verificará que corresponda exactamente a este pedido.'
           : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
       >
@@ -654,7 +664,7 @@ export function PosPage() {
           <div className="transaction-form">
             {deliveryMutation.isError && <Feedback tone="error">{errorMessage(deliveryMutation.error)}</Feedback>}
             <OrderDetailContent order={deliveryOrder} />
-            {deliveryNeedsQr() && (
+            {deliveryNeedsQr(deliveryOrder) && (
               <QrTokenField
                 value={qrToken}
                 onChange={updateQrToken}
@@ -669,7 +679,7 @@ export function PosPage() {
                 type="button"
                 variant="dark"
                 loading={deliveryMutation.isPending}
-                disabled={deliveryMutation.isPending || (deliveryNeedsQr() && !qrToken.trim())}
+                disabled={deliveryMutation.isPending || (deliveryNeedsQr(deliveryOrder) && !qrToken.trim())}
                 onClick={() => deliveryMutation.mutate({ order: deliveryOrder, pickupToken: qrToken.trim() })}
               >
                 Confirmar entrega

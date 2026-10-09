@@ -81,9 +81,9 @@ describe('Flujo de mi tienda', () => {
     const user = userEvent.setup();
     render(<StoreFlowPage />, { wrapper: Wrapper });
     await user.click(await screen.findByRole('radio', { name: /Al final, con cuenta abierta/ }));
-    await user.click(screen.getByRole('radio', { name: /Sin escanear nada/ }));
+    await user.click(screen.getByRole('radio', { name: /Entregar sin QR/ }));
     expect(screen.getByText(/es un flujo personalizado/)).toBeInTheDocument();
-    expect(screen.getByText('Lo entrega sin escanear nada')).toBeInTheDocument();
+    expect(screen.getByText('Entrega sin QR en mesa y para llevar')).toBeInTheDocument();
   });
 
   it('lo que aún no existe sale como Próximamente', async () => {

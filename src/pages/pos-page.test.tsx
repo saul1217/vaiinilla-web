@@ -126,6 +126,27 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Validar QR' }));
     expect(await screen.findByLabelText('Token QR de entrega')).toBeVisible();
   });
+
+  it('permite entregar sin QR un pedido de una sesión activa aunque el ajuste global lo requiera', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [{
+      ...baseOrder,
+      destino: 'en_espacio',
+      espacio: { id: 67, nombre: 'Mesa 67', tipo: 'mesa' },
+      sesion_espacio_id: 'session-67',
+      sesion_espacio_estado: 'abierta',
+      pago_diferido: true,
+      pago_pendiente: true,
+    }], cursor: null });
+    apiMock.deliverOrder.mockResolvedValue({ folio: 14 });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Entregar' }));
+    expect(screen.queryByLabelText('Token QR de entrega')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Confirmar entrega' }));
+    await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', 'order-14', 4, ''));
+  });
 });
 
 describe('POS: Nuevo pedido del staff', () => {
