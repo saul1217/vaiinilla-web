@@ -449,6 +449,7 @@ export function WaiterBoard({
               availability={spaces.get(open.espacio.id)}
               businessName={businessName}
               canConfirmRefunds={role === 'cajero'}
+              onReleased={() => setOpenId(null)}
             />
           </div>
         )}
