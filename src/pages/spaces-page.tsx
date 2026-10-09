@@ -347,7 +347,9 @@ function BookingSettingsCard() {
   const current = settings.data;
   const values = draft ?? (current ? { apertura: current.apertura, cierre: current.cierre, dias: String(current.dias_adelanto) } : null);
   const days = values ? Number(values.dias) : NaN;
-  const invalid = !values || values.cierre <= values.apertura || !Number.isInteger(days) || days < 0 || days > 60;
+  const sameHours = Boolean(values && values.cierre === values.apertura);
+  const crossesMidnight = Boolean(values && values.cierre < values.apertura);
+  const invalid = !values || sameHours || !Number.isInteger(days) || days < 0 || days > 60;
   const changed =
     Boolean(draft) && current !== undefined &&
     (draft?.apertura !== current.apertura || draft?.cierre !== current.cierre || Number(draft?.dias) !== current.dias_adelanto);
@@ -392,7 +394,8 @@ function BookingSettingsCard() {
             type="time"
             value={values.cierre}
             onChange={(event) => setDraft({ ...values, cierre: event.target.value })}
-            error={values.cierre <= values.apertura ? 'Debe cerrar después de abrir.' : undefined}
+            error={sameHours ? 'El cierre debe ser distinto de la apertura.' : undefined}
+            hint={crossesMidnight ? 'Cruza la medianoche (del día siguiente)' : undefined}
             required
           />
           <Field

@@ -139,6 +139,37 @@ describe('reservas de canchas en el panel', () => {
     expect(await screen.findByText('Horario guardado.')).toBeInTheDocument();
   });
 
+  it('permite horario que cruza la medianoche y muestra indicación', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    const open = await screen.findByLabelText('Abre');
+    const close = screen.getByLabelText('Cierra');
+    await user.clear(open);
+    await user.type(open, '08:00');
+    await user.clear(close);
+    await user.type(close, '03:00');
+    expect(screen.getByText('Cruza la medianoche (del día siguiente)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Guardar horario' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Guardar horario' }));
+    await waitFor(() =>
+      expect(apiMock.saveBookingSettings).toHaveBeenCalledWith('tenant-token', {
+        apertura: '08:00',
+        cierre: '03:00',
+        dias_adelanto: 14,
+      }),
+    );
+  });
+
+  it('rechaza horario si apertura y cierre son idénticos', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    const close = await screen.findByLabelText('Cierra');
+    await user.clear(close);
+    await user.type(close, '07:00');
+    expect(screen.getByText('El cierre debe ser distinto de la apertura.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Guardar horario' })).toBeDisabled();
+  });
+
   it('crea asientos en lote: muestra lo que se creará y envía el rango', async () => {
     const user = userEvent.setup();
     apiMock.createSpaceBatch.mockReset().mockResolvedValue({ tipo: 'asiento', solicitados: 3, creados: 2, omitidos: ['Asiento 2'] });
