@@ -89,7 +89,13 @@ export function PosPage() {
   const [removingFrom, setRemovingFrom] = useState<OrderDetail | null>(null);
   // El staff registra pedidos de quien no usa la app (mesero, cajero y admin).
   const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const [staffOrderSpaceId, setStaffOrderSpaceId] = useState<number | undefined>();
   const canCreateStaffOrder = role === 'mesero' || role === 'cajero' || role === 'admin';
+
+  const openStaffOrder = useCallback((spaceId?: number) => {
+    setStaffOrderSpaceId(spaceId);
+    setNewOrderOpen(true);
+  }, []);
 
   const session = useQuery({
     queryKey: ['cash-session', scopeId],
@@ -239,7 +245,7 @@ export function PosPage() {
             </span>
           )}
           {nueva && canCreateStaffOrder && (
-            <Button variant="dark" onClick={() => setNewOrderOpen(true)}>
+            <Button variant="dark" onClick={() => openStaffOrder()}>
               Nuevo pedido
             </Button>
           )}
@@ -253,7 +259,7 @@ export function PosPage() {
           description={pageDescription(role)}
           action={
             canCreateStaffOrder ? (
-              <Button onClick={() => setNewOrderOpen(true)}>Nuevo pedido</Button>
+              <Button onClick={() => openStaffOrder()}>Nuevo pedido</Button>
             ) : undefined
           }
         />
@@ -294,7 +300,15 @@ export function PosPage() {
         </section>
       )}
 
-      {role === 'mesero' && <WaiterBoard token={token} role="mesero" variant={ui} businessName={businessName} />}
+      {role === 'mesero' && (
+        <WaiterBoard
+          token={token}
+          role="mesero"
+          variant={ui}
+          businessName={businessName}
+          onAddOrder={openStaffOrder}
+        />
+      )}
 
       {nueva && isCashier && (
         <section className={`staff-cashbar ${active ? 'staff-cashbar--open' : ''}`} aria-label="Sesión de Caja">
@@ -590,6 +604,7 @@ export function PosPage() {
           <StaffOrderForm
             token={token}
             rol={role ?? ''}
+            initialSpaceId={staffOrderSpaceId}
             onCreated={async (pedido) => {
               setNewOrderOpen(false);
               setNotice(avisoDeAlta(pedido));
