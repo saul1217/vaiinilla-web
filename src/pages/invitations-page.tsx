@@ -400,13 +400,15 @@ function CreateInvitationModal({
     defaultValues: { email: '', rol: 'cajero' },
   });
 
+  const handleOpenChange = (next: boolean) => {
+    onOpenChange(next);
+    if (!next) { reset(); mutation.reset(); }
+  };
+
   return (
     <Modal
       open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) { reset(); mutation.reset(); }
-      }}
+      onOpenChange={handleOpenChange}
       title="Invitar personal"
       description="El enlace será de un solo uso, vencerá en 72 horas y quedará limitado al rol seleccionado."
     >
@@ -433,7 +435,7 @@ function CreateInvitationModal({
           ]}
         />
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>Cancelar</Button>
           <Button type="submit" loading={mutation.isPending}>Enviar invitación</Button>
         </div>
       </form>
