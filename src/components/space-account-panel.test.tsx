@@ -121,8 +121,8 @@ describe('cuenta del espacio', () => {
     const availability: SpaceAvailability = { espacio: court, estado: 'libre', saldada: true, inicio: null, fin_previsto: null, precio_hora: '300.00', proxima_reserva: null };
     render(<SpaceAccountPanel token="t" spaceId={3} availability={availability} />, { wrapper: TestProvider });
 
-    await user.click(await screen.findByRole('button', { name: '1 h' }));
-    expect(apiMock.startCounterRental).toHaveBeenCalledWith('t', { espacioId: 3, duracionMin: 60, inicio: null });
+    await user.click(await screen.findByRole('button', { name: '1 h 30 min' }));
+    expect(apiMock.startCounterRental).toHaveBeenCalledWith('t', { espacioId: 3, duracionMin: 90, inicio: null });
     await user.click(await screen.findByRole('button', { name: 'Cancelar renta' }));
 
     expect(apiMock.cancelCounterRental).toHaveBeenCalledWith('t', 'r1');
