@@ -71,12 +71,12 @@ function llamadas(): LlamadaCrear[] {
   return apiMock.createStaffOrder.mock.calls as LlamadaCrear[];
 }
 
-function renderForm(rol: string, onCreated = vi.fn()) {
+function renderForm(rol: string, onCreated = vi.fn(), initialSpaceId?: number) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-  render(<StaffOrderForm token="token" rol={rol} onCreated={onCreated} />, { wrapper });
+  render(<StaffOrderForm token="token" rol={rol} onCreated={onCreated} initialSpaceId={initialSpaceId} />, { wrapper });
   return { onCreated };
 }
 
@@ -135,6 +135,19 @@ describe('StaffOrderForm', () => {
       pago_diferido: true,
     });
     expect(llamadas()[0]?.[1]).not.toHaveProperty('cobrar_ahora');
+  });
+
+  it('iniciado desde una mesa precarga destino y mesa en el pedido', async () => {
+    const user = userEvent.setup();
+    renderForm('mesero', vi.fn(), 2);
+
+    expect(screen.getByRole('button', { name: 'En mesa' })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByRole('button', { name: /Mesa 2/ })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
+    expect(llamadas()[0]?.[1]).toMatchObject({ destino: 'en_espacio', espacio_id: 2 });
   });
 
   it('solo caja ve "Cobrar ahora", y con monto recibido lo manda normalizado', async () => {
