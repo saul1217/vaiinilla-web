@@ -13,7 +13,7 @@ const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
 const KitchenPage = lazy(() => import('../pages/kitchen-page').then((module) => ({ default: module.KitchenPage })));
 const MenuPage = lazy(() => import('../pages/menu-page').then((module) => ({ default: module.MenuPage })));
-const CashbackPage = lazy(() => import('../pages/cashback-page').then((module) => ({ default: module.CashbackPage })));
+const CashbackComingSoonPage = lazy(() => import('../pages/cashback-coming-soon-page').then((module) => ({ default: module.CashbackComingSoonPage })));
 const StoreFlowPage = lazy(() => import('../pages/store-flow-page').then((module) => ({ default: module.StoreFlowPage })));
 const SpacesPage = lazy(() => import('../pages/spaces-page').then((module) => ({ default: module.SpacesPage })));
 const PlatformDashboardPage = lazy(() => import('../pages/platform-dashboard-page').then((module) => ({ default: module.PlatformDashboardPage })));
@@ -65,7 +65,7 @@ function TenantArea() {
           </Route>
           <Route path="/app/cashback">
             <RoleGuard allowed={['admin']}>
-              <CashbackPage />
+              <CashbackComingSoonPage />
             </RoleGuard>
           </Route>
           <Route path="/app/flujo">

@@ -311,10 +311,10 @@ export function TenantDashboardPage() {
             <span className="dashboard-card__icon">
               <BadgePercent aria-hidden="true" />
             </span>
-            <ArrowRight aria-hidden="true" />
+            <span className="dashboard-card__badge">Próximamente</span>
           </div>
           <h2>Cashback y wallet</h2>
-          <p>Configura el beneficio y consulta recargas, compras, devoluciones y conciliación.</p>
+          <p>Los flujos de cashback y wallet estarán disponibles próximamente.</p>
         </Link>
         <Link to="/app/pos" className="dashboard-card dashboard-card--dark">
           <div className="dashboard-card__top">

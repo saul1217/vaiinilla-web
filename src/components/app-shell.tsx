@@ -33,13 +33,14 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   end?: boolean;
+  comingSoon?: boolean;
 }
 
 const adminNavigation: NavItem[] = [
   { to: '/app', label: 'Resumen', icon: LayoutDashboard, end: true },
   { to: '/app/menu', label: 'Menú', icon: NotebookTabs },
   { to: '/app/pedidos', label: 'Pedidos e historial', icon: ClipboardList },
-  { to: '/app/cashback', label: 'Cashback y wallet', icon: BadgePercent },
+  { to: '/app/cashback', label: 'Cashback y wallet', icon: BadgePercent, comingSoon: true },
   { to: '/app/flujo', label: 'Flujo de mi tienda', icon: Workflow },
   { to: '/app/espacios', label: 'Mesas y espacios', icon: Table2 },
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
@@ -186,7 +187,7 @@ function Shell({
         </div>
 
         <nav className="sidebar__nav" aria-label="Navegación principal">
-          {navigation.map(({ to, label, icon: Icon, end }) => (
+          {navigation.map(({ to, label, icon: Icon, end, comingSoon }) => (
             <NavLink
               key={to}
               to={to}
@@ -196,7 +197,8 @@ function Shell({
               activeClassName="nav-item--active"
             >
               <Icon aria-hidden="true" className="size-5" />
-              <span>{label}</span>
+              <span className="nav-item__label">{label}</span>
+              {comingSoon && <small className="nav-item__badge">Próximamente</small>}
             </NavLink>
           ))}
         </nav>

@@ -1350,6 +1350,33 @@ select:enabled {
     transform 180ms var(--ease);
 }
 
+.nav-item__label {
+  min-width: 0;
+  flex: 1;
+}
+
+.nav-item__badge,
+.dashboard-card__badge,
+.cashback-coming-soon__badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--color-cream-2);
+  color: var(--color-muted);
+  font-size: 0.65rem;
+  font-weight: 750;
+  line-height: 1;
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.nav-item--active .nav-item__badge {
+  border-color: rgba(22, 21, 15, 0.16);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--color-ink);
+}
+
 .nav-item:hover {
   background: var(--color-cream-2);
 }
@@ -1502,6 +1529,54 @@ select:enabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.dashboard-card__badge {
+  padding: 8px 10px;
+}
+
+.cashback-coming-soon {
+  max-width: 1100px;
+}
+
+.cashback-coming-soon__card {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  padding: clamp(24px, 5vw, 48px);
+}
+
+.cashback-coming-soon__icon {
+  display: flex;
+  width: 64px;
+  height: 64px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 20px;
+  background: var(--color-lime);
+  color: var(--color-ink);
+}
+
+.cashback-coming-soon__icon svg:first-child {
+  width: 27px;
+}
+
+.cashback-coming-soon__icon svg:last-child {
+  width: 19px;
+}
+
+.cashback-coming-soon__card h2 {
+  max-width: 24ch;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+.cashback-coming-soon__card > p {
+  max-width: 58ch;
+  color: var(--color-muted);
+  line-height: 1.7;
 }
 
 .dashboard-card--dark .dashboard-card__icon {
