@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MailPlus, MoreHorizontal, RefreshCw, UserPlus, UserX, Pencil } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { InvitationStatusBadge } from '../components/status-badge';
@@ -307,7 +307,7 @@ function StaffRow({ membership, onEdit, onDeactivate }: { membership: StaffMembe
   return <tr><td data-label="Persona"><strong className="font-semibold text-ink">{membership.email}</strong>{membership.nombre && <small className="block text-muted">{membership.nombre}</small>}</td><td data-label="Rol">{roleLabel(membership.rol)}</td><td data-label="Alta">{formatDate(membership.creado_en)}</td><td className="table-actions" data-label="Acciones"><button type="button" className="table-action" onClick={() => onEdit(membership)}><Pencil aria-hidden="true" /> Editar</button><button type="button" className="table-action table-action--danger" onClick={() => onDeactivate(membership)}><UserX aria-hidden="true" /> Desactivar</button></td></tr>;
 }
 
-function InvitationRow({
+export function InvitationRow({
   invitation,
   membership,
   onAction,
@@ -321,6 +321,17 @@ function InvitationRow({
   onDeactivate: (membership: StaffMembership) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [menuOpen]);
   const canRevoke = invitation.estado === 'pendiente';
   const canResend = ['pendiente', 'expirada', 'revocada'].includes(invitation.estado);
   const canManage = invitation.estado === 'aceptada' && membership;
@@ -345,6 +356,7 @@ function InvitationRow({
         {!canRevoke && !canResend && canManage && (
           <div className="relative ml-auto">
             <button
+              ref={menuButtonRef}
               type="button"
               className="table-action table-action--icon"
               aria-label={`Opciones de ${invitation.email}`}
