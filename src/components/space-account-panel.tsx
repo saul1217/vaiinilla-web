@@ -27,7 +27,8 @@ import type {
   SpaceSessionDetail,
 } from '../types/api';
 
-const RENTAL_DURATIONS = [60, 90, 120];
+// Pádel se renta por turnos de 1 h 30 (uno, dos, tres o cuatro seguidos).
+const RENTAL_DURATIONS = [90, 180, 270, 360];
 
 function durationLabel(minutes: number): string {
   const hours = Math.floor(minutes / 60);
