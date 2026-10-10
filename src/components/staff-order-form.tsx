@@ -34,11 +34,14 @@ interface StaffOrderFormProps {
   /** mesero, cajero o admin: lo decide el backend; aquí solo se decide qué opciones mostrar. */
   rol: string;
   onCreated: (pedido: StaffOrderResult) => void;
+  initialSpaceId?: number;
 }
 
-export function StaffOrderForm({ token, rol, onCreated }: StaffOrderFormProps) {
+export function StaffOrderForm({ token, rol, onCreated, initialSpaceId }: StaffOrderFormProps) {
   const puedeCobrarAhora = rol === 'cajero';
-  const [draft, setDraft] = useState<StaffOrderDraft>(BORRADOR_VACIO);
+  const [draft, setDraft] = useState<StaffOrderDraft>(() => initialSpaceId === undefined
+    ? BORRADOR_VACIO
+    : { ...BORRADOR_VACIO, destino: 'en_espacio', espacioId: initialSpaceId });
   const [errores, setErrores] = useState<string[]>([]);
   const [llave, setLlave] = useState<LlaveDeEnvio | null>(null);
 

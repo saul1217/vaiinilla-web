@@ -48,12 +48,14 @@ export function WaiterBoard({
   role,
   variant = 'anterior',
   businessName,
+  onAddOrder,
 }: {
   token: string;
   role: 'mesero' | 'cajero';
   /** 'nueva' = presentación de las apps (oscura); misma función. */
   variant?: StaffUi;
   businessName?: string;
+  onAddOrder?: (spaceId: number) => void;
 }) {
   const client = useMemo(() => createWaiterClient(() => Promise.resolve(token)), [token]);
   const queryClient = useQueryClient();
@@ -396,6 +398,18 @@ export function WaiterBoard({
       >
         {open && (
           <div className="mesero-sheet">
+            {role === 'mesero' && onAddOrder && (
+              <Button
+                variant="dark"
+                onClick={() => {
+                  const spaceId = open.espacio.id;
+                  setOpenId(null);
+                  onAddOrder(spaceId);
+                }}
+              >
+                Nuevo pedido en esta mesa
+              </Button>
+            )}
             {open.llamada && (
               <div className={`mesero-call mesero-call--${open.llamada.estado}`}>
                 <div>

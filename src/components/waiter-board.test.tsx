@@ -140,4 +140,18 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Entregar' }));
     await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('staff-token', 'order-28', 1, ''));
   });
+
+  it('permite iniciar un pedido desde el detalle y comunica la mesa seleccionada', async () => {
+    state.call = null;
+    const user = userEvent.setup();
+    const onAddOrder = vi.fn();
+    render(<WaiterBoard token="staff-token" role="mesero" onAddOrder={onAddOrder} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Mesa 67\. Pedido listo/ }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Nuevo pedido en esta mesa' }));
+
+    expect(onAddOrder).toHaveBeenCalledWith(67);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });
