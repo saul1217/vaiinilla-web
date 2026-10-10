@@ -61,12 +61,15 @@ describe('impresión de cuenta de mesa', () => {
     expect(html).toContain('<h1>USAGI</h1>');
     expect(html).toContain('KIKIN');
     expect(html).toContain('Quesadilla');
-    expect(html).toContain('1x Hamburguesa');
+    expect(html).toContain('<span class="item-name">Hamburguesa</span><span class="quantity">1x</span><span class="amount">$90.00</span>');
+    expect(html).toContain('<span>PRODUCTO</span><span>CANT.</span><span>TOTAL LÍNEA</span>');
     expect(html).toContain('Sin cebolla');
     expect(html).toContain('Bien dorada');
     expect(html).not.toContain('PEDIDO GENERAL');
     expect(html).not.toContain('VAIINILLA');
     expect(html).not.toContain('Propina');
+    expect(html).not.toContain('c/u');
+    expect(html).not.toContain('1x Hamburguesa');
     expect(html).not.toMatch(/<(?:button|nav|a)(?:\s|>)/i);
   });
 
@@ -94,7 +97,7 @@ describe('impresión de cuenta de mesa', () => {
 
     expect(html).toContain('Participante con nombre muy largo');
     expect(html).not.toContain('Participante sin consumo');
-    expect(html).toContain('grid-template-columns:minmax(0,1fr) max-content');
+    expect(html).toContain('grid-template-columns:minmax(0,1fr) 32px max-content');
     expect(html).toContain('white-space:nowrap');
     expect(html).toContain('overflow-wrap:break-word');
     expect(html).toContain('@media print');
@@ -131,7 +134,26 @@ describe('impresión de cuenta de mesa', () => {
     const html = buildSpaceAccountPrintHtml(detail, 'USAGI', new Map());
 
     expect(html).toContain('$12,450.00');
-    expect(html).toContain('grid-template-columns:minmax(0,1fr) max-content');
     expect(html).toContain('white-space:nowrap');
+  });
+
+  it('imprime una línea por producto con cantidad en la segunda columna e importe total de línea en la tercera', () => {
+    const multipleUnits = {
+      ...orderDetail,
+      items: [{
+        ...orderDetail.items[0]!,
+        nombre_producto: 'Agua',
+        cantidad: 3,
+        precio_digital_unitario: '20.00',
+        subtotal: '60.00',
+        opciones: [{ opcion_id: 1, nombre: 'Extra fría', precio_extra: '2.00' }],
+      }],
+    } satisfies OrderDetail;
+    const html = buildSpaceAccountPrintHtml(createDetail('David', 'p-david', { total: 60 }), 'USAGI', new Map([['order-1', multipleUnits]]));
+
+    expect(html).toContain('<span class="item-name">Agua</span><span class="quantity">3x</span><span class="amount">$60.00</span>');
+    expect(html).not.toContain('$20.00');
+    expect(html).not.toContain('c/u');
+    expect(html).toContain('+ Extra fría');
   });
 });
