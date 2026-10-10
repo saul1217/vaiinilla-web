@@ -451,6 +451,7 @@ function SpaceCard({
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(space.nombre);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
   const nameValue = editing ? draftName : space.nombre;
 
   useEffect(() => {
@@ -608,13 +609,42 @@ function SpaceCard({
           <RotateCw aria-hidden="true" className="size-4" />
           Rotar QR
         </Button>
-        <Button type="button" variant="ghost" onClick={onToggle}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            if (space.activo) setConfirmingDeactivate(true);
+            else onToggle();
+          }}
+        >
           {space.activo ? 'Desactivar' : 'Activar'}
         </Button>
         <Button type="button" variant="ghost" onClick={() => setConfirmingDelete(true)}>
           Eliminar
         </Button>
       </div>
+      {confirmingDeactivate && space.activo && (
+        <div className="mt-4 grid gap-3 rounded-2xl bg-cream p-4" role="alertdialog" aria-label={`Desactivar ${space.nombre}`}>
+          <p className="text-sm leading-6 text-ink">
+            ¿Desactivar «{space.nombre}»? Dejará de estar disponible para los clientes hasta que lo actives de nuevo.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                setConfirmingDeactivate(false);
+                onToggle();
+              }}
+            >
+              Sí, desactivar
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setConfirmingDeactivate(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
       {confirmingDelete && (
         <div className="mt-4 grid gap-3 rounded-2xl bg-cream p-4">
           <p className="text-sm leading-6 text-ink">
