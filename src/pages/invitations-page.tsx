@@ -322,15 +322,24 @@ export function InvitationRow({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menuOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (menuContainerRef.current?.contains(event.target as Node)) return;
+      setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       setMenuOpen(false);
       menuButtonRef.current?.focus();
     };
     document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
   }, [menuOpen]);
   const canRevoke = invitation.estado === 'pendiente';
   const canResend = ['pendiente', 'expirada', 'revocada'].includes(invitation.estado);
@@ -354,7 +363,7 @@ export function InvitationRow({
           </button>
         )}
         {!canRevoke && !canResend && canManage && (
-          <div className="relative ml-auto">
+          <div className="relative ml-auto" ref={menuContainerRef}>
             <button
               ref={menuButtonRef}
               type="button"
