@@ -613,13 +613,22 @@ function SpaceCard({
           type="button"
           variant="ghost"
           onClick={() => {
-            if (space.activo) setConfirmingDeactivate(true);
-            else onToggle();
+            if (space.activo) {
+              setConfirmingDelete(false);
+              setConfirmingDeactivate(true);
+            } else onToggle();
           }}
         >
           {space.activo ? 'Desactivar' : 'Activar'}
         </Button>
-        <Button type="button" variant="ghost" onClick={() => setConfirmingDelete(true)}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            setConfirmingDeactivate(false);
+            setConfirmingDelete(true);
+          }}
+        >
           Eliminar
         </Button>
       </div>

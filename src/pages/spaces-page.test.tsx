@@ -126,6 +126,24 @@ describe('desactivar y activar un espacio', () => {
     await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }));
     expect(await screen.findByText(/reservas vigentes/)).toBeInTheDocument();
   });
+
+  it('solo hay una confirmación abierta: Eliminar cierra la de Desactivar', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
+    await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+    expect(screen.getByText(/¿Eliminar «Mesa 1»\?/)).toBeInTheDocument();
+    expect(screen.queryByText(/¿Desactivar «Mesa 1»\?/)).not.toBeInTheDocument();
+  });
+
+  it('solo hay una confirmación abierta: Desactivar cierra la de Eliminar', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    await user.click(screen.getByRole('button', { name: 'Desactivar' }));
+    expect(screen.getByText(/¿Desactivar «Mesa 1»\?/)).toBeInTheDocument();
+    expect(screen.queryByText(/¿Eliminar «Mesa 1»\?/)).not.toBeInTheDocument();
+  });
 });
 
 describe('reservas de canchas en el panel', () => {
