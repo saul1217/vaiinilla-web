@@ -49,8 +49,8 @@ describe('menú de acciones por fila en Personal', () => {
 
   it('abrir el menú de otra fila cierra el anterior', async () => {
     const user = userEvent.setup();
-    const other = { ...invitation, id: 2, email: 'beto@example.com' } as StaffInvitation;
-    const otherMembership = { ...membership, id: 2, email: 'beto@example.com' } as StaffMembership;
+    const other = { ...invitation, id: '2', email: 'beto@example.com' } as unknown as StaffInvitation;
+    const otherMembership = { ...membership, id: '2', email: 'beto@example.com' } as unknown as StaffMembership;
     render(<table><tbody>
       <InvitationRow invitation={invitation} membership={membership} onAction={vi.fn()} onEdit={vi.fn()} onDeactivate={vi.fn()} />
       <InvitationRow invitation={other} membership={otherMembership} onAction={vi.fn()} onEdit={vi.fn()} onDeactivate={vi.fn()} />
