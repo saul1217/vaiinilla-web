@@ -11,14 +11,27 @@ permissions:
   issues: write
   pull-requests: write
   id-token: write
+  actions: read
 jobs:
   claude:
     if: |
       (github.event_name == 'issues' && contains(github.event.issue.body, '@claude')) ||
       (github.event_name != 'issues' && contains(github.event.comment.body, '@claude'))
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          base_branch: develop
+          claude_args: |
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(node:*)"
+            --append-system-prompt "Reglas del repo: trabaja siempre directamente sobre la rama develop (git checkout develop). Nunca hagas push a main ni abras PRs. Al terminar una corrección: 1) corre npm ci si hace falta y luego npm test; 2) si todas las pruebas pasan, haz commit en develop y git push origin HEAD:develop; 3) si alguna prueba falla, no hagas push: explica en el issue qué falló. Responde siempre en el issue con el commit subido a develop y el resultado de las pruebas."
