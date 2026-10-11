@@ -146,50 +146,22 @@ describe('desactivar y activar un espacio', () => {
   });
 });
 
-describe('rotar el QR de un espacio', () => {
+describe('rotar QR no está disponible en el panel', () => {
   beforeEach(() => {
-    apiMock.listManagedSpaces.mockReset().mockResolvedValue([table]);
-    apiMock.rotateSpaceQr.mockReset().mockResolvedValue(table);
+    apiMock.listManagedSpaces.mockReset().mockResolvedValue([court, table]);
+    apiMock.rotateSpaceQr.mockReset();
     apiMock.bookingSettings.mockReset().mockResolvedValue(settings);
   });
 
-  it('pide confirmación con la advertencia y rota solo al confirmar', async () => {
-    const user = userEvent.setup();
+  it('ninguna tarjeta muestra "Rotar QR" ni su aviso, pero siguen Editar nombre, Desactivar y Eliminar', async () => {
     render(<SpacesPage />, { wrapper: TestProvider });
-    await user.click(await screen.findByRole('button', { name: 'Rotar QR' }));
-    expect(screen.getByRole('alertdialog', { name: /Rotar QR de Mesa 1/ })).toHaveTextContent(
-      /QR y NFC actuales dejarán de funcionar/,
-    );
+    await screen.findByText('Mesa 1');
+    expect(screen.queryByRole('button', { name: /Rotar/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Rotar un QR/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Editar nombre' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Desactivar' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Eliminar' })).toHaveLength(2);
     expect(apiMock.rotateSpaceQr).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Sí, rotar QR' }));
-    await waitFor(() => expect(apiMock.rotateSpaceQr).toHaveBeenCalledTimes(1));
-    expect(apiMock.rotateSpaceQr.mock.calls[0]).toContain(3);
-  });
-
-  it('cancelar no rota el QR', async () => {
-    const user = userEvent.setup();
-    render(<SpacesPage />, { wrapper: TestProvider });
-    await user.click(await screen.findByRole('button', { name: 'Rotar QR' }));
-    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-    expect(apiMock.rotateSpaceQr).not.toHaveBeenCalled();
-  });
-
-  it('solo hay una confirmación abierta por tarjeta', async () => {
-    const user = userEvent.setup();
-    render(<SpacesPage />, { wrapper: TestProvider });
-    await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
-    await user.click(screen.getByRole('button', { name: 'Rotar QR' }));
-    expect(screen.getByText(/¿Rotar el QR de «Mesa 1»\?/)).toBeInTheDocument();
-    expect(screen.queryByText(/¿Desactivar «Mesa 1»\?/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Eliminar' }));
-    expect(screen.getByText(/¿Eliminar «Mesa 1»\?/)).toBeInTheDocument();
-    expect(screen.queryByText(/¿Rotar el QR/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Rotar QR' }));
-    expect(screen.queryByText(/¿Eliminar «Mesa 1»\?/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Desactivar' }));
-    expect(screen.getByText(/¿Desactivar «Mesa 1»\?/)).toBeInTheDocument();
-    expect(screen.queryByText(/¿Rotar el QR/)).not.toBeInTheDocument();
   });
 });
 

@@ -5,12 +5,10 @@ import {
   Download,
   ExternalLink,
   ImageIcon,
-  Link2,
   Nfc,
   Pencil,
   Plus,
   RefreshCw,
-  RotateCw,
   Store,
   Table2,
   Trash2,
@@ -423,7 +421,6 @@ function BookingSettingsCard() {
 function SpaceCard({
   space,
   onToggle,
-  onRotate,
   onDelete,
   onRename,
   onChangeType,
@@ -435,7 +432,6 @@ function SpaceCard({
 }: {
   space: ManagedSpace;
   onToggle: () => void;
-  onRotate: () => void;
   onDelete: () => void;
   onRename: (nombre: string) => void;
   onChangeType: (tipo: SpaceType) => void;
@@ -452,7 +448,6 @@ function SpaceCard({
   const [draftName, setDraftName] = useState(space.nombre);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
-  const [confirmingRotate, setConfirmingRotate] = useState(false);
   const nameValue = editing ? draftName : space.nombre;
 
   useEffect(() => {
@@ -610,19 +605,6 @@ function SpaceCard({
           type="button"
           variant="ghost"
           onClick={() => {
-            setConfirmingDelete(false);
-            setConfirmingDeactivate(false);
-            setConfirmingRotate(true);
-          }}
-        >
-          <RotateCw aria-hidden="true" className="size-4" />
-          Rotar QR
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => {
-            setConfirmingRotate(false);
             if (space.activo) {
               setConfirmingDelete(false);
               setConfirmingDeactivate(true);
@@ -636,35 +618,12 @@ function SpaceCard({
           variant="ghost"
           onClick={() => {
             setConfirmingDeactivate(false);
-            setConfirmingRotate(false);
             setConfirmingDelete(true);
           }}
         >
           Eliminar
         </Button>
       </div>
-      {confirmingRotate && (
-        <div className="mt-4 grid gap-3 rounded-2xl bg-cream p-4" role="alertdialog" aria-label={`Rotar QR de ${space.nombre}`}>
-          <p className="text-sm leading-6 text-ink">
-            ¿Rotar el QR de «{space.nombre}»? Los QR y NFC actuales dejarán de funcionar y tendrás que reimprimirlos o regrabarlos. No se puede deshacer.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => {
-                setConfirmingRotate(false);
-                onRotate();
-              }}
-            >
-              Sí, rotar QR
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setConfirmingRotate(false)}>
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      )}
       {confirmingDeactivate && space.activo && (
         <div className="mt-4 grid gap-3 rounded-2xl bg-cream p-4" role="alertdialog" aria-label={`Desactivar ${space.nombre}`}>
           <p className="text-sm leading-6 text-ink">
@@ -744,17 +703,12 @@ export function SpacesPage() {
     onSuccess: (_space, { file }) => setFeedback(file ? 'Foto guardada.' : 'Foto quitada.'),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
   });
-  const rotate = useMutation({
-    mutationFn: (id: number) => api.rotateSpaceQr(token, id),
-    onSuccess: () => setFeedback('QR rotado. El enlace anterior dejó de resolver.'),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
-  });
   const remove = useMutation({
     mutationFn: (id: number) => api.deleteSpace(token, id),
     onSuccess: () => setFeedback('Espacio eliminado. Su nombre queda libre para uno nuevo.'),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
   });
-  const mutationError = create.error || update.error || rotate.error || image.error || remove.error;
+  const mutationError = create.error || update.error || image.error || remove.error;
   function submit(event: FormEvent) {
     event.preventDefault();
     setFeedback(null);
@@ -832,7 +786,6 @@ export function SpacesPage() {
               key={space.id}
               space={space}
               onToggle={() => update.mutate({ id: space.id, activo: !space.activo })}
-              onRotate={() => rotate.mutate(space.id)}
               onDelete={() => remove.mutate(space.id)}
               onRename={(nombre) => update.mutate({ id: space.id, nombre })}
               onChangeType={(tipo) => update.mutate({ id: space.id, tipo })}
@@ -847,10 +800,6 @@ export function SpacesPage() {
           ))}
         </div>
       </section>
-      <p className="flex items-center gap-2 text-xs leading-5 text-muted">
-        <Link2 aria-hidden="true" className="size-4 shrink-0" />
-        Rotar un QR invalida el enlace anterior; imprime el nuevo QR antes de volver a usar ese espacio.
-      </p>
     </div>
   );
 }
