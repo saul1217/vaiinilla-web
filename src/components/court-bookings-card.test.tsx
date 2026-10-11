@@ -21,7 +21,7 @@ const base = {
   inicio: '2026-10-11T19:00:00-06:00',
   fin: '2026-10-11T20:30:00-06:00',
   monto: '300.00',
-  vence_en: '2026-10-11T18:30:00-06:00',
+  expira_en: '2026-10-11T18:30:00-06:00',
   version: 1,
 };
 
@@ -42,7 +42,7 @@ describe('CourtBookingsCard', () => {
   it('cancela una reserva por pagar tras confirmar y no ofrece cancelar las pagadas', async () => {
     apiMock.listStaffBookings.mockResolvedValue([
       { ...base, id: 'b1', estado: 'pendiente_pago' },
-      { ...base, id: 'b2', estado: 'pagada', vence_en: null, cliente: { nombre: 'Luis' } },
+      { ...base, id: 'b2', estado: 'confirmada', expira_en: null, cliente: { nombre: 'Luis' } },
     ]);
     renderCard();
     expect(await screen.findByText('Por pagar en efectivo')).toBeInTheDocument();

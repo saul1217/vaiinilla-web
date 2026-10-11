@@ -1,13 +1,13 @@
 // Reservas de cancha del día para caja: quién, qué cancha, a qué hora, si ya pagó o paga en
 // efectivo, y cuándo vence el apartado. Cobrar (efectivo) o liberar/cancelar la que no llegó.
-// Contrato: GET /reservas/personal?fecha=, POST /reservas/:id/pago y /reservas/:id/cancelacion.
+// Contrato: GET /reservas?fecha=, POST /reservas/:id/pago y /reservas/:id/cancelacion.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarCheck, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { Button, Feedback, Field, Modal } from './ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
-import { errorMessage } from '../lib/api-error';
+import { VaiinillaApiError, errorMessage } from '../lib/api-error';
 import { MONEY_PATTERN, calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
 import { clock } from '../lib/space-status';
 import type { StaffBooking } from '../types/api';
@@ -20,9 +20,21 @@ function localDate(): string {
 
 const STATUS_LABEL: Record<string, string> = {
   pendiente_pago: 'Por pagar en efectivo',
-  pagada: 'Pagada',
+  confirmada: 'Pagada',
+  en_curso: 'Pagada',
+  terminada: 'Pagada',
   cancelada: 'Cancelada',
+  expirada: 'Expirada',
+  conflicto: 'Con conflicto',
 };
+const PAID = new Set(['confirmada', 'en_curso', 'terminada']);
+
+function actionError(error: unknown): string {
+  if (error instanceof VaiinillaApiError && error.status === 403) {
+    return 'Tu rol no tiene permiso para esta acción todavía. Pide a un cajero que la haga o espera la actualización del backend.';
+  }
+  return errorMessage(error);
+}
 
 export function CourtBookingsCard() {
   const { tenant } = useSessions();
@@ -57,7 +69,7 @@ export function CourtBookingsCard() {
   });
 
   const rows = (bookings.data ?? []).filter((booking) => booking.estado !== 'cancelada');
-  const change = paying && MONEY_PATTERN.test(received) ? calculateChange(received, paying.monto) : null;
+  const change = paying?.monto && MONEY_PATTERN.test(received) ? calculateChange(received, paying.monto) : null;
 
   return (
     <section className="panel-card p-5 sm:p-6" aria-labelledby="court-bookings-title">
@@ -78,27 +90,31 @@ export function CourtBookingsCard() {
         </Button>
       </div>
       {notice && <Feedback tone="success">{notice}</Feedback>}
-      {bookings.isError && <Feedback tone="error">{errorMessage(bookings.error)}</Feedback>}
-      {cancel.isError && <Feedback tone="error">{errorMessage(cancel.error)}</Feedback>}
+      {bookings.isError && <Feedback tone="error">{bookings.error instanceof VaiinillaApiError && bookings.error.status === 403
+            ? 'Tu rol no tiene permiso para ver las reservas.'
+            : errorMessage(bookings.error)}</Feedback>}
+      {cancel.isError && <Feedback tone="error">{actionError(cancel.error)}</Feedback>}
       {bookings.isLoading && <p className="text-sm text-muted">Consultando reservas…</p>}
       {bookings.isSuccess && rows.length === 0 && <p className="text-sm text-muted">No hay reservas para hoy.</p>}
       {rows.length > 0 && (
         <ul className="grid gap-3">
           {rows.map((booking) => {
             const unpaid = booking.estado === 'pendiente_pago';
+            const paid = PAID.has(booking.estado);
+            const spaceName = booking.espacio?.nombre ?? 'Cancha';
             return (
               <li key={booking.id} className="grid gap-2 rounded-2xl bg-cream p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-extrabold text-ink">
-                    {booking.espacio.nombre} · {clock(booking.inicio)}–{clock(booking.fin)}
+                    {spaceName} · {clock(booking.inicio)}–{clock(booking.fin)}
                   </p>
-                  <span className={`status-badge ${unpaid ? 'status-badge--warning' : 'status-badge--success'}`}>
+                  <span className={`status-badge ${paid ? 'status-badge--success' : 'status-badge--warning'}`}>
                     {STATUS_LABEL[booking.estado] ?? booking.estado}
                   </span>
                 </div>
                 <p className="text-sm text-muted">
-                  {booking.cliente?.nombre ?? 'Cliente'} · {formatMoney(booking.monto)}
-                  {unpaid && booking.vence_en ? ` · Vence ${clock(booking.vence_en)}` : ''}
+                  {booking.cliente?.nombre ?? 'Cliente'} · {booking.monto ? formatMoney(booking.monto) : 'Monto por confirmar'}
+                  {unpaid && booking.expira_en ? ` · Vence ${clock(booking.expira_en)}` : ''}
                 </p>
                 {unpaid ? (
                   <div className="flex flex-wrap gap-2">
@@ -123,9 +139,9 @@ export function CourtBookingsCard() {
                       Liberar cancha / Cancelar
                     </Button>
                   </div>
-                ) : (
+                ) : paid ? (
                   <p className="text-xs text-muted">Ya está pagada: no se cancela desde aquí hasta definir el reembolso.</p>
-                )}
+                ) : null}
               </li>
             );
           })}
@@ -137,7 +153,7 @@ export function CourtBookingsCard() {
         title="Liberar cancha"
         description={
           canceling
-            ? `¿Cancelar la reserva de ${canceling.cliente?.nombre ?? 'el cliente'} en ${canceling.espacio.nombre}, de ${clock(canceling.inicio)} a ${clock(canceling.fin)}? El horario queda libre y el cliente verá su pedido como cancelado por el establecimiento.`
+            ? `¿Cancelar la reserva de ${canceling.cliente?.nombre ?? 'el cliente'} en ${canceling.espacio?.nombre ?? 'la cancha'}, de ${clock(canceling.inicio)} a ${clock(canceling.fin)}? El horario queda libre y el cliente verá su pedido como cancelado por el establecimiento.`
             : undefined
         }
       >
@@ -154,7 +170,7 @@ export function CourtBookingsCard() {
         open={Boolean(paying)}
         onOpenChange={(open) => !open && setPaying(null)}
         title="Cobrar reserva en efectivo"
-        description={paying ? `${paying.espacio.nombre} · ${formatMoney(paying.monto)}` : undefined}
+        description={paying ? `${paying.espacio?.nombre ?? 'Cancha'}${paying.monto ? ` · ${formatMoney(paying.monto)}` : ''}` : undefined}
       >
         <form
           className="grid gap-3"
@@ -171,7 +187,7 @@ export function CourtBookingsCard() {
             onChange={(event) => setReceived(event.target.value)}
             hint={change ? `Cambio: ${formatMoney(change)}` : undefined}
           />
-          {pay.isError && <Feedback tone="error">{errorMessage(pay.error)}</Feedback>}
+          {pay.isError && <Feedback tone="error">{actionError(pay.error)}</Feedback>}
           <Button type="submit" loading={pay.isPending} disabled={!MONEY_PATTERN.test(received)}>
             Cobrar
           </Button>

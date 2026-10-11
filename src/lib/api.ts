@@ -805,7 +805,7 @@ export const api = {
 
   /** Reservas de cancha del día (de clientes y de mostrador). `date` = YYYY-MM-DD. */
   async listStaffBookings(token: string, date: string): Promise<StaffBooking[]> {
-    return (await request<StaffBooking[]>(`/reservas/personal?fecha=${encodeURIComponent(date)}`, { token })).data;
+    return (await request<StaffBooking[]>(`/reservas?fecha=${encodeURIComponent(date)}`, { token })).data;
   },
 
   /** `null` = el negocio todavía no conecta su cuenta de Stripe. */
