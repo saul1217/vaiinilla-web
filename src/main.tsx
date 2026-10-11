@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { installPreloadErrorReload } from './app/preload-error';
 import { AppRouter } from './app/router';
 import { AuthProvider } from './context/auth-context';
 import { SessionProvider } from './context/session-context';
 import './styles/index.css';
+
+installPreloadErrorReload();
 
 const queryClient = new QueryClient({
   defaultOptions: {
