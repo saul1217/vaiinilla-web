@@ -47,7 +47,22 @@ export function CourtBookingsCard() {
   const [canceling, setCanceling] = useState<StaffBooking | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const queryKey = ['court-bookings', scopeId, date];
-  const bookings = useQuery({ queryKey, enabled: Boolean(token), queryFn: () => api.listStaffBookings(token, date) });
+  // Espera sesión y establecimiento (evita pedir sin token o con otro alcance). Un 404 puntual
+  // en la primera carga se reintenta una vez antes de mostrarse; siempre refresca al abrir.
+  const bookings = useQuery({
+    queryKey,
+    enabled: Boolean(token && scopeId),
+    refetchOnMount: 'always',
+    retry: (failureCount, error) => {
+      if (error instanceof VaiinillaApiError) {
+        if (error.status === 404) return failureCount < 1;
+        if (error.status < 500) return false;
+      }
+      return failureCount < 2;
+    },
+    retryDelay: 600,
+    queryFn: () => api.listStaffBookings(token, date),
+  });
   const refresh = () => queryClient.invalidateQueries({ queryKey });
 
   const pay = useMutation({
@@ -90,7 +105,7 @@ export function CourtBookingsCard() {
         </Button>
       </div>
       {notice && <Feedback tone="success">{notice}</Feedback>}
-      {bookings.isError && <Feedback tone="error">{bookings.error instanceof VaiinillaApiError && bookings.error.status === 403
+      {bookings.isError && !bookings.isFetching && <Feedback tone="error">{bookings.error instanceof VaiinillaApiError && bookings.error.status === 403
             ? 'Tu rol no tiene permiso para ver las reservas.'
             : errorMessage(bookings.error)}</Feedback>}
       {cancel.isError && <Feedback tone="error">{actionError(cancel.error)}</Feedback>}
