@@ -52,6 +52,7 @@ import type {
   AccountPaymentMethod,
   CounterRental,
   CounterRentalPayment,
+  StaffBooking,
   SpaceAvailability,
   SpaceSessionDetail,
   ClosedSpaceSessionDetail,
@@ -800,6 +801,11 @@ export const api = {
   /** Suelta el horario apartado si no se cobró. */
   async cancelCounterRental(token: string, rentalId: string): Promise<void> {
     await request(`/reservas/${rentalId}/cancelacion`, { method: 'POST', token, idempotent: true });
+  },
+
+  /** Reservas de cancha del día (de clientes y de mostrador). `date` = YYYY-MM-DD. */
+  async listStaffBookings(token: string, date: string): Promise<StaffBooking[]> {
+    return (await request<StaffBooking[]>(`/reservas?fecha=${encodeURIComponent(date)}`, { token })).data;
   },
 
   /** `null` = el negocio todavía no conecta su cuenta de Stripe. */

@@ -607,6 +607,20 @@ export interface CounterRental {
   version: number;
 }
 
+/** Reserva de cancha del día vista por caja (GET /reservas?fecha=). Algunos campos los completa el backend (vaiinilla_back#112). */
+export interface StaffBooking {
+  id: string;
+  espacio?: { id?: number | string; nombre: string } | null;
+  cliente?: { nombre: string } | null;
+  inicio: string;
+  fin: string;
+  monto?: string | null;
+  estado: 'pendiente_pago' | 'confirmada' | 'en_curso' | 'terminada' | 'cancelada' | 'expirada' | 'conflicto' | string;
+  /** Hora en que vence el apartado en efectivo; null si ya no aplica. */
+  expira_en?: string | null;
+  version?: number;
+}
+
 export interface CounterRentalPayment {
   reserva: CounterRental;
   cobro: { monto_recibido: string; cambio: string } | null;

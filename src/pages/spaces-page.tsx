@@ -5,12 +5,10 @@ import {
   Download,
   ExternalLink,
   ImageIcon,
-  Link2,
   Nfc,
   Pencil,
   Plus,
   RefreshCw,
-  RotateCw,
   Store,
   Table2,
   Trash2,
@@ -19,6 +17,7 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { CourtBookingsCard } from '../components/court-bookings-card';
 import { Button, CustomSelect, Feedback, Field, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
@@ -423,7 +422,6 @@ function BookingSettingsCard() {
 function SpaceCard({
   space,
   onToggle,
-  onRotate,
   onDelete,
   onRename,
   onChangeType,
@@ -435,7 +433,6 @@ function SpaceCard({
 }: {
   space: ManagedSpace;
   onToggle: () => void;
-  onRotate: () => void;
   onDelete: () => void;
   onRename: (nombre: string) => void;
   onChangeType: (tipo: SpaceType) => void;
@@ -451,6 +448,7 @@ function SpaceCard({
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(space.nombre);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
   const nameValue = editing ? draftName : space.nombre;
 
   useEffect(() => {
@@ -604,17 +602,51 @@ function SpaceCard({
           <Pencil aria-hidden="true" className="size-4" />
           Editar nombre
         </Button>
-        <Button type="button" variant="ghost" onClick={onRotate}>
-          <RotateCw aria-hidden="true" className="size-4" />
-          Rotar QR
-        </Button>
-        <Button type="button" variant="ghost" onClick={onToggle}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            if (space.activo) {
+              setConfirmingDelete(false);
+              setConfirmingDeactivate(true);
+            } else onToggle();
+          }}
+        >
           {space.activo ? 'Desactivar' : 'Activar'}
         </Button>
-        <Button type="button" variant="ghost" onClick={() => setConfirmingDelete(true)}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            setConfirmingDeactivate(false);
+            setConfirmingDelete(true);
+          }}
+        >
           Eliminar
         </Button>
       </div>
+      {confirmingDeactivate && space.activo && (
+        <div className="mt-4 grid gap-3 rounded-2xl bg-cream p-4" role="alertdialog" aria-label={`Desactivar ${space.nombre}`}>
+          <p className="text-sm leading-6 text-ink">
+            ¿Desactivar «{space.nombre}»? Dejará de estar disponible para los clientes hasta que lo actives de nuevo.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                setConfirmingDeactivate(false);
+                onToggle();
+              }}
+            >
+              Sí, desactivar
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setConfirmingDeactivate(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
       {confirmingDelete && (
         <div className="mt-4 grid gap-3 rounded-2xl bg-cream p-4">
           <p className="text-sm leading-6 text-ink">
@@ -672,17 +704,12 @@ export function SpacesPage() {
     onSuccess: (_space, { file }) => setFeedback(file ? 'Foto guardada.' : 'Foto quitada.'),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
   });
-  const rotate = useMutation({
-    mutationFn: (id: number) => api.rotateSpaceQr(token, id),
-    onSuccess: () => setFeedback('QR rotado. El enlace anterior dejó de resolver.'),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
-  });
   const remove = useMutation({
     mutationFn: (id: number) => api.deleteSpace(token, id),
     onSuccess: () => setFeedback('Espacio eliminado. Su nombre queda libre para uno nuevo.'),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] }),
   });
-  const mutationError = create.error || update.error || rotate.error || image.error || remove.error;
+  const mutationError = create.error || update.error || image.error || remove.error;
   function submit(event: FormEvent) {
     event.preventDefault();
     setFeedback(null);
@@ -730,6 +757,7 @@ export function SpacesPage() {
         </form>
       </section>
       <BatchSpacesCard onCreated={setFeedback} />
+      {spaces.data?.some((space) => space.tipo === 'cancha') && <CourtBookingsCard />}
       {spaces.data?.some((space) => space.tipo === 'cancha') && <BookingSettingsCard />}
       <section className="space-y-4" aria-labelledby="spaces-list-title">
         <div className="flex items-center justify-between gap-4">
@@ -760,7 +788,6 @@ export function SpacesPage() {
               key={space.id}
               space={space}
               onToggle={() => update.mutate({ id: space.id, activo: !space.activo })}
-              onRotate={() => rotate.mutate(space.id)}
               onDelete={() => remove.mutate(space.id)}
               onRename={(nombre) => update.mutate({ id: space.id, nombre })}
               onChangeType={(tipo) => update.mutate({ id: space.id, tipo })}
@@ -775,10 +802,6 @@ export function SpacesPage() {
           ))}
         </div>
       </section>
-      <p className="flex items-center gap-2 text-xs leading-5 text-muted">
-        <Link2 aria-hidden="true" className="size-4 shrink-0" />
-        Rotar un QR invalida el enlace anterior; imprime el nuevo QR antes de volver a usar ese espacio.
-      </p>
     </div>
   );
 }

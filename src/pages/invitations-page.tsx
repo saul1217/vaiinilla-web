@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MailPlus, MoreHorizontal, RefreshCw, UserPlus, UserX, Pencil } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { InvitationStatusBadge } from '../components/status-badge';
@@ -307,7 +307,7 @@ function StaffRow({ membership, onEdit, onDeactivate }: { membership: StaffMembe
   return <tr><td data-label="Persona"><strong className="font-semibold text-ink">{membership.email}</strong>{membership.nombre && <small className="block text-muted">{membership.nombre}</small>}</td><td data-label="Rol">{roleLabel(membership.rol)}</td><td data-label="Alta">{formatDate(membership.creado_en)}</td><td className="table-actions" data-label="Acciones"><button type="button" className="table-action" onClick={() => onEdit(membership)}><Pencil aria-hidden="true" /> Editar</button><button type="button" className="table-action table-action--danger" onClick={() => onDeactivate(membership)}><UserX aria-hidden="true" /> Desactivar</button></td></tr>;
 }
 
-function InvitationRow({
+export function InvitationRow({
   invitation,
   membership,
   onAction,
@@ -321,6 +321,26 @@ function InvitationRow({
   onDeactivate: (membership: StaffMembership) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (menuContainerRef.current?.contains(event.target as Node)) return;
+      setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [menuOpen]);
   const canRevoke = invitation.estado === 'pendiente';
   const canResend = ['pendiente', 'expirada', 'revocada'].includes(invitation.estado);
   const canManage = invitation.estado === 'aceptada' && membership;
@@ -343,8 +363,9 @@ function InvitationRow({
           </button>
         )}
         {!canRevoke && !canResend && canManage && (
-          <div className="relative ml-auto">
+          <div className="relative ml-auto" ref={menuContainerRef}>
             <button
+              ref={menuButtonRef}
               type="button"
               className="table-action table-action--icon"
               aria-label={`Opciones de ${invitation.email}`}
@@ -400,13 +421,15 @@ function CreateInvitationModal({
     defaultValues: { email: '', rol: 'cajero' },
   });
 
+  const handleOpenChange = (next: boolean) => {
+    onOpenChange(next);
+    if (!next) { reset(); mutation.reset(); }
+  };
+
   return (
     <Modal
       open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) { reset(); mutation.reset(); }
-      }}
+      onOpenChange={handleOpenChange}
       title="Invitar personal"
       description="El enlace será de un solo uso, vencerá en 72 horas y quedará limitado al rol seleccionado."
     >
@@ -433,7 +456,7 @@ function CreateInvitationModal({
           ]}
         />
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>Cancelar</Button>
           <Button type="submit" loading={mutation.isPending}>Enviar invitación</Button>
         </div>
       </form>

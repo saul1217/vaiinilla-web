@@ -14,6 +14,7 @@ const apiMock = vi.hoisted(() => ({
   uploadSpaceImage: vi.fn(),
   deleteSpaceImage: vi.fn(),
   deleteSpace: vi.fn(),
+  listStaffBookings: vi.fn().mockResolvedValue([]),
   bookingSettings: vi.fn(),
   saveBookingSettings: vi.fn(),
 }));
@@ -81,6 +82,87 @@ describe('eliminar un espacio desde el panel', () => {
     await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
     await user.click(screen.getByRole('button', { name: 'Sí, eliminar' }));
     expect(await screen.findByText(/Ciérrala antes de eliminarlo/)).toBeInTheDocument();
+  });
+});
+
+describe('desactivar y activar un espacio', () => {
+  beforeEach(() => {
+    apiMock.listManagedSpaces.mockReset().mockResolvedValue([table]);
+    apiMock.updateSpace.mockReset().mockResolvedValue(table);
+    apiMock.bookingSettings.mockReset().mockResolvedValue(settings);
+  });
+
+  it('pide confirmación y desactiva solo al confirmar', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
+    expect(screen.getByText(/¿Desactivar «Mesa 1»\?/)).toBeInTheDocument();
+    expect(apiMock.updateSpace).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }));
+    await waitFor(() => expect(apiMock.updateSpace).toHaveBeenCalledWith('tenant-token', 3, { activo: false }));
+  });
+
+  it('cancelar deja el espacio activo', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByText(/¿Desactivar «Mesa 1»\?/)).not.toBeInTheDocument();
+    expect(apiMock.updateSpace).not.toHaveBeenCalled();
+  });
+
+  it('activar un espacio inactivo no pide confirmación', async () => {
+    apiMock.listManagedSpaces.mockResolvedValue([{ ...table, activo: false }]);
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Activar' }));
+    await waitFor(() => expect(apiMock.updateSpace).toHaveBeenCalledWith('tenant-token', 3, { activo: true }));
+  });
+
+  it('si el servidor responde que hay reservas, muestra el motivo', async () => {
+    apiMock.updateSpace.mockRejectedValue(new Error('Este espacio tiene reservas vigentes.'));
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
+    await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }));
+    expect(await screen.findByText(/reservas vigentes/)).toBeInTheDocument();
+  });
+
+  it('solo hay una confirmación abierta: Eliminar cierra la de Desactivar', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
+    await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+    expect(screen.getByText(/¿Eliminar «Mesa 1»\?/)).toBeInTheDocument();
+    expect(screen.queryByText(/¿Desactivar «Mesa 1»\?/)).not.toBeInTheDocument();
+  });
+
+  it('solo hay una confirmación abierta: Desactivar cierra la de Eliminar', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    await user.click(screen.getByRole('button', { name: 'Desactivar' }));
+    expect(screen.getByText(/¿Desactivar «Mesa 1»\?/)).toBeInTheDocument();
+    expect(screen.queryByText(/¿Eliminar «Mesa 1»\?/)).not.toBeInTheDocument();
+  });
+});
+
+describe('rotar QR no está disponible en el panel', () => {
+  beforeEach(() => {
+    apiMock.listManagedSpaces.mockReset().mockResolvedValue([court, table]);
+    apiMock.rotateSpaceQr.mockReset();
+    apiMock.bookingSettings.mockReset().mockResolvedValue(settings);
+  });
+
+  it('ninguna tarjeta muestra "Rotar QR" ni su aviso, pero siguen Editar nombre, Desactivar y Eliminar', async () => {
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await screen.findByText('Mesa 1');
+    expect(screen.queryByRole('button', { name: /Rotar/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Rotar un QR/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Editar nombre' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Desactivar' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Eliminar' })).toHaveLength(2);
+    expect(apiMock.rotateSpaceQr).not.toHaveBeenCalled();
   });
 });
 
