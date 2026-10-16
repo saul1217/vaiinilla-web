@@ -467,10 +467,19 @@ export interface BusinessSettings {
   tienda_url?: string | null;
   /** Videos del local (hasta 5). Un backend anterior no lo manda: se toma como lista vacía. */
   videos_local?: StoreVideo[];
+  /** Foto del lugar (Mis pedidos en la app). Se cambia con su propia ruta. Un backend anterior no la manda. */
+  imagen_url?: string | null;
+  /** Logo del negocio (carrito y seguimiento en la app). Se cambia con su propia ruta. */
+  logo_url?: string | null;
   tipos_disponibles: string[];
 }
 
-export type BusinessSettingsInput = Partial<Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url'>>;
+/** Las dos imágenes del negocio que sube su administración. */
+export type StoreImageKind = 'logo' | 'foto';
+
+export type BusinessSettingsInput = Partial<
+  Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url' | 'imagen_url' | 'logo_url'>
+>;
 
 /** Una cuenta abierta (pagar al final) que nadie ha cobrado. */
 export interface UnpaidAccount {

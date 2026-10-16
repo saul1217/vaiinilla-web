@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CardPaymentsCard } from '../components/card-payments-card';
 import { StoreDirectoryCard } from '../components/store-directory-card';
+import { StoreImagesCard } from '../components/store-images-card';
 import { StoreVideosCard } from '../components/store-videos-card';
 import { Choice } from '../components/choice';
 import { Button, Feedback, Field, PageHeader } from '../components/ui';
@@ -103,6 +104,7 @@ export function StoreFlowPage() {
 
       <CardPaymentsCard token={token} scopeId={scopeId} />
       {query.data && <StoreDirectoryCard token={token} scopeId={scopeId} settings={query.data} />}
+      {query.data && <StoreImagesCard token={token} scopeId={scopeId} settings={query.data} />}
       {query.data && <StoreVideosCard token={token} scopeId={scopeId} settings={query.data} />}
 
       {(settings || unknownType) && (
