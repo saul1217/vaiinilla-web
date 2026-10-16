@@ -60,6 +60,7 @@ import type {
   ItemRejectionResult,
   PendingRefund,
   RefundMethod,
+  StoreImageKind,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -866,6 +867,16 @@ export const api = {
 
   async saveBusinessSettings(token: string, input: BusinessSettingsInput): Promise<BusinessSettings> {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
+  },
+
+  async uploadStoreImage(token: string, kind: StoreImageKind, file: File): Promise<BusinessSettings> {
+    const body = new FormData();
+    body.append('imagen', file);
+    return (await request<BusinessSettings>(`/establecimiento/${kind}`, { method: 'PUT', token, idempotent: true, body })).data;
+  },
+
+  async deleteStoreImage(token: string, kind: StoreImageKind): Promise<BusinessSettings> {
+    return (await request<BusinessSettings>(`/establecimiento/${kind}`, { method: 'DELETE', token, idempotent: true })).data;
   },
 
   async uploadSpaceImage(token: string, id: number, file: File): Promise<ManagedSpace> {
