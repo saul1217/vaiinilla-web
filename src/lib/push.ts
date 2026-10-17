@@ -32,6 +32,24 @@ export function currentPushToken(): string | null {
   return tokenActual;
 }
 
+/**
+ * El worker recibe la configuración en su propia URL, no por postMessage: el
+ * navegador lo apaga cuando está inactivo y lo revive para atender el push, y en ese
+ * momento no hay página que se la mande. La URL de registro sí sobrevive.
+ *
+ * Son valores públicos (viajan en el bundle), así que no hay nada que proteger aquí.
+ */
+function rutaDelWorker(): string {
+  const p = new URLSearchParams({
+    apiKey: firebaseConfig.apiKey ?? '',
+    authDomain: firebaseConfig.authDomain ?? '',
+    projectId: firebaseConfig.projectId ?? '',
+    messagingSenderId: firebaseConfig.messagingSenderId ?? '',
+    appId: firebaseConfig.appId ?? '',
+  });
+  return `/firebase-messaging-sw.js?${p.toString()}`;
+}
+
 const PREFERENCIA = 'vaiinilla_push_activo';
 
 /**
@@ -75,10 +93,7 @@ export async function enablePush(
       if (respuesta !== 'granted') return 'denied';
     }
 
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-    // El worker no pasa por Vite, así que la configuración se le entrega aquí.
-    const listo = await navigator.serviceWorker.ready;
-    listo.active?.postMessage({ type: 'FIREBASE_CONFIG', config: firebaseConfig });
+    const registration = await navigator.serviceWorker.register(rutaDelWorker());
 
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     const token = await getToken(getMessaging(app), {
@@ -109,7 +124,7 @@ export async function disablePush(sessionToken: string): Promise<void> {
   let token = tokenActual;
   if (!token && pushConfigured) {
     try {
-      const registration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+      const registration = await navigator.serviceWorker.getRegistration(rutaDelWorker());
       const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
       token = await getToken(getMessaging(app), {
         vapidKey,
