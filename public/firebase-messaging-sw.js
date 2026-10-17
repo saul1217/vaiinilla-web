@@ -40,8 +40,11 @@ function iniciar(config) {
     const cuerpo = datos.folio ? `Pedido #${datos.folio}` : datos.motivo || '';
     self.registration.showNotification(titulo, {
       body: cuerpo,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      // El panel aún no es instalable (no hay manifest ni juego de iconos), así que
+      // se usa la marca que ya sirve `public/brand/`. Sin `badge`: Chrome cae a su
+      // propio icono, que es lo correcto mientras la notificación salga del navegador
+      // y no de una app instalada.
+      icon: '/brand/vaiinilla-mark.webp',
       // Un aviso por llamada o por pedido: si llega otro del mismo, se reemplaza
       // en vez de apilarse.
       tag: datos.llamada_id || datos.orderId || datos.alert || 'vaiinilla',
