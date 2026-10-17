@@ -31,6 +31,16 @@ const TEXTO_MOTIVO = {
   cuenta: 'Pide la cuenta',
 };
 
+// A dónde lleva cada aviso al tocarlo. El tablero de Mesero vive dentro de PosPage,
+// en /app/pos (roles admin, cajero y mesero); Cocina tiene su propia pantalla.
+const RUTA_POR_ALERTA = {
+  llamada_mesa: '/app/pos',
+  listo_mesero: '/app/pos',
+  turno_por_terminar: '/app/pos',
+  por_cobrar: '/app/pos',
+  nueva_comanda: '/app/cocina',
+};
+
 /** Arma título y cuerpo desde el `data` del backend, que manda mensajes data-only. */
 function textoDelAviso(d) {
   const espacio = d.espacio_nombre;
@@ -103,7 +113,7 @@ function iniciar(config) {
       // que el mesero la encuentre aunque no oyera el teléfono.
       vibrate: [300, 120, 300, 120, 400],
       requireInteraction: true,
-      data: { url: '/mesero' },
+      data: { url: RUTA_POR_ALERTA[datos.alert] || '/app/pos' },
     });
   });
 }
@@ -116,11 +126,22 @@ if (configuracion) iniciar(configuracion);
 // Al tocar el aviso: enfocar la pestaña del panel si ya está abierta, o abrirla.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const destino = (event.notification.data && event.notification.data.url) || '/';
+  const destino = (event.notification.data && event.notification.data.url) || '/app/pos';
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientes) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientes) => {
       for (const cliente of clientes) {
-        if ('focus' in cliente) return cliente.focus();
+        if ('focus' in cliente) {
+          // Si ya hay una pestaña del panel, llevarla al destino en vez de dejar al
+          // mesero donde estuviera; `navigate` no existe en todos los navegadores.
+          if (!cliente.url.endsWith(destino) && 'navigate' in cliente) {
+            try {
+              await cliente.navigate(destino);
+            } catch {
+              // Queda el focus; el mesero navega a mano.
+            }
+          }
+          return cliente.focus();
+        }
       }
       return self.clients.openWindow(destino);
     }),
