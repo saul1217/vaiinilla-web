@@ -98,6 +98,11 @@ function iniciar(config) {
       // en vez de apilarse.
       tag: datos.llamada_id || datos.orderId || datos.alert || 'vaiinilla',
       renotify: true,
+      // El audio del aviso lo decide el canal de Chrome en Android; desde la web no
+      // se puede elegir. Lo que sí: vibrar fuerte y que no se desvanezca sola, para
+      // que el mesero la encuentre aunque no oyera el teléfono.
+      vibrate: [300, 120, 300, 120, 400],
+      requireInteraction: true,
       data: { url: '/mesero' },
     });
   });
