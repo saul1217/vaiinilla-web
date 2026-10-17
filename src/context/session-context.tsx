@@ -212,7 +212,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const firebaseToken = await firebaseUser.getIdToken(true);
     const response = await api.createTenantContext(firebaseToken, access.membresia_id);
     const next = createTenantSession(access, response);
-    rememberTenantMembership(access.membresia_id);
+    // El rol solo se conoce aquí, no al entrar a Firebase: Mesero y Cocina conservan
+    // la sesión al cerrar el navegador; Caja y Administración no.
+    rememberTenantMembership(access.membresia_id, access.rol);
     setPlatform(null);
     setTenant(next);
     return next;

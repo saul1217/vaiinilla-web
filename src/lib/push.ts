@@ -32,6 +32,29 @@ export function currentPushToken(): string | null {
   return tokenActual;
 }
 
+const PREFERENCIA = 'vaiinilla_push_activo';
+
+/**
+ * Preferencia del usuario, separada del permiso del navegador: puede tener el
+ * permiso concedido y aun así querer las notificaciones apagadas (su día libre, o
+ * trabaja con el panel a la vista y no quiere el doble aviso).
+ */
+export function pushPreferido(): boolean {
+  try {
+    return window.localStorage.getItem(PREFERENCIA) === 'si';
+  } catch {
+    return false;
+  }
+}
+
+function guardarPreferencia(activo: boolean): void {
+  try {
+    window.localStorage.setItem(PREFERENCIA, activo ? 'si' : 'no');
+  } catch {
+    // Sin almacenamiento la preferencia dura lo que la pestaña; no es crítico.
+  }
+}
+
 /**
  * Pide permiso si hace falta, consigue el token y lo registra. Devuelve el estado
  * resultante para que la interfaz pueda explicarlo.
@@ -66,6 +89,7 @@ export async function enablePush(
 
     await api.registerDevice(sessionToken, token);
     tokenActual = token;
+    guardarPreferencia(true);
     return 'ok';
   } catch (error) {
     console.warn('[push] no se pudo activar:', error);
@@ -73,11 +97,31 @@ export async function enablePush(
   }
 }
 
-/** Baja del token al cerrar sesión. Silencioso: tampoco debe romper el logout. */
+/**
+ * Apaga las notificaciones: da de baja el token y recuerda la preferencia.
+ *
+ * Silencioso por diseño — se usa tanto desde el interruptor como al cerrar sesión, y
+ * en ninguno de los dos casos debe romper el flujo. Si el token ya no está en memoria
+ * (por ejemplo tras recargar), lo recupera del registro para poder borrarlo.
+ */
 export async function disablePush(sessionToken: string): Promise<void> {
-  if (!tokenActual) return;
+  guardarPreferencia(false);
+  let token = tokenActual;
+  if (!token && pushConfigured) {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+      const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+      token = await getToken(getMessaging(app), {
+        vapidKey,
+        serviceWorkerRegistration: registration ?? undefined,
+      });
+    } catch {
+      token = null;
+    }
+  }
+  if (!token) return;
   try {
-    await api.unregisterDevice(sessionToken, tokenActual);
+    await api.unregisterDevice(sessionToken, token);
   } catch (error) {
     console.warn('[push] no se pudo dar de baja el token:', error);
   } finally {

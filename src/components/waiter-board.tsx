@@ -3,7 +3,7 @@
 // acciones Voy / Atendida / Entregar y su cuenta (cobrar, rentar, liberar).
 // Contrato: docs/mesero-backend.md.
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Bell, CheckCircle2, ScanLine, Table2 } from 'lucide-react';
+import { Bell, BellOff, CheckCircle2, ScanLine, Table2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, EmptyState, Feedback, Modal } from './ui';
 import { SpaceAccountPanel } from './space-account-panel';
@@ -12,7 +12,7 @@ import { splitSpaceName, type StaffUi } from '../lib/staff-ui';
 import { OrderStatusBadge } from './status-badge';
 import { alertKeys, newAlerts, type WaiterAlert } from '../lib/waiter-alerts';
 import { playAlert, systemNotify, unlockAlertSound } from '../lib/alert-sound';
-import { enablePush } from '../lib/push';
+import { disablePush, enablePush, pushPreferido } from '../lib/push';
 import { QrTokenField } from './qr-token-field';
 import { api } from '../lib/api';
 import { deliveryRequiresQr as orderRequiresQr } from '../lib/delivery-policy';
@@ -151,6 +151,41 @@ export function WaiterBoard({
   const [notifyPermission, setNotifyPermission] = useState(() =>
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
   );
+  // Preferencia propia, aparte del permiso del navegador: se puede tener el permiso
+  // concedido y querer el push apagado.
+  const [pushOn, setPushOn] = useState(() => pushPreferido());
+  const [pushBusy, setPushBusy] = useState(false);
+
+  const togglePush = async () => {
+    setPushBusy(true);
+    try {
+      if (pushOn) {
+        await disablePush(token);
+        setPushOn(false);
+        setNotice({ tone: 'success', text: 'Notificaciones apagadas en este dispositivo.' });
+      } else {
+        unlockAlertSound();
+        const estado = await enablePush(token);
+        setPushOn(estado === 'ok');
+        if (estado === 'denied') {
+          setNotice({
+            tone: 'error',
+            text: 'El navegador bloqueó las notificaciones. Habilítalas en los permisos del sitio.',
+          });
+        } else if (estado === 'unsupported') {
+          setNotice({
+            tone: 'error',
+            text: 'Este navegador no admite notificaciones; los avisos siguen en pantalla.',
+          });
+        } else if (estado === 'error') {
+          setNotice({ tone: 'error', text: 'No se pudieron activar las notificaciones.' });
+        }
+      }
+    } finally {
+      if (typeof Notification !== 'undefined') setNotifyPermission(Notification.permission);
+      setPushBusy(false);
+    }
+  };
   useEffect(() => {
     if (!board.data || role !== 'mesero') return;
     const current = board.data.tables;
@@ -202,22 +237,26 @@ export function WaiterBoard({
 
   const alertsBlock = (
     <>
-      {role === 'mesero' && notifyPermission === 'default' && (
+      {/* Interruptor, no botón de un solo sentido: cubre la franja y el sonido con la
+          pestaña abierta, y el push del backend cuando ya no lo está. */}
+      {role === 'mesero' && notifyPermission !== 'unsupported' && (
         <button
           type="button"
           className="waiter-alerts__enable"
-          onClick={() => {
-            unlockAlertSound();
-            // El mismo botón cubre los dos alcances: la franja y el sonido con la
-            // pestaña abierta, y el push del backend cuando ya no lo está. `enablePush`
-            // pide el permiso por su cuenta y nunca lanza; si no hay clave VAPID
-            // configurada devuelve 'unsupported' y solo queda el permiso del navegador.
-            void enablePush(token).then(() => {
-              if (typeof Notification !== 'undefined') setNotifyPermission(Notification.permission);
-            });
-          }}
+          onClick={() => void togglePush()}
+          disabled={pushBusy}
+          aria-pressed={pushOn}
         >
-          <Bell aria-hidden="true" className="size-4" /> Activar avisos de pedidos listos
+          {pushOn ? (
+            <BellOff aria-hidden="true" className="size-4" />
+          ) : (
+            <Bell aria-hidden="true" className="size-4" />
+          )}
+          {pushBusy
+            ? 'Un momento…'
+            : pushOn
+              ? 'Desactivar notificaciones'
+              : 'Activar avisos de pedidos listos'}
         </button>
       )}
       {alerts.length > 0 && (

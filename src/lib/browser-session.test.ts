@@ -6,6 +6,7 @@ import {
   getRememberedTenantMembership,
   hasBrowserSession,
   rememberTenantMembership,
+  rolConservaSesion,
 } from './browser-session';
 
 describe('browser-session', () => {
@@ -40,6 +41,44 @@ describe('browser-session', () => {
     forgetTenantMembership();
     expect(getRememberedTenantMembership()).toBeNull();
     expect(hasBrowserSession()).toBe(true);
+  });
+
+  it('Mesero y Cocina conservan la sesión al cerrar el navegador; Caja y Administración no', () => {
+    expect(rolConservaSesion('mesero')).toBe(true);
+    expect(rolConservaSesion('cocina')).toBe(true);
+    expect(rolConservaSesion('cajero')).toBe(false);
+    expect(rolConservaSesion('admin')).toBe(false);
+    expect(rolConservaSesion('cliente')).toBe(false);
+  });
+
+  it('con rol de Mesero la cookie lleva Max-Age y deja de morir con el navegador', () => {
+    // jsdom no expone los atributos al leer document.cookie, así que se intercepta
+    // la escritura: es la única forma de comprobar que Max-Age va en la cookie.
+    const escrituras: string[] = [];
+    const original = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie')!;
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      get: () => original.get!.call(document) as string,
+      set: (valor: string) => {
+        escrituras.push(valor);
+        original.set!.call(document, valor);
+      },
+    });
+
+    try {
+      rememberTenantMembership('membresia-mesero', 'mesero');
+      expect(escrituras.every((cookie) => cookie.includes('Max-Age='))).toBe(true);
+
+      escrituras.length = 0;
+      endBrowserSession();
+      rememberTenantMembership('membresia-caja', 'cajero');
+      // Caja: ninguna cookie de sesión con Max-Age, salvo el borrado previo.
+      const nuevas = escrituras.filter((cookie) => !cookie.includes('Max-Age=0'));
+      expect(nuevas.length).toBeGreaterThan(0);
+      expect(nuevas.some((cookie) => cookie.includes('Max-Age='))).toBe(false);
+    } finally {
+      Object.defineProperty(document, 'cookie', original);
+    }
   });
 
   it('elimina toda la referencia local al cerrar sesión', () => {
