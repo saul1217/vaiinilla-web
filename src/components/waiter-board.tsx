@@ -12,6 +12,7 @@ import { splitSpaceName, type StaffUi } from '../lib/staff-ui';
 import { OrderStatusBadge } from './status-badge';
 import { alertKeys, newAlerts, type WaiterAlert } from '../lib/waiter-alerts';
 import { playAlert, systemNotify, unlockAlertSound } from '../lib/alert-sound';
+import { enablePush } from '../lib/push';
 import { QrTokenField } from './qr-token-field';
 import { api } from '../lib/api';
 import { deliveryRequiresQr as orderRequiresQr } from '../lib/delivery-policy';
@@ -207,7 +208,13 @@ export function WaiterBoard({
           className="waiter-alerts__enable"
           onClick={() => {
             unlockAlertSound();
-            void Notification.requestPermission().then(setNotifyPermission);
+            // El mismo botón cubre los dos alcances: la franja y el sonido con la
+            // pestaña abierta, y el push del backend cuando ya no lo está. `enablePush`
+            // pide el permiso por su cuenta y nunca lanza; si no hay clave VAPID
+            // configurada devuelve 'unsupported' y solo queda el permiso del navegador.
+            void enablePush(token).then(() => {
+              if (typeof Notification !== 'undefined') setNotifyPermission(Notification.permission);
+            });
           }}
         >
           <Bell aria-hidden="true" className="size-4" /> Activar avisos de pedidos listos

@@ -134,6 +134,26 @@ export const api = {
     return (await request<LegalVersions>('/publico/legal/vigente')).data;
   },
 
+  /**
+   * Registra el token FCM de este navegador. Upsert repetible, sin Idempotency-Key:
+   * se llama al entrar y cada vez que FCM rota el token.
+   */
+  async registerDevice(token: string, fcmToken: string): Promise<void> {
+    await request<void>('/devices', {
+      method: 'POST',
+      token,
+      body: { fcmToken, plataforma: 'web' },
+    });
+  },
+
+  /** Baja el token al cerrar sesión, para no seguir avisando a quien ya salió. */
+  async unregisterDevice(token: string, fcmToken: string): Promise<void> {
+    await request<void>(`/devices/${encodeURIComponent(fcmToken)}`, {
+      method: 'DELETE',
+      token,
+    });
+  },
+
   async requestEmailVerification(firebaseToken: string): Promise<void> {
     await request<{ aceptado: true }>('/publico/correos/verificacion', {
       method: 'POST',
