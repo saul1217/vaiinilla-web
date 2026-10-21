@@ -15,25 +15,25 @@ function loadEnv(): Record<string, string> {
 }
 
 const env = { ...loadEnv(), ...process.env };
-const password = env.E2E_PASSWORD ?? '';
+// Cada cuenta QA tiene su propia contraseña (no hay una compartida).
 const accounts = {
-  admin: env.E2E_ADMIN_EMAIL ?? '',
-  cajero: env.E2E_CAJERO_EMAIL ?? '',
-  cocina: env.E2E_COCINA_EMAIL ?? '',
-  mesero: env.E2E_MESERO_EMAIL ?? '',
+  admin: { email: env.E2E_ADMIN_EMAIL ?? '', password: env.E2E_ADMIN_PASSWORD ?? '' },
+  cajero: { email: env.E2E_CAJERO_EMAIL ?? '', password: env.E2E_CAJERO_PASSWORD ?? '' },
+  cocina: { email: env.E2E_COCINA_EMAIL ?? '', password: env.E2E_COCINA_PASSWORD ?? '' },
+  mesero: { email: env.E2E_MESERO_EMAIL ?? '', password: env.E2E_MESERO_PASSWORD ?? '' },
 };
 
 // El CORS del API de desarrollo solo admite http://127.0.0.1:5173 (no el 4173 de la config): `npm run dev -- --host 127.0.0.1`.
 test.use({ baseURL: env.E2E_BASE_URL ?? 'http://127.0.0.1:5173' });
 
-test.skip(!password, 'Falta .env.e2e.local con las cuentas QA de desarrollo.');
+test.skip(Object.values(accounts).some((a) => !a.email || !a.password), 'Falta .env.e2e.local con las cuentas QA de desarrollo.');
 
 async function shot(page: Page, name: string, projectName: string) {
   await page.waitForTimeout(700); // deja terminar transiciones y animaciones de entrada
   await page.screenshot({ path: `test-results/legibilidad/${projectName}/${name}.png`, fullPage: true });
 }
 
-async function login(page: Page, email: string) {
+async function login(page: Page, { email, password }: { email: string; password: string }) {
   await page.goto('/acceso');
   await page.getByLabel('Correo').fill(email);
   await page.getByLabel('Contraseña').fill(password);
