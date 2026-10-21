@@ -18,7 +18,9 @@ function loadEnv(): Record<string, string> {
 }
 
 const env = { ...loadEnv(), ...process.env };
-const password = env.E2E_PASSWORD ?? '';
+const sharedPassword = env.E2E_PASSWORD ?? '';
+const adminPassword = env.E2E_ADMIN_PASSWORD ?? sharedPassword;
+const cajeroPassword = env.E2E_CAJERO_PASSWORD ?? sharedPassword;
 const adminEmail = env.E2E_ADMIN_EMAIL ?? '';
 const cajeroEmail = env.E2E_CAJERO_EMAIL ?? '';
 
@@ -30,15 +32,16 @@ const VIEWPORTS = [
 ] as const;
 // Solo se usa tema claro: no hay capturas del tema oscuro del personal.
 test.use({ baseURL: env.E2E_BASE_URL ?? 'http://127.0.0.1:5173', colorScheme: 'light', contextOptions: { reducedMotion: 'reduce' } });
-test.skip(!password, 'Faltan las cuentas QA (E2E_PASSWORD y correos) de la tienda de CI.');
+test.skip(!adminPassword || !cajeroPassword, 'Faltan las cuentas QA (contraseñas y correos) de la tienda de CI.');
 
-type Surface = { name: string; route: string; email: () => string; ready: (page: Page) => Promise<void>; trigger?: (page: Page) => ReturnType<Page['locator']> };
+type Surface = { name: string; route: string; email: () => string; password: () => string; ready: (page: Page) => Promise<void>; trigger?: (page: Page) => ReturnType<Page['locator']> };
 
 const SURFACES: Surface[] = [
   {
     name: 'reservas-de-hoy',
     route: '/app/espacios',
     email: () => adminEmail,
+    password: () => adminPassword,
     ready: async (page) => {
       await expect(page.getByRole('heading', { name: 'Reservas de hoy' })).toBeVisible({ timeout: 20_000 });
       await expect(page.getByText('Consultando reservas…')).toHaveCount(0, { timeout: 20_000 });
@@ -49,6 +52,7 @@ const SURFACES: Surface[] = [
     name: 'caja',
     route: '/app/pos',
     email: () => cajeroEmail,
+    password: () => cajeroPassword,
     ready: async (page) => {
       await expect(page.locator('html')).toHaveAttribute('data-staff-ui', 'nueva', { timeout: 20_000 });
       await page.waitForLoadState('networkidle');
@@ -56,7 +60,7 @@ const SURFACES: Surface[] = [
   },
 ];
 
-async function login(page: Page, email: string) {
+async function login(page: Page, email: string, password: string) {
   await page.goto('/acceso');
   await page.getByLabel('Correo').fill(email);
   await page.getByLabel('Contraseña').fill(password);
@@ -81,7 +85,7 @@ async function blockIfDataFailed(page: Page, info: TestInfo, surface: Surface) {
 async function open(page: Page, info: TestInfo, surface: Surface, viewport: (typeof VIEWPORTS)[number]) {
   await page.setViewportSize({ width: viewport.width, height: viewport.height });
   await page.clock.install({ time: FROZEN_TIME });
-  await login(page, surface.email());
+  await login(page, surface.email(), surface.password());
   await page.goto(surface.route);
   await surface.ready(page);
   await blockIfDataFailed(page, info, surface);
@@ -159,7 +163,7 @@ test.describe('Reservas de hoy · teclado y estados', () => {
       await route.continue();
     });
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await login(page, surface.email());
+    await login(page, surface.email(), surface.password());
     await page.goto(surface.route);
     await expect(page.getByText('Consultando reservas…')).toBeVisible({ timeout: 20_000 });
     release();
@@ -168,7 +172,7 @@ test.describe('Reservas de hoy · teclado y estados', () => {
   test('estado vacío', async ({ page }) => {
     await page.route('**/reservas?*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"data":[],"items":[]}' }));
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await login(page, surface.email());
+    await login(page, surface.email(), surface.password());
     await page.goto(surface.route);
     await expect(page.getByText('No hay reservas para hoy.')).toBeVisible({ timeout: 20_000 });
   });
@@ -176,7 +180,7 @@ test.describe('Reservas de hoy · teclado y estados', () => {
   test('estado de error', async ({ page }) => {
     await page.route('**/reservas?*', (route) => route.fulfill({ status: 403, contentType: 'application/json', body: '{"message":"forbidden"}' }));
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await login(page, surface.email());
+    await login(page, surface.email(), surface.password());
     await page.goto(surface.route);
     await expect(page.getByText('Tu rol no tiene permiso para ver las reservas.')).toBeVisible({ timeout: 20_000 });
   });
