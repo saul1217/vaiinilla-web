@@ -4,3 +4,6 @@
 # apiKey web pública de Firebase (development); falso positivo confirmado por QA_SEGURIDAD (web#79).
 # Es pública por diseño y ya está cubierta en .gitleaksignore. Solo este archivo.
 .env.development
+
+# Borradores de workflows aún no activos (no se ejecutan); ya se escanean en .github/workflows.
+docs/ci-pendiente/
