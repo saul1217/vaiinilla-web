@@ -1,0 +1,38 @@
+name: E2E
+on:
+  pull_request:
+  push:
+    branches: [develop]
+permissions:
+  contents: read
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    # Secretos solo en el Environment `develop-e2e` (cuentas QA dedicadas; nunca llaves de servicio de Supabase ni secretos de producción).
+    environment: develop-e2e
+    env:
+      E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_CAJERO_EMAIL: ${{ secrets.E2E_CAJERO_EMAIL }}
+      E2E_CAJERO_PASSWORD: ${{ secrets.E2E_CAJERO_PASSWORD }}
+      E2E_COCINA_EMAIL: ${{ secrets.E2E_COCINA_EMAIL }}
+      E2E_COCINA_PASSWORD: ${{ secrets.E2E_COCINA_PASSWORD }}
+      E2E_MESERO_EMAIL: ${{ secrets.E2E_MESERO_EMAIL }}
+      E2E_MESERO_PASSWORD: ${{ secrets.E2E_MESERO_PASSWORD }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --project=chromium
+      # Solo trazas, solo si falla, 7 días. Nunca storageState ni capturas con sesión.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/**/trace.zip
+          retention-days: 7
+          if-no-files-found: ignore
