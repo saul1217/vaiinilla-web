@@ -61,11 +61,22 @@ test('Caja (POS) con tema oscuro del personal', async ({ page }, info) => {
   await expect(page.locator('html')).toHaveAttribute('data-staff-ui', 'nueva');
   await page.waitForLoadState('networkidle');
   await shot(page, 'pos-01-inicio', info.project.name);
-  await page.getByRole('button', { name: 'Quitar artículo' }).first().click();
-  await shot(page, 'pos-02-quitar-articulo', info.project.name);
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Cobrar', exact: true }).first().click();
-  await shot(page, 'pos-03-cobrar', info.project.name);
+  // «Quitar artículo» solo existe dentro del diálogo que abre «Rechazar o quitar» en un pedido en efectivo,
+  // y «Cobrar» queda deshabilitado sin sesión de Caja abierta. Se fotografía lo que el estado de la tienda permita.
+  await expect(page.getByRole('heading', { name: 'Caja en control.' })).toBeVisible({ timeout: 20_000 });
+  const rechazar = page.getByRole('button', { name: 'Rechazar o quitar' }).first();
+  if (await rechazar.count()) {
+    await rechazar.click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await shot(page, 'pos-02-quitar-articulo', info.project.name);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  }
+  const cobrar = page.getByRole('button', { name: 'Cobrar', exact: true }).first();
+  if ((await cobrar.count()) && (await cobrar.isEnabled())) {
+    await cobrar.click();
+    await shot(page, 'pos-03-cobrar', info.project.name);
+  }
 });
 
 test('Cocina con tema oscuro del personal', async ({ page }, info) => {
@@ -82,9 +93,17 @@ test('Cocina con tema oscuro del personal', async ({ page }, info) => {
 
 test('Mesero: tablero de mesas', async ({ page }, info) => {
   await login(page, accounts.mesero);
-  await page.locator('.staff-tile:not(.staff-tile--skeleton)').first().waitFor({ timeout: 20_000 });
+  // Distingue "no carga" de "la tienda no tiene mesas" para que el fallo diga la causa y no sea un timeout ciego.
+  const tile = page.locator('.staff-tile:not(.staff-tile--skeleton)').first();
+  const sinMesas = page.getByText('Sin mesas', { exact: true });
+  const error = page.locator('.feedback--error, [role="alert"]').first();
+  await expect(tile.or(sinMesas).or(error)).toBeVisible({ timeout: 20_000 });
+  expect(await sinMesas.count(), 'La tienda de CI no tiene espacios (datos sembrados), no es la interfaz.').toBe(0);
+  expect(await tile.count(), 'El tablero del mesero devolvió un error en vez de mesas.').toBeGreaterThan(0);
   await shot(page, 'mesero-01-inicio', info.project.name);
-  await page.locator('.staff-tile', { hasText: 'Mesa' }).filter({ hasText: 'pedido' }).first().click();
+  // Prefiere una mesa con pedidos; si no hay, abre la primera.
+  const conPedidos = page.locator('.staff-tile--active, .staff-tile--ready, .staff-tile--call').first();
+  await ((await conPedidos.count()) ? conPedidos : tile).click();
   await shot(page, 'mesero-02-mesa', info.project.name);
 });
 
