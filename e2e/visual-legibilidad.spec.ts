@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Page } from '@playwright/test';
 
 // Credenciales de la tienda QA de desarrollo: `.env.e2e.local` (fuera de git).
 function loadEnv(): Record<string, string> {
@@ -91,7 +91,36 @@ test('Cocina con tema oscuro del personal', async ({ page }, info) => {
   }
 });
 
-test('Mesero: tablero de mesas', async ({ page }, info) => {
+// La tienda de CI no trae mesas sembradas. Con la cuenta admin se crean por API (lote) solo si no hay ninguna.
+async function sembrarMesas(browser: Browser) {
+  const context = await browser.newContext({ baseURL: env.E2E_BASE_URL ?? 'http://127.0.0.1:5173' });
+  try {
+    const page = await context.newPage();
+    await login(page, accounts.admin);
+    const [listado] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes('/espacios/administracion'), { timeout: 30_000 }),
+      page.goto('/app/espacios'),
+    ]);
+    const authorization = (await listado.allHeaders())['authorization'];
+    expect(authorization, 'El panel no envió Authorization al listar espacios.').toBeTruthy();
+    const headers = { Authorization: authorization, Accept: 'application/json' };
+    const respuesta = await context.request.get(listado.url(), { headers });
+    expect(respuesta.ok(), `Listar espacios respondió ${respuesta.status()}.`).toBeTruthy();
+    const { data } = (await respuesta.json()) as { data: unknown[] };
+    if (data.length > 0) return;
+    const base = listado.url().split('/espacios/administracion')[0];
+    const alta = await context.request.post(`${base}/espacios/lote`, {
+      headers: { ...headers, 'Idempotency-Key': `e2e-mesas-${Date.now()}` },
+      data: { tipo: 'mesa', prefijo: 'Mesa', desde: 1, hasta: 4 },
+    });
+    expect(alta.ok(), `Crear mesas de CI respondió ${alta.status()}: el admin de CI no pudo sembrarlas.`).toBeTruthy();
+  } finally {
+    await context.close();
+  }
+}
+
+test('Mesero: tablero de mesas', async ({ page, browser }, info) => {
+  await sembrarMesas(browser);
   await login(page, accounts.mesero);
   // Distingue "no carga" de "la tienda no tiene mesas" para que el fallo diga la causa y no sea un timeout ciego.
   const tile = page.locator('.staff-tile:not(.staff-tile--skeleton)').first();
