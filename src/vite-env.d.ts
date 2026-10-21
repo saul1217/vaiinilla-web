@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_APP_ID: string;
   /** Clave pública de Web Push. Sin ella el panel no se suscribe a notificaciones. */
   readonly VITE_FIREBASE_VAPID_KEY?: string;
+  /** DSN de Sentry. Sin él, Sentry no se carga. */
+  readonly VITE_SENTRY_DSN?: string;
   readonly VITE_ALLOW_UNPUBLISHED_LEGAL_TESTING?: string;
 }
 

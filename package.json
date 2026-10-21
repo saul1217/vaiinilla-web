@@ -13,11 +13,14 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:ui": "playwright test --project=ui-regresion",
+    "lhci": "npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
     "@radix-ui/react-dialog": "^1.1.23",
+    "@sentry/react": "^8.55.2",
     "@tanstack/react-query": "^5.101.4",
     "firebase": "^12.17.1",
     "jsqr": "^1.4.0",
@@ -30,6 +33,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.3.3",
@@ -48,10 +52,17 @@
     "globals": "^17.9.0",
     "jsdom": "^30.0.1",
     "msw": "^2.15.0",
+    "puppeteer": "^25.15.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",
-    "vite": "^8.2.0",
-    "vitest": "^4.1.10"
+    "vite": "^8.3.4",
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6",
+    "basic-ftp": "^6.2.3",
+    "tmp": "^0.2.7",
+    "uuid": "^11.1.1"
   }
 }

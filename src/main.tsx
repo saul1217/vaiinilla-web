@@ -9,6 +9,12 @@ import './styles/index.css';
 
 installPreloadErrorReload();
 
+// Sentry solo se descarga si hay DSN configurado.
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+if (sentryDsn) {
+  void import('./app/sentry').then((m) => m.initSentry(sentryDsn)).catch(() => undefined);
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

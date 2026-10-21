@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { VaiinillaApiError } from '../lib/api-error';
 import { CourtBookingsCard } from './court-bookings-card';
 
 const apiMock = vi.hoisted(() => ({
@@ -53,5 +54,34 @@ describe('CourtBookingsCard', () => {
     expect(await screen.findByText(/reserva de Ana en Cancha 1/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Sí, cancelar reserva' }));
     await waitFor(() => expect(apiMock.cancelCounterRental).toHaveBeenCalledWith('t', 'b1'));
+  });
+
+  it('muestra el estado de carga mientras consulta', () => {
+    apiMock.listStaffBookings.mockReturnValue(new Promise(() => {}));
+    renderCard();
+    expect(screen.getByText('Consultando reservas…')).toBeInTheDocument();
+  });
+
+  it('muestra el estado vacío', async () => {
+    apiMock.listStaffBookings.mockResolvedValue([]);
+    renderCard();
+    expect(await screen.findByText('No hay reservas para hoy.')).toBeInTheDocument();
+  });
+
+  it('muestra el estado de error', async () => {
+    apiMock.listStaffBookings.mockRejectedValue(new VaiinillaApiError(403, { code: 'FORBIDDEN', message: 'x' }));
+    renderCard();
+    expect(await screen.findByText('Tu rol no tiene permiso para ver las reservas.')).toBeInTheDocument();
+  });
+
+  it('Escape cierra el diálogo y devuelve el foco al botón que lo abrió', async () => {
+    apiMock.listStaffBookings.mockResolvedValue([{ ...base, id: 'b1', estado: 'pendiente_pago' }]);
+    renderCard();
+    const opener = await screen.findByRole('button', { name: /Liberar cancha/ });
+    await userEvent.click(opener);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(opener).toHaveFocus();
   });
 });

@@ -270,11 +270,27 @@ export function Modal({
   children: ReactNode;
   contentClassName?: string;
 }) {
+  // Los diálogos son controlados y sin Trigger: Radix no sabe a dónde devolver el foco,
+  // así que recordamos el elemento activo al abrir y lo restauramos al cerrar.
+  const opener = useRef<HTMLElement | null>(null);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className={`dialog-content ${contentClassName}`}>
+        <Dialog.Content
+          className={`dialog-content ${contentClassName}`}
+          onOpenAutoFocus={() => {
+            opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          }}
+          onCloseAutoFocus={(event) => {
+            const target = opener.current;
+            opener.current = null;
+            if (target?.isConnected) {
+              event.preventDefault();
+              target.focus();
+            }
+          }}
+        >
           <div className="pr-14">
             <Dialog.Title className="text-xl font-bold text-ink">{title}</Dialog.Title>
             {description && (
