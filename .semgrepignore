@@ -1,0 +1,6 @@
+# Mínimo a propósito: .semgrepignore reemplaza los ignores por defecto, así que se reincluye .gitignore.
+:include .gitignore
+
+# apiKey web pública de Firebase (development); falso positivo confirmado por QA_SEGURIDAD (web#79).
+# Es pública por diseño y ya está cubierta en .gitleaksignore. Solo este archivo.
+.env.development

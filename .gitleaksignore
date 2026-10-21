@@ -1,0 +1,10 @@
+# Falsos positivos confirmados por QA_SEGURIDAD (web#79, QA-052) en la corrida de f001686.
+# Formato: <commit>:<archivo>:<regla>:<línea>
+#
+# apiKey web de Firebase del proyecto de development. Es pública por diseño (va en el bundle del
+# navegador); la protección es la restricción por referrer en Google Cloud, no el secreto.
+e7bbd2bebae22d3445233e6eb3688a43ae0f7f0c:.env.development:gcp-api-key:7
+# UUID de idempotencia usado como dato de prueba; no es una credencial.
+fcc54b99464fac0bce225c0af99ea827d7823e14:src/lib/api.test.ts:generic-api-key:118
+# Otro UUID de prueba; no es una credencial.
+e53e334b68439606ab4fa90f0ea647cab6e3429e:src/lib/api.test.ts:generic-api-key:791
