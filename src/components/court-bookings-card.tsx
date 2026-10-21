@@ -120,14 +120,14 @@ export function CourtBookingsCard() {
             return (
               <li key={booking.id} className="grid gap-2 rounded-2xl bg-cream p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-extrabold text-ink">
+                  <p className="font-extrabold text-ink" data-qa-volatil>
                     {spaceName} · {clock(booking.inicio)}–{clock(booking.fin)}
                   </p>
                   <span className={`status-badge ${paid ? 'status-badge--success' : 'status-badge--warning'}`}>
                     {STATUS_LABEL[booking.estado] ?? booking.estado}
                   </span>
                 </div>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-muted" data-qa-volatil>
                   {booking.cliente?.nombre ?? 'Cliente'} · {booking.monto ? formatMoney(booking.monto) : 'Monto por confirmar'}
                   {unpaid && booking.expira_en ? ` · Vence ${clock(booking.expira_en)}` : ''}
                 </p>

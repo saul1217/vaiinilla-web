@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  // Referencias de capturas generadas en el contenedor fijo de Playwright (CI), sin sufijo de plataforma.
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFileName}/{arg}{ext}',
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
@@ -16,7 +18,9 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile', use: { ...devices['Pixel 7'] } },
+    { name: 'chromium', testIgnore: /ui-regresion/, use: { ...devices['Desktop Chrome'] } },
+    { name: 'mobile', testIgnore: /ui-regresion/, use: { ...devices['Pixel 7'] } },
+    // QA-049: regresión de interfaz (capturas, axe, teclado). Los viewports los fija el propio spec.
+    { name: 'ui-regresion', testMatch: /ui-regresion/, use: { ...devices['Desktop Chrome'], colorScheme: 'light' } },
   ],
 });
