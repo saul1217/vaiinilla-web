@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Browser, type Page } from '@playwright/test';
@@ -110,10 +111,13 @@ async function sembrarMesas(browser: Browser) {
     if (data.length > 0) return;
     const base = listado.url().split('/espacios/administracion')[0];
     const alta = await context.request.post(`${base}/espacios/lote`, {
-      headers: { ...headers, 'Idempotency-Key': `e2e-mesas-${Date.now()}` },
+      headers: { ...headers, 'Idempotency-Key': randomUUID() },
       data: { tipo: 'mesa', prefijo: 'Mesa', desde: 1, hasta: 4 },
     });
-    expect(alta.ok(), `Crear mesas de CI respondió ${alta.status()}: el admin de CI no pudo sembrarlas.`).toBeTruthy();
+    expect(
+      alta.ok(),
+      `Crear mesas de CI respondió ${alta.status()}: el admin de CI no pudo sembrarlas. Respuesta: ${await alta.text()}`,
+    ).toBeTruthy();
   } finally {
     await context.close();
   }
