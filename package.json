@@ -20,6 +20,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
     "@radix-ui/react-dialog": "^1.1.23",
+    "@sentry/react": "^8.55.2",
     "@tanstack/react-query": "^5.101.4",
     "firebase": "^12.17.1",
     "jsqr": "^1.4.0",
