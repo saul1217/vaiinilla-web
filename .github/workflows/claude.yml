@@ -14,12 +14,13 @@ permissions:
   actions: read
 jobs:
   claude:
+    # Solo quien tiene permiso de escritura (OWNER/MEMBER/COLLABORATOR) puede invocar a Claude.
     if: |
-      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude')) ||
-      (github.event_name != 'issues' && contains(github.event.comment.body, '@claude'))
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)) ||
+      (github.event_name != 'issues' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
