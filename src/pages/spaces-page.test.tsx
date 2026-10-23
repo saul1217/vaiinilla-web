@@ -15,6 +15,7 @@ const apiMock = vi.hoisted(() => ({
   deleteSpaceImage: vi.fn(),
   deleteSpace: vi.fn(),
   listStaffBookings: vi.fn().mockResolvedValue([]),
+  listBookingRefunds: vi.fn().mockResolvedValue([]),
   bookingSettings: vi.fn(),
   saveBookingSettings: vi.fn(),
 }));

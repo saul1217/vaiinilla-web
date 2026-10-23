@@ -53,6 +53,8 @@ import type {
   CounterRental,
   CounterRentalPayment,
   StaffBooking,
+  BookingRefund,
+  BookingRefundInput,
   SpaceAvailability,
   SpaceSessionDetail,
   ClosedSpaceSessionDetail,
@@ -820,8 +822,19 @@ export const api = {
   },
 
   /** Suelta el horario apartado si no se cobró. */
-  async cancelCounterRental(token: string, rentalId: string): Promise<void> {
-    await request(`/reservas/${rentalId}/cancelacion`, { method: 'POST', token, idempotent: true });
+  /** Sin `refund` cancela una reserva por pagar; con él cancela una pagada y reembolsa de 0 al total pagado. */
+  async cancelCounterRental(token: string, rentalId: string, refund?: BookingRefundInput): Promise<void> {
+    await request(`/reservas/${rentalId}/cancelacion`, {
+      method: 'POST',
+      token,
+      idempotent: true,
+      body: refund ? { motivo: refund.motivo, monto_reembolso: refund.monto_reembolso } : undefined,
+    });
+  },
+
+  /** Reporte de reembolsos de reservas de cancha (solo Administración del negocio). */
+  async listBookingRefunds(token: string): Promise<BookingRefund[]> {
+    return (await request<BookingRefund[]>('/reservas/reembolsos', { token })).data;
   },
 
   /** Reservas de cancha del día (de clientes y de mostrador). `date` = YYYY-MM-DD. */

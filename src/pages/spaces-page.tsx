@@ -18,6 +18,7 @@ import {
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { CourtBookingsCard } from '../components/court-bookings-card';
+import { BookingRefundsCard } from '../components/booking-refunds-card';
 import { Button, CustomSelect, Feedback, Field, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
@@ -758,6 +759,7 @@ export function SpacesPage() {
       </section>
       <BatchSpacesCard onCreated={setFeedback} />
       {spaces.data?.some((space) => space.tipo === 'cancha') && <CourtBookingsCard />}
+      {spaces.data?.some((space) => space.tipo === 'cancha') && <BookingRefundsCard />}
       {spaces.data?.some((space) => space.tipo === 'cancha') && <BookingSettingsCard />}
       <section className="space-y-4" aria-labelledby="spaces-list-title">
         <div className="flex items-center justify-between gap-4">

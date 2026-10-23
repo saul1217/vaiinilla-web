@@ -7,6 +7,7 @@ import { Bell, BellOff, CheckCircle2, ScanLine, Table2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, EmptyState, Feedback, Modal } from './ui';
 import { SpaceAccountPanel } from './space-account-panel';
+import { CourtBookingsCard } from './court-bookings-card';
 import { spaceStatusLine } from '../lib/space-status';
 import { splitSpaceName, type StaffUi } from '../lib/staff-ui';
 import { OrderStatusBadge } from './status-badge';
@@ -435,6 +436,8 @@ export function WaiterBoard({
           })}
         </div>
       )}
+
+      {(availability.data ?? []).some((space) => space.precio_hora !== null) && <CourtBookingsCard />}
 
       <Modal
         open={Boolean(open)}

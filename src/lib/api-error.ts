@@ -46,6 +46,7 @@ const friendlyMessages: Record<string, string> = {
     'Escribe ELIMINAR exactamente para confirmar la eliminación definitiva.',
   ACCOUNT_DELETION_ALREADY_REQUESTED:
     'Esta cuenta ya tiene una solicitud de eliminación incompatible.',
+  RESERVATION_IN_PROGRESS: 'La reserva ya inició: no se puede cancelar.',
   ACCOUNT_DELETION_FAILED:
     'No fue posible completar la eliminación. Tu sesión sigue activa; inténtalo nuevamente.',
 };
