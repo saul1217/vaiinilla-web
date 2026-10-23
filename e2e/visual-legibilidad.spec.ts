@@ -46,6 +46,12 @@ async function login(page: Page, { email, password }: { email: string; password:
   await expect(page).toHaveURL(/\/app/);
 }
 
+// `data-staff-ui` lo pone la vista del personal cuando ya se resolvió el rol de la sesión (tras recargar con
+// `goto` depende de la API y puede tardar más que el timeout por defecto). Se fija la preferencia del dispositivo.
+async function fijarTemaNuevo(page: Page) {
+  await page.addInitScript("window.localStorage.setItem('vaiinilla.panel.staff-ui', 'nueva')");
+}
+
 test('acceso: formulario vacío y error de credenciales', async ({ page }, info) => {
   await page.goto('/acceso');
   await shot(page, 'acceso-01-formulario', info.project.name);
@@ -57,9 +63,10 @@ test('acceso: formulario vacío y error de credenciales', async ({ page }, info)
 });
 
 test('Caja (POS) con tema oscuro del personal', async ({ page }, info) => {
+  await fijarTemaNuevo(page);
   await login(page, accounts.cajero);
   await page.goto('/app/pos');
-  await expect(page.locator('html')).toHaveAttribute('data-staff-ui', 'nueva');
+  await expect(page.locator('html')).toHaveAttribute('data-staff-ui', 'nueva', { timeout: 30_000 });
   await page.waitForLoadState('networkidle');
   await shot(page, 'pos-01-inicio', info.project.name);
   // «Quitar artículo» solo existe dentro del diálogo que abre «Rechazar o quitar» en un pedido en efectivo,
@@ -81,9 +88,10 @@ test('Caja (POS) con tema oscuro del personal', async ({ page }, info) => {
 });
 
 test('Cocina con tema oscuro del personal', async ({ page }, info) => {
+  await fijarTemaNuevo(page);
   await login(page, accounts.cocina);
   await page.goto('/app/cocina');
-  await expect(page.locator('html')).toHaveAttribute('data-staff-ui', 'nueva');
+  await expect(page.locator('html')).toHaveAttribute('data-staff-ui', 'nueva', { timeout: 30_000 });
   await page.waitForLoadState('networkidle');
   await shot(page, 'cocina-01-tablero', info.project.name);
   const tickets = page.locator('.kitchen-ticket');
