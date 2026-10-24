@@ -28,7 +28,7 @@ jobs:
           # persist-credentials: true para que base_branch pueda hacer git fetch origin develop (run 39893079348 fallaba con exit 128).
           persist-credentials: true
           fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - uses: anthropics/claude-code-action@a5a423f75c251dcbff8a74e99f83b2cb03c72bfa # v1.0.256 (tag v1)
