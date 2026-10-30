@@ -8,7 +8,7 @@ import { PosPage } from './pos-page';
 
 const apiMock = vi.hoisted(() => ({
   activeCashSession: vi.fn(), operationalStatus: vi.fn(), listOrders: vi.fn(),
-  collectCash: vi.fn(), deliverOrder: vi.fn(),
+  collectCash: vi.fn(), deliverOrder: vi.fn(), closeCashSession: vi.fn(),
   catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
 }));
 
@@ -94,13 +94,36 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     apiMock.collectCash.mockResolvedValue({ cambio: '0.00' });
   });
 
+  it.each(['cajero', 'mesero', 'admin'])('respeta el tema claro elegido por %s al entrar y salir', (role) => {
+    sesion.rol = role;
+    const previousTheme = document.documentElement.dataset.adminTheme;
+    const previousPreference = window.localStorage.getItem('vaiinilla.panel.admin-theme');
+    document.documentElement.dataset.adminTheme = 'claro';
+    window.localStorage.setItem('vaiinilla.panel.admin-theme', 'claro');
+    const { unmount } = render(<PosPage />, { wrapper: Wrapper });
+    try {
+      expect(document.documentElement.dataset.adminTheme).toBe('claro');
+      expect(document.documentElement.dataset.staffUi).toBeUndefined();
+      expect(window.localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
+      unmount();
+      expect(document.documentElement.dataset.adminTheme).toBe('claro');
+      expect(window.localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
+    } finally {
+      unmount();
+      if (previousTheme === undefined) delete document.documentElement.dataset.adminTheme;
+      else document.documentElement.dataset.adminTheme = previousTheme;
+      if (previousPreference === null) window.localStorage.removeItem('vaiinilla.panel.admin-theme');
+      else window.localStorage.setItem('vaiinilla.panel.admin-theme', previousPreference);
+    }
+  });
+
   it.each(['cajero', 'mesero', 'admin'])('retira el selector y migra la preferencia de %s', (role) => {
     sesion.rol = role;
     window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
     const { unmount } = render(<PosPage />, { wrapper: Wrapper });
     expect(screen.queryByRole('button', { name: /UI anterior|UI nueva/i })).not.toBeInTheDocument();
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
-    expect(document.documentElement.dataset.staffUi).toBe('nueva');
+    expect(document.documentElement.dataset.staffUi).toBeUndefined();
     unmount();
   });
 
@@ -113,9 +136,43 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(screen.getByLabelText('Datos de la sesión de Caja')).toHaveTextContent('2026-10-07');
     expect(screen.getByRole('button', { name: 'Nuevo pedido' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Revisar cierre' })).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Estado del local'));
+    expect(screen.getByText('Estado del local').closest('details')).toHaveAttribute('open');
     expect(screen.getByText('Estado operativo')).toBeVisible();
     expect(screen.queryByRole('button', { name: /Cobrar \$/ })).not.toBeInTheDocument();
+  });
+
+  it.each([true, false])('el mesero no ve la barra de Caja (sesión abierta: %s)', async (open) => {
+    sesion.rol = 'mesero';
+    if (!open) apiMock.activeCashSession.mockResolvedValue(null);
+    render(<PosPage />, { wrapper: Wrapper });
+    await waitFor(() => expect(apiMock.activeCashSession).toHaveBeenCalled());
+    expect(screen.queryByRole('region', { name: 'Sesión de Caja' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Caja abierta|Caja cerrada/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Abrir Caja' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Cerrar caja')).not.toBeInTheDocument();
+  });
+
+  it.each(['cajero', 'admin'])('exige confirmar el cierre de Caja para %s', async (role) => {
+    sesion.rol = role;
+    apiMock.closeCashSession.mockResolvedValue({});
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByText('Cerrar caja'));
+    await user.type(screen.getByLabelText('Monto final (MXN)'), '750.50');
+    expect(apiMock.closeCashSession).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Revisar cierre' }));
+    const dialog = await screen.findByRole('dialog', { name: '¿Cerrar la caja?' });
+    expect(dialog).toHaveTextContent('$750.50 MXN');
+    expect(apiMock.closeCashSession).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Volver' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(apiMock.closeCashSession).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Revisar cierre' }));
+    const confirmation = await screen.findByRole('dialog', { name: '¿Cerrar la caja?' });
+    expect(apiMock.closeCashSession).not.toHaveBeenCalled();
+    await user.click(within(confirmation).getByRole('button', { name: 'Cerrar caja' }));
+    await waitFor(() => expect(apiMock.closeCashSession).toHaveBeenCalledExactlyOnceWith('token', 'cash-1', '750.50'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('ofrece apertura de Caja a Admin cuando no hay sesión', async () => {

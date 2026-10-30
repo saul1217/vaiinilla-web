@@ -485,7 +485,7 @@ export function PosPage() {
       {/* Caja también cobra la cuenta de las mesas y renta canchas en mostrador. */}
       {isCashier && <WaiterBoard token={token} role="cajero" businessName={businessName} />}
 
-      <details className="staff-details">
+      <details className="staff-details" open={role === 'admin'}>
           <summary>Estado del local</summary>
           <OperationalStatusPanel />
       </details>

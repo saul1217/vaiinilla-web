@@ -22,11 +22,11 @@ describe('presentación del personal', () => {
     }
   });
 
-  it('aplica la UI nueva y retira el tema al salir de la vista', () => {
+  it('limpia la preferencia obsoleta sin activar un tema del personal', () => {
     window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
     const { unmount } = renderHook(() => useStaffTheme());
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
-    expect(document.documentElement.dataset.staffUi).toBe('nueva');
+    expect(document.documentElement.dataset.staffUi).toBeUndefined();
     unmount();
     expect(document.documentElement.dataset.staffUi).toBeUndefined();
   });

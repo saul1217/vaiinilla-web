@@ -84,15 +84,38 @@ describe('tablero de Cocina', () => {
     });
   });
 
-  it('aplica la UI nueva a Admin y conserva su encabezado y estado operativo', async () => {
-    sessionRole.value = 'admin';
+  it.each(['cocina', 'admin'])('respeta el tema claro elegido por %s al entrar y salir', (role) => {
+    sessionRole.value = role;
+    const previousTheme = document.documentElement.dataset.adminTheme;
+    const previousPreference = window.localStorage.getItem('vaiinilla.panel.admin-theme');
+    document.documentElement.dataset.adminTheme = 'claro';
+    window.localStorage.setItem('vaiinilla.panel.admin-theme', 'claro');
+    const { unmount } = render(<KitchenPage />, { wrapper: TestProvider });
+    try {
+      expect(document.documentElement.dataset.adminTheme).toBe('claro');
+      expect(document.documentElement.dataset.staffUi).toBeUndefined();
+      expect(window.localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
+      unmount();
+      expect(document.documentElement.dataset.adminTheme).toBe('claro');
+      expect(window.localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
+    } finally {
+      unmount();
+      if (previousTheme === undefined) delete document.documentElement.dataset.adminTheme;
+      else document.documentElement.dataset.adminTheme = previousTheme;
+      if (previousPreference === null) window.localStorage.removeItem('vaiinilla.panel.admin-theme');
+      else window.localStorage.setItem('vaiinilla.panel.admin-theme', previousPreference);
+    }
+  });
+
+  it('aplica la UI nueva a Cocina y conserva su encabezado y estado operativo', async () => {
+    sessionRole.value = 'cocina';
     window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
     const { container } = render(<KitchenPage />, { wrapper: TestProvider });
     expect(container.firstChild).toHaveClass('staff-page');
-    expect(document.documentElement.dataset.staffUi).toBe('nueva');
+    expect(document.documentElement.dataset.staffUi).toBeUndefined();
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Comandas de Cocina' })).toBeInTheDocument();
-    expect(apiMock.listOrders).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Una comanda a la vez.' })).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.listOrders).toHaveBeenCalled());
     await userEvent.setup().click(screen.getByText('Estado operativo del establecimiento'));
     expect(screen.getByText('Estado operativo')).toBeVisible();
   });

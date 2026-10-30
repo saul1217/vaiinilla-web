@@ -11,15 +11,10 @@ export function clearLegacyStaffUi(): void {
   }
 }
 
-/** Aplica la presentación actual mientras está montada una vista del personal. */
+/** Limpia la preferencia obsoleta sin alterar el tema elegido en el panel. */
 export function useStaffTheme(): void {
   useEffect(() => {
     clearLegacyStaffUi();
-    const root = document.documentElement;
-    root.dataset.staffUi = 'nueva';
-    return () => {
-      delete root.dataset.staffUi;
-    };
   }, []);
 }
 
