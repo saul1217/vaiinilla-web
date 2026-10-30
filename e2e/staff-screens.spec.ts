@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import type { OperationalStatus } from '../src/types/api';
 
 const operationalStatus = {
@@ -49,7 +51,12 @@ for (const role of ['mesero', 'cajero', 'cocina']) {
     await expect(page.locator('.operational-panel__updated')).toBeAttached();
     for (const theme of ['claro', 'oscuro']) {
       await expect(page.locator('html')).toHaveAttribute('data-admin-theme', theme);
-      await page.screenshot({ path: `/workspace/qa-tema/${role}-${theme}-${info.project.name}.png`, fullPage: true, animations: 'disabled' });
+      const filename = `${role}-${theme}-${info.project.name}.png`;
+      const screenshotPath = process.env.QA_SCREENSHOT_DIR
+        ? join(process.env.QA_SCREENSHOT_DIR, filename)
+        : info.outputPath(filename);
+      await mkdir(dirname(screenshotPath), { recursive: true });
+      await page.screenshot({ path: screenshotPath, fullPage: true, animations: 'disabled' });
       if (theme === 'claro') {
         const menu = page.getByRole('button', { name: 'Abrir navegación', exact: true });
         const mobileMenu = await menu.isVisible();
