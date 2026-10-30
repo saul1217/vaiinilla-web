@@ -314,3 +314,59 @@ for (const theme of ['claro', 'oscuro'] as const) {
     });
   }
 }
+
+// Slice 4: deterministic Vite fixtures; baselines only in the fixed QA container.
+for (const theme of ['claro', 'oscuro']) {
+  for (const viewport of VIEWPORTS) {
+    test(`Cocina · protagonista, cola y rechazo · ${theme} · ${viewport.name}`, async ({ page }) => {
+      const { installKitchenSliceMocks } = await import('./fixtures/kitchen-slice');
+      await page.setViewportSize(viewport);
+      await installKitchenSliceMocks(page, theme);
+      await page.goto('/app/cocina');
+      const ticket = page.locator('.kitchen-work__ticket--selected');
+      await expect(ticket.getByRole('heading', { name: '#72', exact: true })).toBeVisible();
+      await stabilize(page);
+      const capture = async (state: string) => {
+        await expect(page).toHaveScreenshot(`cocina-${state}-${theme}-${viewport.name}.png`, { fullPage: true, animations: 'disabled' });
+        const { violations } = await new AxeBuilder({ page }).analyze();
+        expect(violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+      };
+      await capture('preparando-cola');
+      await ticket.getByRole('button', { name: 'No se puede preparar' }).click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toHaveAccessibleName('Rechazar pedido');
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: 'Cocina saturada', exact: true }).click();
+      await capture('rechazo-total');
+      await dialog.getByRole('radio', { name: /Tacos/ }).click();
+      await expect(page.getByRole('dialog', { name: 'Quitar Tacos', exact: true })).toBeVisible();
+      await capture('rechazo-parcial');
+      await page.route('**/mock-kitchen/item', route => route.fulfill({ status: 503, json: {} }));
+      await dialog.getByRole('button', { name: 'Quitar artículo', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toBeVisible();
+      await capture('rechazo-error');
+      await page.keyboard.press('Escape');
+      await expect(ticket.getByRole('button', { name: 'No se puede preparar' })).toBeFocused();
+      await ticket.getByRole('button', { name: 'Marcar como listo' }).click();
+      await expect(ticket.getByRole('heading', { name: '#71', exact: true })).toBeVisible();
+      await capture('nueva');
+      await ticket.getByRole('button', { name: 'Comenzar preparación' }).click();
+      await expect(ticket.getByRole('button', { name: 'Marcar como listo' })).toBeVisible();
+      await ticket.getByRole('button', { name: 'Marcar como listo' }).click();
+      await expect(ticket.getByText('Esperando entrega', { exact: true })).toBeVisible();
+      await capture('listo');
+    });
+    for (const state of ['empty', 'error'] as const) {
+      test(`Cocina · ${state} · ${theme} · ${viewport.name}`, async ({ page }) => {
+        const { installKitchenSliceMocks } = await import('./fixtures/kitchen-slice');
+        await page.setViewportSize(viewport);
+        await installKitchenSliceMocks(page, theme, state);
+        await page.goto('/app/cocina');
+        if (state === 'empty') await expect(page.getByRole('heading', { name: 'Sin comandas activas' })).toBeVisible();
+        else await expect(page.getByRole('alert').filter({ hasText: 'No se pudieron actualizar' })).toBeVisible();
+        await stabilize(page);
+        await expect(page).toHaveScreenshot(`cocina-${state}-${theme}-${viewport.name}.png`, { fullPage: true });
+      });
+    }
+  }
+}
