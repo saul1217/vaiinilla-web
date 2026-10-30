@@ -370,3 +370,44 @@ for (const theme of ['claro', 'oscuro']) {
     }
   }
 }
+
+// Slice 5: Vite fixtures, both themes; generate baselines only in fixed QA CI.
+for (const theme of ['claro', 'oscuro']) {
+  for (const viewport of VIEWPORTS) {
+    test(`Admin · Inicio y Pedidos · ${theme} · ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await installStaffR2Mocks(page, 'admin', theme);
+      const capture = async (surface: string) => {
+        await stabilize(page);
+        const { violations } = await new AxeBuilder({ page }).analyze();
+        expect(violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+        await expect(page).toHaveScreenshot(`admin-${surface}-${theme}-${viewport.name}.png`, { fullPage: true, animations: 'disabled' });
+      };
+      await page.goto('/app');
+      await expect(page.getByText('Ventas confirmadas', { exact: true })).toBeVisible();
+      await expect(page.getByText('Preparando las métricas del negocio…')).toHaveCount(0);
+      await page.getByRole('button', { name: '7 días', exact: true }).click();
+      await expect(page.getByRole('button', { name: '7 días', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('complementary', { name: 'Ahora' })).toBeVisible();
+      await capture('inicio-periodo');
+      await page.goto('/app/pedidos');
+      const opener = page.getByRole('button', { name: /^Ver pedido / }).first();
+      await expect(opener).toBeVisible();
+      await capture('pedidos-lista');
+      await opener.focus();
+      await page.keyboard.press('Enter');
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByText('Pago', { exact: true })).toBeVisible();
+      await expect(dialog.getByText('Destino', { exact: true })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: /Cobrar|Entregar|Devolver/ })).toHaveCount(0);
+      await capture('pedidos-detalle');
+      await page.keyboard.press('Escape');
+      await expect(opener).toBeFocused();
+      for (const label of ['Todos', 'Entregados', 'Incidencias', 'Activos']) {
+        await page.getByRole('button', { name: label, exact: true }).click();
+        await expect(page.getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-pressed', 'true');
+      }
+    });
+  }
+}

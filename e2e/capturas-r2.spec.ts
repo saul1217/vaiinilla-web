@@ -38,7 +38,7 @@ for (const scenario of scenarios) {
       await expect(page.locator('html')).toHaveAttribute('data-admin-theme', theme);
       await expect(page.locator(scenario.ready).first()).toBeVisible();
       if (scenario.path === '/app') {
-        await expect(page.getByRole('heading', { name: 'Hola, Café del Jardín', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Café del Jardín', exact: true })).toBeVisible();
       } else if (scenario.role === 'mesero' || scenario.path === '/app/cashback' || scenario.path === '/app/flujo') {
         await expect(page.getByRole('heading', { level: 1, name: scenario.seed, exact: true })).toBeVisible();
       } else if (scenario.role === 'cocina') {
@@ -71,7 +71,7 @@ for (const scenario of scenarios) {
         await expect(page.getByRole('dialog', { name: 'Rechazar pedido', exact: true })).toBeVisible();
         await capture('-rechazo');
       } else if (scenario.path === '/app/pedidos') {
-        await page.getByRole('button', { name: 'Ver detalle', exact: true }).first().click();
+        await page.getByRole('button', { name: /^Ver pedido /  }).first().click();
         await expect(page.getByRole('dialog', { name: 'Pedido 241', exact: true })).toBeVisible();
         await capture('-detalle-pedido');
       }

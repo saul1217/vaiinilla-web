@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
   BadgePercent,
-  Banknote,
   HandCoins,
   ClipboardList,
   NotebookTabs,
@@ -85,9 +84,8 @@ export function TenantDashboardPage() {
   return (
     <div className="page-stack admin-screen admin-overview">
       <AppPageHeader
-        eyebrow="Administración"
-        title={`Hola, ${tenant?.access.establecimiento.nombre ?? 'Vaiinilla'}`}
-        description="Consulta ventas, pedidos y desempeño del menú; después entra a cada operación autorizada."
+        eyebrow="Administración · Inicio"
+        title={tenant?.access.establecimiento.nombre ?? 'Vaiinilla'}
       />
 
       {tenant?.context.modo_restringido && (
@@ -108,15 +106,70 @@ export function TenantDashboardPage() {
 
       {analytics.isError && <Feedback tone="error">{errorMessage(analytics.error)}</Feedback>}
 
+      <div className="business-summary">
+        <section aria-label="Ventas en el periodo" aria-busy={analytics.isFetching}>
+        <p className="eyebrow">En el periodo</p>
+        <p className="sr-only" role="status">Periodo: {period.desde} a {period.hasta}{analytics.isFetching ? ". Actualizando métricas…" : ""}</p>
+          <article className="business-sales">
+            <p>Ventas confirmadas</p>
+            <strong>{report ? formatAnalyticsMoney(report.resumen.ventas_totales) : '—'}</strong>
+            <small>Sin cancelados ni pedidos por cobrar</small>
+          </article>
+        </section>
+        <aside className="business-now" aria-label="Ahora">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Ahora mismo</p>
+            <h2>Operación del establecimiento</h2>
+          </div>
+        </div>
+
+        <section className="stats-grid" aria-label="Resumen del establecimiento">
+          <article className="stat-card">
+            <span className="stat-card__icon stat-card__icon--lime">
+              <UserPlus aria-hidden="true" />
+            </span>
+            <div>
+              <p>Invitaciones pendientes</p>
+              <strong>{pendingInvitations.isError ? 'No disponible' : pendingInvitations.isPending ? '—' : pendingCount}</strong>
+            </div>
+            <span className="stat-card__meta">Hasta 50 recientes</span>
+          </article>
+          <article className="stat-card">
+            <span className="stat-card__icon">
+              <WalletCards aria-hidden="true" />
+            </span>
+            <div>
+              <p>Estado de Caja</p>
+              <strong className="text-xl">
+                {cashSession.isError ? 'No disponible' : cashSession.isPending ? 'Consultando' : activeSession ? 'Abierta' : 'Cerrada'}
+              </strong>
+            </div>
+            <span className="stat-card__meta">Contrato POS vigente</span>
+          </article>
+          <article className="stat-card">
+            <span className="stat-card__icon">
+              <ClipboardList aria-hidden="true" />
+            </span>
+            <div>
+              <p>Pedidos activos</p>
+              <strong>
+                {activeOrders.isError ? 'No disponible' : activeOrders.isPending
+                  ? '—'
+                  : `${activeOrderCount}${activeOrders.data?.cursor ? '+' : ''}`}
+              </strong>
+            </div>
+            <span className="stat-card__meta">Actualización cada 10 segundos</span>
+          </article>
+        </section>
+
+        <OperationalStatusPanel />
+        {pendingInvitations.isError && <Feedback tone="error">Invitaciones: {errorMessage(pendingInvitations.error)}</Feedback>}
+        {cashSession.isError && <Feedback tone="error">Caja: {errorMessage(cashSession.error)}</Feedback>}
+        {activeOrders.isError && <Feedback tone="error">Pedidos activos: {errorMessage(activeOrders.error)}</Feedback>}
+        </aside>
+      </div>
       <section className="analytics-kpi-grid" aria-label="Indicadores del periodo">
-        <article className="analytics-kpi">
-          <span className="analytics-kpi__icon">
-            <Banknote aria-hidden="true" />
-          </span>
-          <p>Ventas confirmadas</p>
-          <strong>{report ? formatAnalyticsMoney(report.resumen.ventas_totales) : '—'}</strong>
-          <small>Sin cancelados ni pedidos por cobrar</small>
-        </article>
         <article className="analytics-kpi">
           <span className="analytics-kpi__icon">
             <ReceiptText aria-hidden="true" />
@@ -153,13 +206,32 @@ export function TenantDashboardPage() {
         </article>
       </section>
 
+      {report && (
+        <section className="analytics-secondary" aria-label="Otros movimientos del periodo">
+          <div>
+            <span>Recargas en efectivo</span>
+            <strong>{formatAnalyticsMoney(report.resumen.recargas)}</strong>
+          </div>
+          <div>
+            <span>Comisiones generadas</span>
+            <strong>{formatAnalyticsMoney(report.resumen.comisiones)}</strong>
+          </div>
+          <p>
+            Actualizado{' '}
+            {new Intl.DateTimeFormat('es-MX', {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            }).format(new Date(report.calculado_en))}
+          </p>
+        </section>
+      )}
+
       {analytics.isPending ? (
         <div className="analytics-loading" role="status">
           Preparando las métricas del negocio…
         </div>
       ) : report ? (
         <section className="analytics-grid" aria-label="Gráficas del negocio">
-          <SalesTrendChart data={report.ventas_por_dia} />
           <RankedBarChart
             eyebrow="Preferencias"
             title="Métodos de pago"
@@ -187,6 +259,7 @@ export function TenantDashboardPage() {
               state: 'positive' as const,
             }))}
           />
+          <SalesTrendChart data={report.ventas_por_dia} />
           <RankedBarChart
             eyebrow="Flujo"
             title="Pedidos por estado"
@@ -207,73 +280,6 @@ export function TenantDashboardPage() {
         </section>
       ) : null}
 
-      {report && (
-        <section className="analytics-secondary" aria-label="Otros movimientos del periodo">
-          <div>
-            <span>Recargas en efectivo</span>
-            <strong>{formatAnalyticsMoney(report.resumen.recargas)}</strong>
-          </div>
-          <div>
-            <span>Comisiones generadas</span>
-            <strong>{formatAnalyticsMoney(report.resumen.comisiones)}</strong>
-          </div>
-          <p>
-            Actualizado{' '}
-            {new Intl.DateTimeFormat('es-MX', {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-            }).format(new Date(report.calculado_en))}
-          </p>
-        </section>
-      )}
-
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Ahora mismo</p>
-          <h2>Operación del establecimiento</h2>
-        </div>
-      </div>
-
-      <section className="stats-grid" aria-label="Resumen del establecimiento">
-        <article className="stat-card">
-          <span className="stat-card__icon stat-card__icon--lime">
-            <UserPlus aria-hidden="true" />
-          </span>
-          <div>
-            <p>Invitaciones pendientes</p>
-            <strong>{pendingInvitations.isPending ? '—' : pendingCount}</strong>
-          </div>
-          <span className="stat-card__meta">Hasta 50 recientes</span>
-        </article>
-        <article className="stat-card">
-          <span className="stat-card__icon">
-            <WalletCards aria-hidden="true" />
-          </span>
-          <div>
-            <p>Estado de Caja</p>
-            <strong className="text-xl">
-              {cashSession.isPending ? 'Consultando' : activeSession ? 'Abierta' : 'Cerrada'}
-            </strong>
-          </div>
-          <span className="stat-card__meta">Contrato POS vigente</span>
-        </article>
-        <article className="stat-card">
-          <span className="stat-card__icon">
-            <ClipboardList aria-hidden="true" />
-          </span>
-          <div>
-            <p>Pedidos activos</p>
-            <strong>
-              {activeOrders.isPending
-                ? '—'
-                : `${activeOrderCount}${activeOrders.data?.cursor ? '+' : ''}`}
-            </strong>
-          </div>
-          <span className="stat-card__meta">Actualización cada 10 segundos</span>
-        </article>
-      </section>
-
-      <OperationalStatusPanel />
       <UnpaidAccountsCard />
 
       <section className="dashboard-grid">
