@@ -149,6 +149,10 @@ function Shell({
 
       <header className="mobile-header">
         <Logo compact theme={dark ? 'dark' : 'light'} />
+        <div className="mobile-header__context">
+          <p className="mobile-header__title">{title}</p>
+          <p className="mobile-header__role">{subtitle}</p>
+        </div>
         <button
           type="button"
           className="icon-button"

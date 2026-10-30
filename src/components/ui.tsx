@@ -29,6 +29,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={`button button--${variant} ${className}`}
+      aria-busy={loading || undefined}
       disabled={disabled || loading}
       {...props}
     >
@@ -292,7 +293,7 @@ export function Modal({
           }}
         >
           <div className="pr-14">
-            <Dialog.Title className="text-xl font-bold text-ink">{title}</Dialog.Title>
+            <Dialog.Title className="dialog-title text-xl font-bold text-ink">{title}</Dialog.Title>
             {description && (
               <Dialog.Description className="mt-2 text-sm leading-6 text-muted">
                 {description}
