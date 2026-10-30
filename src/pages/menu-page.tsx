@@ -1,3 +1,4 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -16,7 +17,7 @@ import {
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useFieldArray, useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
-import { Button, CustomSelect, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { Button, CustomSelect, EmptyState, Feedback, Field, Modal } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { looksLikeRental, rentsSpaces } from '../lib/rental-product';
 import { api } from '../lib/api';
@@ -125,7 +126,7 @@ export function MenuPage() {
 
   return (
     <div className="page-stack admin-screen admin-catalog">
-      <PageHeader
+      <AppPageHeader
         eyebrow="Administración"
         title="Menú"
         description="Organiza lo que vende la tienda, sus precios, preparación y opciones. El precio que ve el cliente lo confirma el sistema al cobrar."

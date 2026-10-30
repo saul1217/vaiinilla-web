@@ -78,7 +78,7 @@ test.describe('Caja', () => {
     test.skip(!accounts.cajero, 'Falta E2E_CAJERO_EMAIL.');
     await login(page, accounts.cajero);
     await page.goto('/app/pos');
-    await expect(page.getByRole('heading', { name: 'Caja en control.' })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { name: 'Caja', exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('region', { name: 'Sesión de Caja' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Datos de la sesión de Caja' })).toBeVisible();
   });

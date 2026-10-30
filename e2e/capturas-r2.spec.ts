@@ -23,8 +23,8 @@ const products: Result<'catalog'> = {
     id: i + 1, categoria_id: i < 3 ? 1 : 2, estacion_preparacion: i < 3 ? 'cocina' : 'caja', nombre,
     descripcion: i < 3 ? 'Preparado al momento con ingredientes de temporada.' : 'Una pausa fresca para tu día.',
     ingredientes: i < 3 ? 'Ingredientes frescos de la casa' : 'Café de especialidad', alergenos: i === 1 ? 'Gluten, lácteos' : null,
-    tiempo_estimado_min: i < 3 ? 12 : 4, precio_mostrador: ['120.00', '85.00', '110.00', '65.00', '40.00', '60.00'][i]!,
-    precio_digital: ['120.00', '85.00', '110.00', '65.00', '40.00', '60.00'][i]!, disponible: i !== 5,
+    tiempo_estimado_min: i < 3 ? 12 : 4, precio_mostrador: ['120.00', '85.00', '110.00', '65.00', '40.00', '60.00'][i],
+    precio_digital: ['120.00', '85.00', '110.00', '65.00', '40.00', '60.00'][i], disponible: i !== 5,
     imagen_url: null, grupos_opcion: i === 3 ? [{ id: 1, nombre: 'Leche', min_selecciones: 1, max_selecciones: 1,
       opciones: [{ id: 1, nombre: 'Entera', precio_extra: '0.00' }, { id: 2, nombre: 'Avena', precio_extra: '10.00' }] }] : [],
   })),
@@ -33,7 +33,7 @@ const products: Result<'catalog'> = {
 const orders: OrderDetail[] = (['por_cobrar', 'cobrado', 'preparando', 'listo', 'entregado', 'listo'] as const).map((estado, i) => ({
   id: `pedido-${i + 1}`, folio: 241 + i, fecha_operativa: '2026-10-30', estado,
   metodo_pago: i === 4 ? 'stripe' : 'efectivo', destino: i === 0 ? 'para_llevar' : 'en_espacio',
-  espacio: i === 0 ? null : spaces[i % 3]!, sesion_espacio_id: i === 0 ? null : `sesion-${i % 3 + 1}`,
+  espacio: i === 0 ? null : spaces[i % 3], sesion_espacio_id: i === 0 ? null : `sesion-${i % 3 + 1}`,
   sesion_espacio_estado: i === 0 ? null : 'abierta', subtotal: '185.00', total: '185.00',
   ahorro_combinado: '0.00', cashback_otorgado: i === 4 ? '9.25' : '0.00',
   monto_pagado: i === 0 || i === 2 || i === 5 ? '0.00' : '185.00',
@@ -41,8 +41,8 @@ const orders: OrderDetail[] = (['por_cobrar', 'cobrado', 'preparando', 'listo', 
   pago_diferido: i === 2 || i === 5, pago_pendiente: i === 0 || i === 2 || i === 5,
   version: 1, creado_en: `2026-10-30T18:${40 + i * 2}:00.000Z`, actualizado_en: now,
   notas_cocina: i === 2 ? 'Salsa aparte, por favor.' : null,
-  usuario: { nombre: ['Mariana López', 'Diego Ruiz', 'Ana Torres', 'Luis García', 'Sofía Pérez', 'Carlos Méndez'][i]!, matricula: null },
-  items: [products.productos[0]!, products.productos[3]!].map((p, index) => ({
+  usuario: { nombre: ['Mariana López', 'Diego Ruiz', 'Ana Torres', 'Luis García', 'Sofía Pérez', 'Carlos Méndez'][i], matricula: null },
+  items: [products.productos[0], products.productos[3]].map((p, index) => ({
     id: i * 10 + index + 1, producto_id: p.id, nombre_producto: p.nombre, estacion_preparacion: p.estacion_preparacion,
     cantidad: 1, precio_digital_unitario: p.precio_digital, subtotal: p.precio_digital, opciones: [], rechazo: null,
   })),
@@ -151,7 +151,7 @@ const scenarios = [
   { role: 'cocina', path: '/app/cocina', ready: '.kitchen-ticket', seed: 'Chilaquiles verdes' },
   ...['/app', '/app/pedidos', '/app/menu', '/app/espacios', '/app/cashback', '/app/flujo'].map((path) => ({
     role: 'admin', path, ready: '.admin-screen', seed: ({ '/app': 'Café del Jardín', '/app/pedidos': 'Mariana López',
-      '/app/menu': 'Chilaquiles verdes', '/app/espacios': 'Mesa 1', '/app/cashback': 'Cashback y wallet', '/app/flujo': 'Flujo de mi tienda' } as Record<string, string>)[path]!,
+      '/app/menu': 'Chilaquiles verdes', '/app/espacios': 'Mesa 1', '/app/cashback': 'Cashback y wallet', '/app/flujo': 'Flujo de mi tienda' } as Record<string, string>)[path],
   })),
 ] as const;
 
@@ -168,6 +168,8 @@ for (const scenario of scenarios) {
       await expect(page.locator(scenario.ready).first()).toBeVisible();
       if (scenario.path === '/app') {
         await expect(page.getByRole('heading', { name: 'Hola, Café del Jardín', exact: true })).toBeVisible();
+      } else if (scenario.role === 'mesero') {
+        await expect(page.getByRole('heading', { level: 1, name: scenario.seed, exact: true })).toBeVisible();
       } else {
         await expect(page.getByText(scenario.seed, { exact: false }).first()).toBeVisible();
       }

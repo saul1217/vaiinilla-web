@@ -1,8 +1,9 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Eye, ReceiptText } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { OrderCard, OrderDetailContent } from '../components/order-card';
-import { Button, EmptyState, Feedback, Modal, PageHeader } from '../components/ui';
+import { Button, EmptyState, Feedback, Modal } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -54,7 +55,7 @@ export function OrdersPage() {
 
   return (
     <div className="page-stack admin-screen admin-orders">
-      <PageHeader
+      <AppPageHeader
         eyebrow="Administración"
         title="Pedidos e historial"
         description="Consulta el detalle y el estado real de cada pedido. Cobros y entregas se realizan únicamente desde una cuenta de Caja."

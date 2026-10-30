@@ -1,3 +1,4 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClock,
@@ -19,7 +20,7 @@ import QRCode from 'qrcode';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { CourtBookingsCard } from '../components/court-bookings-card';
 import { BookingRefundsCard } from '../components/booking-refunds-card';
-import { Button, CustomSelect, Feedback, Field, PageHeader } from '../components/ui';
+import { Button, CustomSelect, Feedback, Field } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -718,7 +719,7 @@ export function SpacesPage() {
   }
   return (
     <div className="page-stack admin-screen admin-spaces">
-      <PageHeader
+      <AppPageHeader
         eyebrow="Operación del establecimiento"
         title="Mesas y espacios"
         description="Crea espacios para que tus clientes puedan pedir desde un QR. Los enlaces pertenecen únicamente a este establecimiento."

@@ -7663,11 +7663,6 @@ html[data-admin-theme] .feedback--info { background: var(--status-info-bg); colo
 html[data-admin-theme] .pos-toast .feedback { background: var(--toast-bg); color: var(--toast-text); border-color: #626257; border-radius: var(--radius-control); }
 html[data-admin-theme] .dialog-content { border-color: var(--line); border-radius: var(--radius-sheet); background: var(--color-cream); overscroll-behavior: contain; }
 html[data-admin-theme] .dialog-close { background: var(--color-cream-2); border-color: var(--line-strong); }
-.app-frame--tenant .sidebar { background: var(--color-cream); }
-.app-frame--tenant .sidebar__context { background: var(--color-cream-2); border-radius: var(--radius-card); }
-.app-frame--tenant .nav-item { min-height: 44px; }
-html[data-admin-theme] .app-frame--tenant .nav-item--active { background: var(--color-ink); color: var(--color-cream); }
-html[data-admin-theme] .app-frame--tenant .nav-item--active:hover { background: var(--color-ink-soft); }
 .mobile-header__context { flex: 1; min-width: 0; margin-inline: 12px; }
 .mobile-header__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.875rem; font-weight: 800; }
 .mobile-header__role { color: var(--color-muted); font-size: var(--type-caption); }

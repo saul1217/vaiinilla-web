@@ -105,6 +105,6 @@ html[data-admin-theme] .admin-catalog .category-row--active > button:first-child
 html[data-admin-theme] .admin-catalog .category-row__edit { min-height: 44px; }
 html[data-admin-theme] .admin-screen .cashback-days label:focus-within { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 
-@media (max-width: 479px) {
+@media (max-width: 359px) {
   html[data-admin-theme] .admin-catalog .product-grid { grid-template-columns: minmax(0, 1fr); }
 }

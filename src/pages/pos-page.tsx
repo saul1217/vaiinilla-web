@@ -1,3 +1,4 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -19,7 +20,7 @@ import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { OrderCard, OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
 import { StaffOrderForm } from '../components/staff-order-form';
-import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { Button, EmptyState, Feedback, Field, Modal } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
 import { WaiterBoard } from '../components/waiter-board';
 import { useStaffTheme } from '../lib/staff-ui';
@@ -245,17 +246,13 @@ export function PosPage() {
         </div>
       )}
       {role === 'admin' ? (
-        <PageHeader
+        <AppPageHeader
           eyebrow="Operación POS"
           title={pageTitle(role)}
           description={pageDescription(role)}
         />
       ) : isCashier ? (
-        <header className="staff-hero">
-          <p className="staff-eyebrow">Turno de hoy{businessName ? ` · ${businessName}` : ''}</p>
-          <h1 className="staff-title">Caja en control.</h1>
-          <p>Cobra, entrega y mantén el menú disponible para todos.</p>
-        </header>
+        <AppPageHeader eyebrow={`Caja${businessName ? ` · ${businessName}` : ''}`} title="Caja" connected={heartbeat.isSuccess} />
       ) : null}
 
       {session.isError && <Feedback tone="error">{errorMessage(session.error)}</Feedback>}

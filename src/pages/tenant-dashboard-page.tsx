@@ -1,3 +1,4 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -18,7 +19,7 @@ import { Link } from 'react-router-dom';
 import { PeriodSelector, RankedBarChart, SalesTrendChart } from '../components/analytics-dashboard';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { UnpaidAccountsCard } from '../components/unpaid-accounts-card';
-import { Feedback, PageHeader } from '../components/ui';
+import { Feedback } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -84,7 +85,7 @@ export function TenantDashboardPage() {
 
   return (
     <div className="page-stack admin-screen admin-overview">
-      <PageHeader
+      <AppPageHeader
         eyebrow="Administración"
         title={`Hola, ${tenant?.access.establecimiento.nombre ?? 'Vaiinilla'}`}
         description="Consulta ventas, pedidos y desempeño del menú; después entra a cada operación autorizada."
