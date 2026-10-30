@@ -185,7 +185,7 @@ export function CashbackPage() {
   const previousRule = ruleQuery.data;
 
   return (
-    <div className="page-stack cashback-page">
+    <div className="page-stack cashback-page admin-screen admin-cashback">
       <PageHeader
         eyebrow="Administración financiera"
         title="Cashback y wallet"

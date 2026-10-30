@@ -519,11 +519,12 @@ export function PosPage() {
         open={Boolean(cashOrder)}
         onOpenChange={(open) => { if (!open) setCashOrder(null); }}
         title={cashOrder ? `Cobrar pedido ${cashOrder.folio}` : 'Cobrar pedido'}
+        contentClassName="staff-payment-dialog"
         description={`Saldo pendiente: ${formatMoney(cashAmountDue)}. Confirma el efectivo recibido antes de registrar el cobro.`}
       >
         {cashOrder && (
           <form
-            className="transaction-form"
+            className="transaction-form staff-payment"
             onSubmit={(event) => void cashForm.handleSubmit(({ amount }) => {
               if (tipTooBig) return;
               collectMutation.mutate({ order: cashOrder, amount, propina: tipValue });
@@ -531,7 +532,7 @@ export function PosPage() {
           >
             {collectMutation.isError && <Feedback tone="error">{errorMessage(collectMutation.error)}</Feedback>}
             <OrderDetailContent order={cashOrder} />
-            <p><strong>Por cobrar: {formatMoney(cashAmountDue)}</strong></p>
+            <p className="staff-payment__due"><span>Por cobrar</span><strong>{formatMoney(cashAmountDue)}</strong></p>
             <TipPicker base={cashAmountDue} value={tip} onChange={setTip} error={tipError} />
             <Field
               id="cash-amount"
@@ -568,6 +569,7 @@ export function PosPage() {
         open={Boolean(deliveryOrder)}
         onOpenChange={(open) => { if (!open) { setDeliveryOrder(null); setQrToken(''); } }}
         title={deliveryOrder ? `Entregar pedido ${deliveryOrder.folio}` : 'Entregar pedido'}
+        contentClassName="staff-delivery-dialog"
         description={deliveryOrder && deliveryNeedsQr(deliveryOrder)
           ? 'Escanea el código del cliente. El sistema verificará que corresponda exactamente a este pedido.'
           : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}

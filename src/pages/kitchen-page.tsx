@@ -156,7 +156,7 @@ export function KitchenPage() {
     <div className="page-stack kitchen-page staff-page">
       <header className="staff-hero">
         <p className="staff-eyebrow">Comandas en vivo{tenant ? ` · ${tenant.access.establecimiento.nombre}` : ''}</p>
-        <h1 className="staff-title">Una comanda a la vez.</h1>
+        <h1 className="staff-title">Cocina</h1>
         <p>Cambia el estado cuando el trabajo real cambie. El equipo verá la actualización.</p>
       </header>
 

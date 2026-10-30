@@ -119,7 +119,7 @@ export function StaffOrderForm({ token, rol, onCreated, initialSpaceId }: StaffO
       )}
       {crear.isError && <Feedback tone="error">{errorMessage(crear.error)}</Feedback>}
 
-      <fieldset className="staff-order__bloque">
+      <fieldset className="staff-order__bloque staff-order__destination">
         <legend>¿Dónde se sirve?</legend>
         <div className="staff-order__segmentos">
           <button
@@ -155,7 +155,7 @@ export function StaffOrderForm({ token, rol, onCreated, initialSpaceId }: StaffO
         )}
       </fieldset>
 
-      <fieldset className="staff-order__bloque">
+      <fieldset className="staff-order__bloque staff-order__catalog">
         <legend>Productos</legend>
         {catalogo.isError && <Feedback tone="error">{errorMessage(catalogo.error)}</Feedback>}
         {categorias.map((categoria) => {
@@ -168,6 +168,9 @@ export function StaffOrderForm({ token, rol, onCreated, initialSpaceId }: StaffO
                 const linea = cantidadPorProducto.get(producto.id);
                 return (
                   <article key={producto.id} className="staff-order__producto" data-agregado={Boolean(linea)}>
+                    {producto.imagen_url && (
+                      <img className="staff-order__photo" src={producto.imagen_url} alt="" loading="lazy" />
+                    )}
                     <div>
                       <strong>{producto.nombre}</strong>
                       <span>{formatMoney(producto.precio_mostrador)}</span>
@@ -240,7 +243,7 @@ export function StaffOrderForm({ token, rol, onCreated, initialSpaceId }: StaffO
         })}
       </fieldset>
 
-      <fieldset className="staff-order__bloque">
+      <fieldset className="staff-order__bloque staff-order__customer">
         <legend>Cliente y pago</legend>
         <Field
           id="staff-order-nombre"

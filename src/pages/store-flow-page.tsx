@@ -86,7 +86,7 @@ export function StoreFlowPage() {
   const unknownType = Boolean(query.data && !current);
 
   return (
-    <div className="page-stack">
+    <div className="page-stack admin-screen admin-flow">
       <PageHeader
         eyebrow="Operación del establecimiento"
         title="Flujo de mi tienda"
