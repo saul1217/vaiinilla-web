@@ -35,7 +35,7 @@ existente se conserva para Mesero, Caja, Cocina y Admin.
 | `--color-lime` CTA | #B9D86D | #B9D86D |
 | `--on-accent` texto CTA | #171817 | #171817 |
 | `--line` separador decorativo | #D2CEC0 | #434441 |
-| `--line-strong` contorno de control | #86867A | #85867B |
+| `--line-strong` contorno de control | #7F7F73 | #85867B |
 | `--focus-ring` foco | #526D21 | #B9D86D |
 | éxito fondo / texto | #DDE8BC / #354D10 | #303D23 / #C9E795 |
 | pendiente fondo / texto | #F8DE87 / #604400 | #44391E / #F8DE87 |

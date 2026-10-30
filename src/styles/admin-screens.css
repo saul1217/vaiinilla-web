@@ -55,7 +55,9 @@ html[data-admin-theme] .admin-catalog .product-card { min-height: 0; background:
 html[data-admin-theme] .admin-catalog .product-card__media { height: auto; aspect-ratio: 4 / 3; background: var(--color-cream-3); }
 html[data-admin-theme] .admin-catalog .product-card__body { gap: 12px; padding: 20px; }
 html[data-admin-theme] .admin-catalog .product-card h3 { font-size: 1.25rem; letter-spacing: -.035em; }
-html[data-admin-theme] .admin-catalog .product-card__prices dd { font-size: 1.375rem; }
+html[data-admin-theme] .admin-catalog .product-card__prices { grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }
+html[data-admin-theme] .admin-catalog .product-card__prices > div { min-width: 0; }
+html[data-admin-theme] .admin-catalog .product-card__prices dd { font-size: 1.375rem; overflow-wrap: anywhere; }
 html[data-admin-theme] .admin-catalog .product-card__actions { padding: 0 20px 20px; flex-wrap: wrap; }
 html[data-admin-theme] .admin-catalog .product-card__actions .button { flex: 1 1 auto; }
 html[data-admin-theme] .admin-spaces .space-card-enter { background: var(--color-cream-2); gap: 20px; }
@@ -102,3 +104,7 @@ html[data-admin-theme] .admin-flow [aria-labelledby='store-directory-title'] img
 html[data-admin-theme] .admin-catalog .category-row--active > button:first-child { color: inherit; }
 html[data-admin-theme] .admin-catalog .category-row__edit { min-height: 44px; }
 html[data-admin-theme] .admin-screen .cashback-days label:focus-within { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+
+@media (max-width: 479px) {
+  html[data-admin-theme] .admin-catalog .product-grid { grid-template-columns: minmax(0, 1fr); }
+}
