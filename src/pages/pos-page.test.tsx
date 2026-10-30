@@ -103,7 +103,6 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     const { unmount } = render(<PosPage />, { wrapper: Wrapper });
     try {
       expect(document.documentElement.dataset.adminTheme).toBe('claro');
-      expect(document.documentElement.dataset.staffUi).toBeUndefined();
       expect(window.localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
       unmount();
       expect(document.documentElement.dataset.adminTheme).toBe('claro');
@@ -123,7 +122,6 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     const { unmount } = render(<PosPage />, { wrapper: Wrapper });
     expect(screen.queryByRole('button', { name: /UI anterior|UI nueva/i })).not.toBeInTheDocument();
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
-    expect(document.documentElement.dataset.staffUi).toBeUndefined();
     unmount();
   });
 

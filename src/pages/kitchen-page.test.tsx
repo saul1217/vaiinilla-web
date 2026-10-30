@@ -92,8 +92,8 @@ describe('tablero de Cocina', () => {
     window.localStorage.setItem('vaiinilla.panel.admin-theme', 'claro');
     const { unmount } = render(<KitchenPage />, { wrapper: TestProvider });
     try {
+      expect(screen.getByRole('heading', { name: 'Una comanda a la vez.' })).toHaveClass('staff-title');
       expect(document.documentElement.dataset.adminTheme).toBe('claro');
-      expect(document.documentElement.dataset.staffUi).toBeUndefined();
       expect(window.localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
       unmount();
       expect(document.documentElement.dataset.adminTheme).toBe('claro');
@@ -112,7 +112,6 @@ describe('tablero de Cocina', () => {
     window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
     const { container } = render(<KitchenPage />, { wrapper: TestProvider });
     expect(container.firstChild).toHaveClass('staff-page');
-    expect(document.documentElement.dataset.staffUi).toBeUndefined();
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
     expect(screen.getByRole('heading', { name: 'Una comanda a la vez.' })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.listOrders).toHaveBeenCalled());

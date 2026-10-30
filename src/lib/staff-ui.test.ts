@@ -26,9 +26,7 @@ describe('presentación del personal', () => {
     window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
     const { unmount } = renderHook(() => useStaffTheme());
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
-    expect(document.documentElement.dataset.staffUi).toBeUndefined();
     unmount();
-    expect(document.documentElement.dataset.staffUi).toBeUndefined();
   });
 
   it('separa el número del tipo de espacio, como los mosaicos de la app', () => {

@@ -57,9 +57,10 @@ test('acceso: formulario vacío y error de credenciales', async ({ page }, info)
 });
 
 test('Caja (POS) con tema oscuro del personal', async ({ page }, info) => {
+  await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'oscuro'));
   await login(page, accounts.cajero);
   await page.goto('/app/pos');
-  await expect(page.locator('html')).toHaveAttribute('data-staff-ui', 'nueva', { timeout: 30_000 });
+  await expect(page.locator('html')).toHaveAttribute('data-admin-theme', 'oscuro', { timeout: 30_000 });
   await page.waitForLoadState('networkidle');
   await shot(page, 'pos-01-inicio', info.project.name);
   // «Quitar artículo» solo existe dentro del diálogo que abre «Rechazar o quitar» en un pedido en efectivo,
@@ -81,9 +82,10 @@ test('Caja (POS) con tema oscuro del personal', async ({ page }, info) => {
 });
 
 test('Cocina con tema oscuro del personal', async ({ page }, info) => {
+  await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'oscuro'));
   await login(page, accounts.cocina);
   await page.goto('/app/cocina');
-  await expect(page.locator('html')).toHaveAttribute('data-staff-ui', 'nueva', { timeout: 30_000 });
+  await expect(page.locator('html')).toHaveAttribute('data-admin-theme', 'oscuro', { timeout: 30_000 });
   await page.waitForLoadState('networkidle');
   await shot(page, 'cocina-01-tablero', info.project.name);
   const tickets = page.locator('.kitchen-ticket');
@@ -141,6 +143,7 @@ test('Mesero: tablero de mesas', async ({ page, browser }, info) => {
 });
 
 test('Administración: pantallas clave en tema claro', async ({ page }, info) => {
+  await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'));
   await login(page, accounts.admin);
   for (const [route, name] of [
     ['/app/pedidos', 'admin-01-pedidos'],
