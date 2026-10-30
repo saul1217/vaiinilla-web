@@ -98,6 +98,17 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     apiMock.deliverOrder.mockResolvedValue({ folio: 28 });
   });
 
+  it('usa siempre los mosaicos nuevos y permite filtrar mesas por atender', async () => {
+    const { container } = render(<WaiterBoard token="staff-token" role="mesero" />, { wrapper: TestProvider });
+    const tile = await screen.findByRole('button', { name: /Mesa 67\./ });
+    expect(tile).toHaveClass('staff-tile');
+    expect(container.querySelector('.staff-board')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Todas' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.setup().click(screen.getByRole('radio', { name: 'Por atender' }));
+    expect(screen.getByRole('radio', { name: 'Por atender' })).toHaveAttribute('aria-checked', 'true');
+    expect(tile).toBeInTheDocument();
+  });
+
   it('expone la solicitud, permite Voy y Atendida, y deja la cuenta intacta para imprimir', async () => {
     const user = userEvent.setup();
     render(<WaiterBoard token="staff-token" role="mesero" />, { wrapper: TestProvider });

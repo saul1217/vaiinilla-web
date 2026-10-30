@@ -4,11 +4,8 @@ import {
   CalendarDays,
   CircleDollarSign,
   Clock3,
-  LockKeyhole,
-  Radio,
   ReceiptText,
   ScanLine,
-  WalletCards,
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -25,8 +22,7 @@ import { StaffOrderForm } from '../components/staff-order-form';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
 import { WaiterBoard } from '../components/waiter-board';
-import { StaffUiSwitch } from '../components/staff-ui-switch';
-import { useStaffUi } from '../lib/staff-ui';
+import { useStaffTheme } from '../lib/staff-ui';
 import { useSessions } from '../context/session-context';
 import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
@@ -72,10 +68,7 @@ export function PosPage() {
   const isCashier = role === 'cajero';
   const isOperationalWorker = isHeartbeatRole(role);
   const canOperateSession = role === 'admin' || isCashier;
-  // Mesero y Caja tienen la presentación de las apps (oscura) y pueden volver a la anterior.
-  const staffRole = role === 'mesero' || isCashier;
-  const [ui, setUi] = useStaffUi(staffRole);
-  const nueva = staffRole && ui === 'nueva';
+  useStaffTheme();
   const businessName = tenant?.access.establecimiento.nombre;
   const queryClient = useQueryClient();
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
@@ -236,32 +229,26 @@ export function PosPage() {
   }
 
   return (
-    <div className={nueva ? 'page-stack staff-page' : 'page-stack'}>
-      {staffRole && (
+    <div className="page-stack staff-page">
+      {canCreateStaffOrder && (
         <div className="staff-topbar">
-          {nueva && isOperationalWorker && (
+          {isOperationalWorker && (
             <span className={`staff-chip ${heartbeat.isSuccess ? 'staff-chip--on' : ''}`} role="status">
               <span /> {heartbeat.isSuccess ? `${roleLabel(role)} en línea` : `Conectando ${roleLabel(role)}`}
             </span>
           )}
-          {nueva && canCreateStaffOrder && (
+          {canCreateStaffOrder && (
             <Button variant="dark" onClick={() => openStaffOrder()}>
               Nuevo pedido
             </Button>
           )}
-          <StaffUiSwitch mode={ui} onChange={setUi} />
         </div>
       )}
-      {!nueva ? (
+      {role === 'admin' ? (
         <PageHeader
           eyebrow="Operación POS"
           title={pageTitle(role)}
           description={pageDescription(role)}
-          action={
-            canCreateStaffOrder ? (
-              <Button onClick={() => openStaffOrder()}>Nuevo pedido</Button>
-            ) : undefined
-          }
         />
       ) : isCashier ? (
         <header className="staff-hero">
@@ -270,8 +257,6 @@ export function PosPage() {
           <p>Cobra, entrega y mantén el menú disponible para todos.</p>
         </header>
       ) : null}
-
-      {!nueva && <OperationalStatusPanel />}
 
       {session.isError && <Feedback tone="error">{errorMessage(session.error)}</Feedback>}
       {openMutation.isError && <Feedback tone="error">{errorMessage(openMutation.error)}</Feedback>}
@@ -287,30 +272,16 @@ export function PosPage() {
         </Feedback>
       )}
 
-      {isOperationalWorker && !isCashier && !nueva && (
-        <section className="operation-card">
-          <Radio aria-hidden="true" className="size-7 text-muted" />
-          <div>
-            <p className="eyebrow">Presencia operativa</p>
-            <h2>{heartbeat.isSuccess ? `${roleLabel(role)} en línea` : `Conectando ${roleLabel(role)}`}</h2>
-            <p>
-              Esta ventana reporta el perfil cada cinco segundos y lo mantiene visible para Administración.
-            </p>
-          </div>
-        </section>
-      )}
-
       {role === 'mesero' && (
         <WaiterBoard
           token={token}
           role="mesero"
-          variant={ui}
           businessName={businessName}
           onAddOrder={openStaffOrder}
         />
       )}
 
-      {nueva && isCashier && (
+      {canOperateSession && (
         <section className={`staff-cashbar ${active ? 'staff-cashbar--open' : ''}`} aria-label="Sesión de Caja">
           <div className="staff-cashbar__state">
             <span className="staff-cashbar__dot" aria-hidden="true" />
@@ -363,25 +334,7 @@ export function PosPage() {
         </section>
       )}
 
-      {role !== 'mesero' && !nueva && (
-      <>
-      <section className={`cash-hero ${active ? 'cash-hero--open' : ''}`}>
-        <div className="cash-hero__icon"><WalletCards aria-hidden="true" /></div>
-        <div>
-          <p className="eyebrow">Estado actual</p>
-          <h2>{session.isPending ? 'Consultando…' : active ? 'Caja abierta' : 'Caja cerrada'}</h2>
-          <p>
-            {active
-              ? `Abierta ${formatDate(active.abierta_en)} con $${active.monto_inicial} MXN.`
-              : 'El establecimiento no recibe pedidos mientras no exista una sesión abierta.'}
-          </p>
-        </div>
-        <span className={`cash-state ${active ? 'cash-state--open' : ''}`}>
-          <span /> {active ? 'Operando' : 'Sin operar'}
-        </span>
-      </section>
-
-      {active && (
+      {role === 'admin' && active && (
         <section className="stats-grid" aria-label="Datos de la sesión de Caja">
           <article className="stat-card">
             <span className="stat-card__icon"><CalendarDays aria-hidden="true" /></span>
@@ -396,60 +349,6 @@ export function PosPage() {
             <div><p>Tipo de apertura</p><strong className="text-xl">{active.cierre_automatico ? 'Automática' : 'Manual'}</strong></div>
           </article>
         </section>
-      )}
-
-      {!canOperateSession ? (
-        <section className="operation-card operation-card--readonly">
-          <LockKeyhole aria-hidden="true" className="size-7 text-muted" />
-          <div>
-            <h2>Acceso de solo consulta</h2>
-            <p>Tu rol puede consultar la sesión activa, pero solo Caja o Administración pueden abrirla o cerrarla.</p>
-          </div>
-        </section>
-      ) : active ? (
-        <section className="operation-card">
-          <div>
-            <p className="eyebrow">Cierre manual</p>
-            <h2>Cerrar sesión de Caja</h2>
-            <p>Al cerrar, el sistema expira los pedidos en efectivo que sigan por cobrar y registra el movimiento.</p>
-          </div>
-          <form
-            className="operation-form"
-            onSubmit={(event) => void closeForm.handleSubmit((data) => setClosingAmount(data.amount))(event)}
-          >
-            <Field
-              label="Monto final (MXN)"
-              inputMode="decimal"
-              placeholder="0.00"
-              error={closeForm.formState.errors.amount?.message}
-              {...closeForm.register('amount')}
-            />
-            <Button type="submit" variant="dark">Revisar cierre</Button>
-          </form>
-        </section>
-      ) : (
-        <section className="operation-card">
-          <div>
-            <p className="eyebrow">Apertura</p>
-            <h2>Abrir sesión de Caja</h2>
-            <p>Confirma el fondo inicial. El movimiento quedará registrado en el sistema.</p>
-          </div>
-          <form
-            className="operation-form"
-            onSubmit={(event) => void openForm.handleSubmit((data) => openMutation.mutate(data))(event)}
-          >
-            <Field
-              label="Monto inicial (MXN)"
-              inputMode="decimal"
-              placeholder="500.00"
-              error={openForm.formState.errors.amount?.message}
-              {...openForm.register('amount')}
-            />
-            <Button type="submit" loading={openMutation.isPending}>Abrir Caja</Button>
-          </form>
-        </section>
-      )}
-      </>
       )}
 
       {role === 'admin' && (
@@ -584,14 +483,12 @@ export function PosPage() {
       )}
 
       {/* Caja también cobra la cuenta de las mesas y renta canchas en mostrador. */}
-      {isCashier && <WaiterBoard token={token} role="cajero" variant={ui} businessName={businessName} />}
+      {isCashier && <WaiterBoard token={token} role="cajero" businessName={businessName} />}
 
-      {nueva && (
-        <details className="staff-details">
+      <details className="staff-details" open={role === 'admin'}>
           <summary>Estado del local</summary>
           <OperationalStatusPanel />
-        </details>
-      )}
+      </details>
 
       <Modal
         open={newOrderOpen}

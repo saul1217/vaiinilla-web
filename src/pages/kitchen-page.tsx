@@ -19,10 +19,9 @@ import { KitchenOrderCard } from '../components/kitchen-order-card';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { RejectOrderDialog, type RejectTarget } from '../components/reject-order-dialog';
 import { itemRejectionNotice } from '../lib/rejection-notice';
-import { Button, Feedback, PageHeader } from '../components/ui';
+import { Button, Feedback } from '../components/ui';
 import { useSessions } from '../context/session-context';
-import { StaffUiSwitch } from '../components/staff-ui-switch';
-import { useStaffUi } from '../lib/staff-ui';
+import { useStaffTheme } from '../lib/staff-ui';
 import { useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -47,10 +46,7 @@ export function KitchenPage() {
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const now = useKitchenClock();
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
-  // Cocina tiene la presentación de las apps (oscura) y puede volver a la anterior.
-  const staffRole = role === 'cocina';
-  const [ui, setUi] = useStaffUi(staffRole);
-  const nueva = staffRole && ui === 'nueva';
+  useStaffTheme();
   const ordersQueryKey = ['orders', 'kitchen', scopeId] as const;
 
   const orders = useInfiniteQuery({
@@ -157,25 +153,12 @@ export function KitchenPage() {
   const isRefreshing = orders.isFetching && !orders.isFetchingNextPage && !orders.isPending;
 
   return (
-    <div className={nueva ? 'page-stack kitchen-page staff-page' : 'page-stack kitchen-page'}>
-      {staffRole && (
-        <div className="staff-topbar">
-          <StaffUiSwitch mode={ui} onChange={setUi} />
-        </div>
-      )}
-      {nueva ? (
-        <header className="staff-hero">
-          <p className="staff-eyebrow">Comandas en vivo{tenant ? ` · ${tenant.access.establecimiento.nombre}` : ''}</p>
-          <h1 className="staff-title">Una comanda a la vez.</h1>
-          <p>Cambia el estado cuando el trabajo real cambie. El equipo verá la actualización.</p>
-        </header>
-      ) : (
-        <PageHeader
-          eyebrow="Operación de Cocina"
-          title="Comandas de Cocina"
-          description="Lo importante aparece primero: cantidades, opciones, indicaciones, destino y tiempo transcurrido de cada pedido."
-        />
-      )}
+    <div className="page-stack kitchen-page staff-page">
+      <header className="staff-hero">
+        <p className="staff-eyebrow">Comandas en vivo{tenant ? ` · ${tenant.access.establecimiento.nombre}` : ''}</p>
+        <h1 className="staff-title">Una comanda a la vez.</h1>
+        <p>Cambia el estado cuando el trabajo real cambie. El equipo verá la actualización.</p>
+      </header>
 
       <section className="kitchen-overview" aria-labelledby="kitchen-overview-title">
         <header className="kitchen-overview__header">
