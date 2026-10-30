@@ -1,3 +1,5 @@
+import { CashierHome } from '../components/cashier-home';
+import { CashierQueue } from '../components/cashier-queue';
 import { AppSheet } from '../components/app-sheet';
 import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,10 +20,10 @@ import { addMoney, tipAmount, tipExceedsTotal, type TipChoice } from '../lib/tip
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
-import { OrderCard, OrderDetailContent } from '../components/order-card';
+import { OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
 import { StaffOrderForm } from '../components/staff-order-form';
-import { Button, EmptyState, Feedback, Field, Modal } from '../components/ui';
+import { Button, Feedback, Field } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
 import { WaiterBoard } from '../components/waiter-board';
 import { useStaffTheme } from '../lib/staff-ui';
@@ -73,6 +75,9 @@ export function PosPage() {
   useStaffTheme();
   const businessName = tenant?.access.establecimiento.nombre;
   const queryClient = useQueryClient();
+  const focusClosingSummary = useCallback((node: HTMLDivElement | null) => node?.focus(), []);
+  const [sessionOpen, setSessionOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
   // Un solo aviso a la vez, que se va solo: los avisos no se acumulan en la página.
   const [notice, setNotice] = useState<ReactNode>(null);
@@ -134,6 +139,7 @@ export function PosPage() {
     mutationFn: ({ amount }: MoneyForm) => api.openCashSession(token, amount),
     onSuccess: async (_session, { amount }) => {
       closeMutation.reset();
+      setSessionOpen(false);
       setNotice(<>Caja abierta con fondo de <strong>{formatMoney(amount)}</strong>.</>);
       await refreshOperation();
     },
@@ -146,6 +152,7 @@ export function PosPage() {
     onSuccess: async (_session, { amount }) => {
       openMutation.reset();
       setClosingAmount(null);
+      setSessionOpen(false);
       closeForm.reset({ amount: '' });
       setNotice(<>Caja cerrada con <strong>{formatMoney(amount)}</strong> en efectivo.</>);
       await refreshOperation();
@@ -231,7 +238,7 @@ export function PosPage() {
   }
 
   return (
-    <div className="page-stack staff-page">
+    <CashierHome cashier={isCashier}>
       {canCreateStaffOrder && (
         <div className="staff-topbar">
           {isOperationalWorker && (
@@ -279,26 +286,26 @@ export function PosPage() {
         />
       )}
 
+      {canOperateSession && (<div className="cashier-home__operation">
       {canOperateSession && (
         <section className={`staff-cashbar ${active ? 'staff-cashbar--open' : ''}`} aria-label="Sesión de Caja">
           <div className="staff-cashbar__state">
             <span className="staff-cashbar__dot" aria-hidden="true" />
             <div>
-              <strong>{session.isPending ? 'Consultando…' : active ? 'Caja abierta' : 'Caja cerrada'}</strong>
+              <strong>{session.isPending ? 'Consultando…' : session.isError && !active ? 'Sesión no disponible' : active ? 'Caja abierta' : 'Caja cerrada'}</strong>
               <small>
                 {active
                   ? `Desde ${formatDate(active.abierta_en)} · fondo $${active.monto_inicial}`
-                  : 'Abre la caja para recibir pedidos.'}
+                  : session.isPending ? 'Consultando sesión operativa.' : session.isError ? 'No se pudo consultar la sesión.' : 'Abre la caja para recibir pedidos.'}
               </small>
             </div>
           </div>
-          {active ? (
-            <details className="staff-cashbar__close">
-              <summary>
-                <span className="staff-cashbar__when-closed">Cerrar caja</span>
-                <span className="staff-cashbar__when-open">Cancelar</span>
-              </summary>
-              <form
+          <Button variant="secondary" disabled={session.isPending || (session.isError && !active)} onClick={() => setSessionOpen(true)}>{active ? 'Cerrar caja' : 'Abrir Caja'}</Button>
+          <AppSheet open={sessionOpen} onOpenChange={(open) => { setSessionOpen(open); if (!open) setClosingAmount(null); }} title={closingAmount !== null ? '¿Cerrar la caja?' : active ? 'Cerrar caja' : 'Abrir Caja'} description={closingAmount !== null ? 'Los pedidos en efectivo que sigan por cobrar se cancelarán y ya no se recibirán pedidos.' : 'Sesión operativa de Caja'}>
+            <div hidden={closingAmount !== null}>
+              {openMutation.isError && <Feedback tone="error">{errorMessage(openMutation.error)}</Feedback>}
+              {closeMutation.isError && <Feedback tone="error">{errorMessage(closeMutation.error)}</Feedback>}
+              {active ? (<form
                 className="operation-form"
                 onSubmit={(event) => void closeForm.handleSubmit((data) => setClosingAmount(data.amount))(event)}
               >
@@ -311,10 +318,7 @@ export function PosPage() {
                   {...closeForm.register('amount')}
                 />
                 <Button type="submit" variant="dark">Revisar cierre</Button>
-              </form>
-            </details>
-          ) : (
-            <form
+              </form>) : (<form
               className="operation-form"
               onSubmit={(event) => void openForm.handleSubmit((data) => openMutation.mutate(data))(event)}
             >
@@ -327,8 +331,14 @@ export function PosPage() {
                 {...openForm.register('amount')}
               />
               <Button type="submit" loading={openMutation.isPending}>Abrir Caja</Button>
-            </form>
-          )}
+            </form>)}
+            </div>
+            {closingAmount !== null && active && <div className="close-cash-summary" tabIndex={-1} aria-label="Resumen de cierre" ref={focusClosingSummary}>
+              <dl><div><dt>Fondo inicial</dt><dd>{formatMoney(active.monto_inicial)}</dd></div><div><dt>Efectivo al cerrar</dt><dd><strong>{formatMoney(closingAmount)}</strong></dd></div></dl>
+              {closeMutation.isError && <Feedback tone="error">{errorMessage(closeMutation.error)}</Feedback>}
+              <div className="form-actions"><Button variant="secondary" onClick={() => { setClosingAmount(null); requestAnimationFrame(() => closeForm.setFocus('amount')); }}>Volver</Button><Button variant="dark" loading={closeMutation.isPending} onClick={() => closeMutation.mutate({ amount: closingAmount })}>Cerrar caja</Button></div>
+            </div>}
+          </AppSheet>
         </section>
       )}
 
@@ -355,7 +365,11 @@ export function PosPage() {
         </Feedback>
       )}
 
+      {/* Caja también cobra la cuenta de las mesas y renta canchas en mostrador. */}
+      {isCashier && <><Button variant="secondary" onClick={() => setBoardOpen(true)}>Mesas y canchas</Button><WaiterBoard token={token} role="cajero" businessName={businessName} sheetOpen={boardOpen} onSheetOpenChange={setBoardOpen} /></>}
+
       {isCashier && <PendingRefunds token={token} canConfirm />}
+      </div>)}
 
       {isCashier && (
         <section className="pos-orders" aria-labelledby="cashier-orders-title">
@@ -373,55 +387,17 @@ export function PosPage() {
             <Feedback tone="error">No se pudo actualizar la fila de pedidos. {errorMessage(cashierQueue.error)}</Feedback>
           )}
 
-          {cashierQueue.isPending ? (
+          {cashierQueue.isError && !cashierQueue.data ? null : cashierQueue.isPending ? (
             <div className="orders-loading" role="status">Actualizando la fila de Caja…</div>
           ) : (
-            <div className="pos-queue-grid">
-              <QueueColumn
-                title="Por cobrar"
-                description="Pedidos en efectivo pendientes"
-                count={cashOrders.length}
-                icon={<ReceiptText aria-hidden="true" />}
-              >
-                {cashOrders.length ? cashOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    actions={
-                      <>
+            <CashierQueue cashOrders={cashOrders} readyOrders={readyOrders} actions={(order, group) => group === 'cash' ? (<>
                         <Button disabled={!active} onClick={() => beginCash(order)}>
                           <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar
                         </Button>
                         <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
-                          <XCircle aria-hidden="true" className="size-5" /> Rechazar o quitar
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
                         </Button>
-                      </>
-                    }
-                  />
-                )) : (
-                  <EmptyState
-                    icon={<ReceiptText aria-hidden="true" />}
-                    title="Sin cobros pendientes"
-                    description="Los pedidos en efectivo nuevos aparecerán aquí automáticamente."
-                  />
-                )}
-                {!active && cashOrders.length > 0 && (
-                  <Feedback tone="info">Abre la sesión de Caja para registrar cobros.</Feedback>
-                )}
-              </QueueColumn>
-
-              <QueueColumn
-                title="Listos para entregar"
-                description="Cobra lo pendiente; después imprime el ticket y entrega el pedido"
-                count={readyOrders.length}
-                icon={<ScanLine aria-hidden="true" />}
-              >
-                {readyOrders.length ? readyOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    actions={
-                      <>
+                      </>) : (<>
                         {hasOutstandingCashBalance(order) ? (
                           <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
                             <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar {formatMoney(order.saldo_pendiente!)}
@@ -451,20 +427,9 @@ export function PosPage() {
                           <span className="text-sm" role="status">Pago pendiente</span>
                         )}
                         <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
-                          <XCircle aria-hidden="true" className="size-5" /> Rechazar o quitar
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
                         </Button>
-                      </>
-                    }
-                  />
-                )) : (
-                  <EmptyState
-                    icon={<ScanLine aria-hidden="true" />}
-                    title="Sin entregas pendientes"
-                    description="Los pedidos listos, de mesa o para llevar, aparecerán aquí."
-                  />
-                )}
-              </QueueColumn>
-            </div>
+                      </>)} />
           )}
           {cashierQueue.hasNextPage && (
             <div className="orders-footer">
@@ -480,8 +445,6 @@ export function PosPage() {
         </section>
       )}
 
-      {/* Caja también cobra la cuenta de las mesas y renta canchas en mostrador. */}
-      {isCashier && <WaiterBoard token={token} role="cajero" businessName={businessName} />}
 
       <details className="staff-details" open={role === 'admin'}>
           <summary>Estado del local</summary>
@@ -514,7 +477,7 @@ export function PosPage() {
         )}
       </AppSheet>
 
-      <Modal
+      <AppSheet
         open={Boolean(cashOrder)}
         onOpenChange={(open) => { if (!open) setCashOrder(null); }}
         title={cashOrder ? `Cobrar pedido ${cashOrder.folio}` : 'Cobrar pedido'}
@@ -530,7 +493,8 @@ export function PosPage() {
             })(event)}
           >
             {collectMutation.isError && <Feedback tone="error">{errorMessage(collectMutation.error)}</Feedback>}
-            <OrderDetailContent order={cashOrder} />
+            <p className="cashier-payment__customer">{cashOrder.usuario?.nombre ?? 'Cliente'}</p>
+            <details><summary>Productos del pedido</summary><OrderDetailContent order={cashOrder} /></details>
             <p className="staff-payment__due"><span>Por cobrar</span><strong>{formatMoney(cashAmountDue)}</strong></p>
             <TipPicker base={cashAmountDue} value={tip} onChange={setTip} error={tipError} />
             <Field
@@ -538,7 +502,6 @@ export function PosPage() {
               label="Efectivo recibido (MXN)"
               inputMode="decimal"
               placeholder={cashAmountDue}
-              autoFocus
               error={cashForm.formState.errors.amount?.message}
               hint={receivedAmount && change === null ? `Debe ser igual o mayor a ${formatMoney(cashToCollect)}.` : undefined}
               {...cashAmountField}
@@ -551,8 +514,8 @@ export function PosPage() {
               }}
             />
             <div className={`change-preview ${change !== null ? 'change-preview--ready' : ''}`} aria-live="polite">
-              <span>Cambio</span>
-              <strong>{change === null ? '—' : formatMoney(change)}</strong>
+              <span>{change === null && receivedAmount && calculateChange(cashToCollect, receivedAmount) !== null ? 'Falta' : 'Cambio'}</span>
+              <strong>{change === null ? receivedAmount && calculateChange(cashToCollect, receivedAmount) !== null ? formatMoney(calculateChange(cashToCollect, receivedAmount)!) : '—' : formatMoney(change)}</strong>
             </div>
             <div className="form-actions">
               <Button type="button" variant="ghost" onClick={() => setCashOrder(null)}>Cancelar</Button>
@@ -562,9 +525,9 @@ export function PosPage() {
             </div>
           </form>
         )}
-      </Modal>
+      </AppSheet>
 
-      <Modal
+      <AppSheet
         open={Boolean(deliveryOrder)}
         onOpenChange={(open) => { if (!open) { setDeliveryOrder(null); setQrToken(''); } }}
         title={deliveryOrder ? `Entregar pedido ${deliveryOrder.folio}` : 'Entregar pedido'}
@@ -600,7 +563,7 @@ export function PosPage() {
             </div>
           </div>
         )}
-      </Modal>
+      </AppSheet>
       <RejectOrderDialog
         token={token}
         order={removingFrom}
@@ -613,58 +576,8 @@ export function PosPage() {
           await queryClient.invalidateQueries({ queryKey: ['pending-refunds'] });
         }}
       />
-      <Modal
-        open={closingAmount !== null}
-        onOpenChange={(open) => { if (!open) setClosingAmount(null); }}
-        title="¿Cerrar la caja?"
-        description="Los pedidos en efectivo que sigan por cobrar se cancelarán y ya no se recibirán pedidos."
-      >
-        {closingAmount !== null && active && (
-          <div className="close-cash-summary">
-            <dl>
-              <div><dt>Fondo inicial</dt><dd>{formatMoney(active.monto_inicial)}</dd></div>
-              <div><dt>Efectivo al cerrar</dt><dd><strong>{formatMoney(closingAmount)}</strong></dd></div>
-            </dl>
-            {closeMutation.isError && <Feedback tone="error">{errorMessage(closeMutation.error)}</Feedback>}
-            <div className="close-cash-summary__actions">
-              <Button variant="secondary" onClick={() => setClosingAmount(null)}>Volver</Button>
-              <Button
-                variant="dark"
-                loading={closeMutation.isPending}
-                onClick={() => closeMutation.mutate({ amount: closingAmount })}
-              >
-                Cerrar caja
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </div>
-  );
-}
 
-function QueueColumn({
-  title,
-  description,
-  count,
-  icon,
-  children,
-}: {
-  title: string;
-  description: string;
-  count: number;
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="queue-column">
-      <header className="queue-column__header">
-        <span className="queue-column__icon">{icon}</span>
-        <div><h3>{title}</h3><p>{description}</p></div>
-        <strong aria-label={`${count} pedidos`}>{count}</strong>
-      </header>
-      <div className="queue-column__list">{children}</div>
-    </section>
+    </CashierHome>
   );
 }
 

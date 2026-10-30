@@ -80,7 +80,8 @@ test.describe('Caja', () => {
     await page.goto('/app/pos');
     await expect(page.getByRole('heading', { name: 'Caja', exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('region', { name: 'Sesión de Caja' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Datos de la sesión de Caja' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Abrir Caja|Cerrar caja)$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Mesas y canchas', exact: true })).toBeVisible();
   });
 });
 

@@ -18,7 +18,7 @@ async function healthy(page: Page, errors: string[]) {
 
 const scenarios = [
   { role: 'mesero', path: '/app/pos', ready: '.staff-tile', seed: 'Mesas' },
-  { role: 'cajero', path: '/app/pos', ready: '.order-card', seed: 'Mariana López' },
+  { role: 'cajero', path: '/app/pos', ready: '.cashier-queue__ticket', seed: 'Mariana López' },
   { role: 'cocina', path: '/app/cocina', ready: '.kitchen-ticket', seed: 'Chilaquiles verdes' },
   ...['/app', '/app/pedidos', '/app/menu', '/app/espacios', '/app/cashback', '/app/flujo'].map((path) => ({
     role: 'admin', path, ready: '.admin-screen', seed: ({ '/app': 'Café del Jardín', '/app/pedidos': 'Mariana López',

@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
+import { AppSheet } from './app-sheet';
 import { Button, Feedback, Field, Modal } from './ui';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -64,9 +65,10 @@ export function RejectOrderDialog({
     onClose();
   }
 
+  const Dialog = allowWholeOrder ? Modal : AppSheet;
   const isItem = chosen?.kind === 'item';
   return (
-    <Modal
+    <Dialog
       contentClassName="reject-order-dialog"
       open={Boolean(order)}
       onOpenChange={(open) => { if (!open) close(); }}
@@ -135,6 +137,6 @@ export function RejectOrderDialog({
           </div>
         </form>
       )}
-    </Modal>
+    </Dialog>
   );
 }

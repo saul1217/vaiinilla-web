@@ -9,7 +9,7 @@ import { PosPage } from './pos-page';
 const apiMock = vi.hoisted(() => ({
   activeCashSession: vi.fn(), operationalStatus: vi.fn(), listOrders: vi.fn(),
   collectCash: vi.fn(), deliverOrder: vi.fn(), closeCashSession: vi.fn(),
-  catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
+  rejectOrder: vi.fn(), rejectOrderItem: vi.fn(), catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
   businessSettings: vi.fn(),
 }));
 
@@ -31,7 +31,7 @@ vi.mock('../hooks/use-operational-heartbeat', () => ({
 vi.mock('../components/operational-status-panel', () => ({ OperationalStatusPanel: () => <div>Estado operativo</div> }));
 vi.mock('../components/pending-refunds', () => ({ PendingRefunds: () => null }));
 vi.mock('../components/waiter-board', () => ({ WaiterBoard: () => null }));
-vi.mock('../components/reject-order-dialog', () => ({ RejectOrderDialog: () => null }));
+
 
 const baseOrder: OrderDetail = {
   id: 'order-14', folio: 14, fecha_operativa: '2026-10-07', estado: 'listo',
@@ -96,6 +96,25 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: false, tipo: 'cafeteria', entrega_requiere_qr: true, gracia_liberacion_min: 5, franjas_pedido: [] });
   });
 
+  it('permite rechazar desde Caja un pedido de un solo artículo con el diálogo real', async () => {
+    const user = userEvent.setup();
+    apiMock.rejectOrder.mockResolvedValue({});
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, estado: 'por_cobrar', items: [{
+      id: 1, producto_id: 1, nombre_producto: 'Chocolate', estacion_preparacion: 'caja', cantidad: 1,
+      precio_digital_unitario: '125.00', subtotal: '125.00', opciones: [], rechazo: null,
+    }] }], cursor: null });
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Quitar artículo' }));
+    const dialog = await screen.findByRole('dialog', { name: 'No se puede preparar · pedido 14' });
+    expect(within(dialog).getByRole('radio', { name: 'Todo el pedido' })).toBeChecked();
+    expect(within(dialog).getByRole('button', { name: 'Rechazar pedido' })).toBeDisabled();
+    await user.type(within(dialog).getByLabelText('Motivo'), 'Producto agotado');
+    await user.click(within(dialog).getByRole('button', { name: 'Rechazar pedido' }));
+    await waitFor(() => expect(apiMock.rejectOrder).toHaveBeenCalledExactlyOnceWith('token', 'order-14', 4, 'Producto agotado'));
+    expect(apiMock.rejectOrderItem).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
   it.each(['cajero', 'mesero', 'admin'])('respeta el tema claro elegido por %s al entrar y salir', (role) => {
     sesion.rol = role;
     const previousTheme = document.documentElement.dataset.adminTheme;
@@ -131,11 +150,12 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     sesion.rol = 'admin';
     render(<PosPage />, { wrapper: Wrapper });
     expect(await screen.findByText('Caja abierta')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Cerrar caja')); 
     expect(screen.getByRole('heading', { name: 'Sesión de Caja' })).toBeInTheDocument();
     expect(screen.getByLabelText('Datos de la sesión de Caja')).toHaveTextContent('2026-10-07');
     expect(screen.getByRole('button', { name: 'Nuevo pedido' })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText('Cerrar caja'));
     expect(screen.getByRole('button', { name: 'Revisar cierre' })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar ventana' }));
     expect(screen.getByText('Estado del local').closest('details')).toHaveAttribute('open');
     expect(screen.getByText('Estado operativo')).toBeVisible();
     expect(screen.queryByRole('button', { name: /Cobrar \$/ })).not.toBeInTheDocument();
@@ -160,12 +180,18 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     await user.click(await screen.findByText('Cerrar caja'));
     await user.type(screen.getByLabelText('Monto final (MXN)'), '750.50');
     expect(apiMock.closeCashSession).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Revisar cierre' }));
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Revisar cierre' })).toHaveFocus();
+    await user.keyboard('{Enter}');
     const dialog = await screen.findByRole('dialog', { name: '¿Cerrar la caja?' });
     expect(dialog).toHaveTextContent('$750.50 MXN');
+    expect(within(dialog).getByLabelText('Resumen de cierre')).toHaveFocus();
     expect(apiMock.closeCashSession).not.toHaveBeenCalled();
-    await user.click(within(dialog).getByRole('button', { name: 'Volver' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await user.tab();
+    expect(within(dialog).getByRole('button', { name: 'Volver' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByLabelText('Monto final (MXN)')).toHaveFocus());
+    expect(screen.getByLabelText('Monto final (MXN)')).toHaveValue('750.50');
     expect(apiMock.closeCashSession).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Revisar cierre' }));
     const confirmation = await screen.findByRole('dialog', { name: '¿Cerrar la caja?' });
@@ -180,6 +206,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     apiMock.activeCashSession.mockResolvedValue(null);
     render(<PosPage />, { wrapper: Wrapper });
     expect(await screen.findByText('Caja cerrada')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir Caja' }));
     expect(screen.getByLabelText('Monto inicial (MXN)')).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Abrir Caja' })).toBeEnabled();
   });
@@ -225,6 +252,35 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(await screen.findByRole('button', { name: 'Imprimir ticket' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Entregar' })).toBeVisible();
     expect(screen.getByText('PAGADO')).toBeVisible();
+  });
+
+  it('conserva efectivo y propina tras error y reintenta con el mismo payload', async () => {
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, total: '85.00', saldo_pendiente: '85.00' }], cursor: null });
+    apiMock.collectCash.mockRejectedValueOnce(new Error('Cobro rechazado')).mockResolvedValueOnce({ cambio: '6.50' });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Cobrar $85.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: '10%' }));
+    const amount = within(dialog).getByLabelText('Efectivo recibido (MXN)');
+    await user.type(amount, '90');
+    expect(within(dialog).getByText('Falta').parentElement).toHaveTextContent('$3.50 MXN');
+    expect(within(dialog).getByRole('button', { name: 'Confirmar cobro' })).toBeDisabled();
+    expect(apiMock.collectCash).not.toHaveBeenCalled();
+    await user.clear(amount);
+    await user.type(amount, '100');
+    expect(within(dialog).getByText('Cambio').parentElement).toHaveTextContent('$6.50 MXN');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Cobro rechazado');
+    expect(amount).toHaveValue('100.00');
+    expect(within(dialog).getByRole('button', { name: '10%' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
+    await waitFor(() => expect(apiMock.collectCash).toHaveBeenCalledTimes(2));
+    expect(apiMock.collectCash.mock.calls).toEqual([
+      ['token', baseOrder.id, '100.00', 4, '8.50'],
+      ['token', baseOrder.id, '100.00', 4, '8.50'],
+    ]);
+    expect(await screen.findByText(/Cobro registrado/)).toHaveTextContent('$6.50 MXN');
   });
 
   it('exige QR después de cobrar solamente cuando la configuración lo requiere', async () => {

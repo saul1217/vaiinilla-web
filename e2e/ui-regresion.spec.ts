@@ -290,3 +290,27 @@ for (const theme of ['claro', 'oscuro']) {
     });
   }
 }
+
+// Slice 3: snapshots are generated only by the fixed QA container.
+for (const theme of ['claro', 'oscuro'] as const) {
+  for (const viewport of VIEWPORTS) {
+    test(`Caja · hojas · ${theme} · ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await installStaffR2Mocks(page, 'cajero', theme);
+      await page.goto('/app/pos');
+      await expect(page.locator('.cashier-queue__ticket')).toHaveCount(1);
+      await stabilize(page);
+      await expect(page).toHaveScreenshot(`caja-ticket-${theme}-${viewport.name}.png`, { fullPage: true, mask: [page.locator('time')] });
+      await page.getByRole('button', { name: /^Cobrar(?: \$.*)?$/ }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await page.getByRole('button', { name: '10%', exact: true }).click();
+      await expect(page).toHaveScreenshot(`caja-cobro-${theme}-${viewport.name}.png`, { fullPage: true });
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      expect(violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: 'Cerrar caja', exact: true }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await expect(page).toHaveScreenshot(`caja-sesion-${theme}-${viewport.name}.png`, { fullPage: true });
+    });
+  }
+}
