@@ -92,7 +92,7 @@ describe('tablero de Cocina', () => {
     window.localStorage.setItem('vaiinilla.panel.admin-theme', 'claro');
     const { unmount } = render(<KitchenPage />, { wrapper: TestProvider });
     try {
-      expect(screen.getByRole('heading', { name: 'Cocina' })).toHaveClass('staff-title');
+      expect(screen.getByRole('heading', { name: 'Cocina', level: 1 })).toBeInTheDocument();
       expect(document.documentElement.dataset.adminTheme).toBe('claro');
       expect(window.localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
       unmount();

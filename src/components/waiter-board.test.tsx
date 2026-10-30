@@ -103,9 +103,9 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     const tile = await screen.findByRole('button', { name: /Mesa 67\./ });
     expect(tile).toHaveClass('staff-tile');
     expect(container.querySelector('.staff-board')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Todas' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Todas' })).toBeChecked();
     await userEvent.setup().click(screen.getByRole('radio', { name: 'Por atender' }));
-    expect(screen.getByRole('radio', { name: 'Por atender' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Por atender' })).toBeChecked();
     expect(tile).toBeInTheDocument();
   });
 

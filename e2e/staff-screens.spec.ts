@@ -47,7 +47,9 @@ for (const role of ['mesero', 'cajero', 'cocina']) {
     }));
     await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'));
     await page.goto(role === 'cocina' ? '/app/cocina' : '/app/pos');
-    await expect(page.locator(role === 'mesero' ? '.staff-board' : '.staff-hero')).toBeVisible();
+    const pageTitle = { mesero: 'Mesas', cajero: 'Caja', cocina: 'Cocina' }[role];
+    await expect(page.getByRole('heading', { level: 1, name: pageTitle, exact: true })).toBeVisible();
+    if (role === 'mesero') await expect(page.locator('.staff-board')).toBeVisible();
     await expect(page.locator('.operational-panel__updated')).toBeAttached();
     for (const theme of ['claro', 'oscuro']) {
       await expect(page.locator('html')).toHaveAttribute('data-admin-theme', theme);
@@ -58,12 +60,12 @@ for (const role of ['mesero', 'cajero', 'cocina']) {
       await mkdir(dirname(screenshotPath), { recursive: true });
       await page.screenshot({ path: screenshotPath, fullPage: true, animations: 'disabled' });
       if (theme === 'claro') {
-        const menu = page.getByRole('button', { name: 'Abrir navegación', exact: true });
+        const menu = page.getByRole('button', { name: 'Abrir opciones de cuenta', exact: true });
         const mobileMenu = await menu.isVisible();
+        await expect(page.locator(mobileMenu ? '.app-mobile-nav .app-link--active' : '.app-rail .app-link--active')).toBeVisible();
         if (mobileMenu) await menu.click();
-        await expect(page.locator('.sidebar .nav-item--active')).toBeVisible();
         await page.getByRole('button', { name: 'Cambiar a tema oscuro' }).click();
-        if (mobileMenu) await page.getByRole('button', { name: 'Cerrar navegación', expanded: true }).click();
+        if (mobileMenu) await page.getByRole('button', { name: 'Cerrar ventana' }).click();
       }
     }
     expect(pageErrors).toEqual([]);

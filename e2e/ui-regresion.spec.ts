@@ -83,7 +83,7 @@ async function blockIfDataFailed(page: Page, info: TestInfo, surface: Surface) {
 }
 
 async function open(page: Page, info: TestInfo, surface: Surface, viewport: (typeof VIEWPORTS)[number]) {
-  await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'));
+  await page.addInitScript(() => { if (!localStorage.getItem('vaiinilla.panel.admin-theme')) localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'); });
   await page.setViewportSize({ width: viewport.width, height: viewport.height });
   await page.clock.install({ time: FROZEN_TIME });
   await login(page, surface.email(), surface.password());
@@ -100,7 +100,7 @@ async function stabilize(page: Page) {
 }
 
 // Horas, contadores y folios cambian con los datos: se tapan en la captura.
-const volatile = (page: Page) => [page.locator('[data-qa-volatil], time, [class*="timer"], [class*="folio"], .status-badge')];
+const volatile = (page: Page) => [page.locator('[data-qa-volatil], time, [class*="timer"], [class*="folio"]')];
 
 for (const surface of SURFACES) {
   for (const viewport of VIEWPORTS) {
@@ -117,7 +117,7 @@ for (const surface of SURFACES) {
 
       test('axe: sin violaciones serias ni críticas', async ({ page }, info) => {
         await open(page, info, surface, viewport);
-        const exceptions: { id: string; ticket: string }[] = JSON.parse(readFileSync(resolve(process.cwd(), 'e2e/axe-excepciones.json'), 'utf8'));
+        const exceptions = JSON.parse(readFileSync(resolve(process.cwd(), 'e2e/axe-excepciones.json'), 'utf8')) as { id: string; ticket: string }[];
         for (const entry of exceptions) expect(entry.ticket, `La excepción axe ${entry.id} necesita ticket`).toMatch(/\S/);
         const { violations } = await new AxeBuilder({ page }).disableRules(exceptions.map((entry) => entry.id)).analyze();
         const blocking = violations.filter((violation) => violation.impact === 'serious' || violation.impact === 'critical');
@@ -128,7 +128,7 @@ for (const surface of SURFACES) {
         await open(page, info, surface, viewport);
         const overflow = await page.evaluate<number>('document.documentElement.scrollWidth - window.innerWidth');
         expect(overflow).toBeLessThanOrEqual(0);
-        const small = await page.locator('main button:visible, main a:visible').evaluateAll((nodes) =>
+        const small = await page.locator('main button:visible, main a:visible, .app-mobile-nav a:visible, .app-mobile-nav button:visible, .app-sheet button:visible, .app-sheet a:visible').evaluateAll((nodes) =>
           nodes
             .map((node) => ({ text: (node.textContent ?? '').trim().slice(0, 30), box: node.getBoundingClientRect() }))
             .filter(({ box }) => box.height < 44 || box.width < 44)
@@ -189,3 +189,52 @@ test.describe('Reservas de hoy · teclado y estados', () => {
     await expect(page.getByText('Tu rol no tiene permiso para ver las reservas.')).toBeVisible({ timeout: 20_000 });
   });
 });
+
+
+// Slice 1: real shell, account sheet and theme persistence. No snapshot updates outside CI.
+for (const theme of ['claro', 'oscuro']) {
+  test(`Shell Admin y cuenta · ${theme}`, async ({ page }, info) => {
+    await open(page, info, SURFACES[0], VIEWPORTS[0]);
+    const account = page.getByRole('button', { name: 'Abrir opciones de cuenta' });
+    if (theme === 'oscuro') {
+      await account.click();
+      await page.getByRole('button', { name: 'Cambiar a tema oscuro' }).click();
+      await page.keyboard.press('Escape');
+    }
+    await page.reload();
+    await SURFACES[0].ready(page);
+    await expect(page.locator('html')).toHaveAttribute('data-admin-theme', theme);
+    for (const width of [320, 390, 768, 1024, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect(page.getByRole('navigation', { name: 'Navegación móvil' })).toBeVisible({ visible: width < 768 });
+      await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible({ visible: width >= 768 });
+      expect(await page.evaluate<number>('document.documentElement.scrollWidth - innerWidth')).toBeLessThanOrEqual(0);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobile = page.getByRole('navigation', { name: 'Navegación móvil' });
+    await expect(mobile.getByRole('link')).toHaveCount(4);
+    const more = mobile.getByRole('button', { name: 'Más' });
+    await expect(more).not.toHaveAttribute('aria-current');
+    await more.click();
+    const destinations = page.getByRole('navigation', { name: 'Más destinos' });
+    await expect(destinations.getByRole('link')).toHaveCount(4);
+    await destinations.getByRole('link', { name: 'Mesas y espacios' }).click();
+    await expect(page.locator('#contenido')).toBeFocused();
+    await account.focus();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Opciones de cuenta' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('heading')).toBeFocused();
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Tab');
+      expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    }
+    const { violations } = await new AxeBuilder({ page }).analyze();
+    expect(violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
+    await stabilize(page);
+    await expect(page).toHaveScreenshot(`cuenta-shell-${theme}-390x844.png`, { fullPage: true, mask: volatile(page) });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(account).toBeFocused();
+  });
+}

@@ -1,3 +1,4 @@
+import { AppPageHeader } from '../components/app-page-header';
 import {
   useInfiniteQuery,
   useMutation,
@@ -154,11 +155,7 @@ export function KitchenPage() {
 
   return (
     <div className="page-stack kitchen-page staff-page">
-      <header className="staff-hero">
-        <p className="staff-eyebrow">Comandas en vivo{tenant ? ` · ${tenant.access.establecimiento.nombre}` : ''}</p>
-        <h1 className="staff-title">Cocina</h1>
-        <p>Cambia el estado cuando el trabajo real cambie. El equipo verá la actualización.</p>
-      </header>
+      <AppPageHeader eyebrow={`Cocina${tenant ? ` · ${tenant.access.establecimiento.nombre}` : ''}`} title="Cocina" connected={heartbeat.isSuccess} />
 
       <section className="kitchen-overview" aria-labelledby="kitchen-overview-title">
         <header className="kitchen-overview__header">

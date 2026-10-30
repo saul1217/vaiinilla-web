@@ -1,3 +1,4 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Clock3, Link2 } from 'lucide-react';
 import { useState } from 'react';
@@ -7,7 +8,7 @@ import { StoreDirectoryCard } from '../components/store-directory-card';
 import { StoreImagesCard } from '../components/store-images-card';
 import { StoreVideosCard } from '../components/store-videos-card';
 import { Choice } from '../components/choice';
-import { Button, Feedback, Field, PageHeader } from '../components/ui';
+import { Button, Feedback, Field } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -87,7 +88,7 @@ export function StoreFlowPage() {
 
   return (
     <div className="page-stack admin-screen admin-flow">
-      <PageHeader
+      <AppPageHeader
         eyebrow="Operación del establecimiento"
         title="Flujo de mi tienda"
         description="Elige cómo funciona tu negocio: cuándo pagan, cómo se entrega y cuánto dura un turno. Abajo ves el flujo paso a paso, por rol."

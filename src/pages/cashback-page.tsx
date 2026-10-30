@@ -1,3 +1,4 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -11,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { PeriodSelector } from '../components/analytics-dashboard';
-import { Button, CustomSelect, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { Button, CustomSelect, Feedback, Field, Modal } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -186,7 +187,7 @@ export function CashbackPage() {
 
   return (
     <div className="page-stack cashback-page admin-screen admin-cashback">
-      <PageHeader
+      <AppPageHeader
         eyebrow="Administración financiera"
         title="Cashback y wallet"
         description="Configura el beneficio y consulta únicamente información agregada del establecimiento. Los saldos individuales y el ledger no se pueden editar aquí."

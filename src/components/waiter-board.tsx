@@ -1,3 +1,5 @@
+import { AppPageHeader } from './app-page-header';
+import { SegmentedControl } from './segmented-control';
 // Tablero de Mesero y Caja: cada mesa a la vista, más urgente primero (llamando → pedido
 // listo → activa → libre). Sondea cada 5 s. Al tocar una mesa se abre su detalle con las
 // acciones Voy / Atendida / Entregar y su cuenta (cobrar, rentar, liberar).
@@ -282,17 +284,9 @@ export function WaiterBoard({
 
   const summary = (
     <>
-      <header className="staff-board-head">
-        <div>
-          <p className="staff-eyebrow">
-            {role === 'mesero' ? 'Mesero' : 'Caja'}{businessName ? ` · ${businessName}` : ''}
-          </p>
-          <h2 id="mesero-board-title" className="staff-title">Mesas</h2>
-        </div>
-        <span className={`staff-live ${board.isError ? 'staff-live--off' : ''}`} role="status">
-          <span /> {board.isError ? 'Sin conexión' : 'En vivo'}
-        </span>
-      </header>
+      <AppPageHeader id="mesero-board-title" headingLevel={role === 'mesero' ? 1 : 2}
+        eyebrow={`${role === 'mesero' ? 'Mesero' : 'Caja'}${businessName ? ` · ${businessName}` : ''}`} title="Mesas"
+        action={board.isError ? <span role="status">Sin conexión</span> : undefined} />
       <dl className="staff-stats" role="status">
         <div className={calling ? 'staff-stat staff-stat--call' : 'staff-stat'}>
           <dd>{calling}</dd>
@@ -307,11 +301,9 @@ export function WaiterBoard({
           <dt>activas</dt>
         </div>
       </dl>
-      <div className="staff-segment" role="radiogroup" aria-label="Qué mesas ver" data-value={onlyPending ? 'pending' : 'all'}>
-        <span className="staff-segment__indicator" aria-hidden="true" />
-        <button type="button" role="radio" aria-checked={!onlyPending} onClick={() => setOnlyPending(false)}>Todas</button>
-        <button type="button" role="radio" aria-checked={onlyPending} onClick={() => setOnlyPending(true)}>Por atender</button>
-      </div>
+      <SegmentedControl legend="Qué mesas ver" value={onlyPending ? 'pending' : 'all'}
+        options={[{ value: 'all', label: 'Todas' }, { value: 'pending', label: 'Por atender' }]}
+        onChange={(value) => setOnlyPending(value === 'pending')} />
     </>
   );
 

@@ -10,6 +10,7 @@ import {
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
+  type RefObject,
   type SelectHTMLAttributes,
 } from 'react';
 import { Spinner } from './brand-mark';
@@ -49,7 +50,8 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
   { id, label, error, hint, className = '', ...props },
   ref,
 ) {
-  const fieldId = id ?? props.name;
+  const generatedId = useId();
+  const fieldId = id ?? props.name ?? generatedId;
   const descriptionId = `${fieldId}-description`;
   return (
     <div className="field">
@@ -81,7 +83,8 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
   { id, label, error, hint, className = '', children, ...props },
   ref,
 ) {
-  const fieldId = id ?? props.name;
+  const generatedId = useId();
+  const fieldId = id ?? props.name ?? generatedId;
   const descriptionId = `${fieldId}-description`;
   return (
     <div className="field">
@@ -263,6 +266,12 @@ export function Modal({
   description,
   children,
   contentClassName = '',
+  presentation,
+  size = 'compact',
+  header,
+  footer,
+  returnFocusRef,
+  fallbackFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -270,21 +279,43 @@ export function Modal({
   description?: string;
   children: ReactNode;
   contentClassName?: string;
+  presentation?: 'responsive-sheet';
+  size?: 'compact' | 'large' | 'fullscreen';
+  header?: ReactNode;
+  footer?: ReactNode;
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }) {
   // Los diálogos son controlados y sin Trigger: Radix no sabe a dónde devolver el foco,
   // así que recordamos el elemento activo al abrir y lo restauramos al cerrar.
   const opener = useRef<HTMLElement | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const sheet = presentation === 'responsive-sheet';
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay" />
+        <Dialog.Overlay className={sheet ? "app-sheet-overlay" : "dialog-overlay"} />
         <Dialog.Content
-          className={`dialog-content ${contentClassName}`}
-          onOpenAutoFocus={() => {
+          className={`${sheet ? `app-sheet app-sheet--${size}` : 'dialog-content'} ${contentClassName}`}
+          {...(!description ? { 'aria-describedby': undefined } : {})}
+          onOpenAutoFocus={(event) => {
             opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            if (sheet) {
+              event.preventDefault();
+              titleRef.current?.focus();
+            }
           }}
           onCloseAutoFocus={(event) => {
-            const target = opener.current;
+            const target = [returnFocusRef?.current, opener.current, fallbackFocusRef?.current,
+              document.getElementById('contenido')].find((element) => {
+              if (!element?.isConnected || element === document.body || element.matches(':disabled')) return false;
+              // A responsive opener may still be mounted but hidden after resizing.
+              for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+                const style = getComputedStyle(node);
+                if (style.display === 'none' || style.visibility === 'hidden') return false;
+              }
+              return true;
+            });
             opener.current = null;
             if (target?.isConnected) {
               event.preventDefault();
@@ -292,18 +323,20 @@ export function Modal({
             }
           }}
         >
-          <div className="pr-14">
-            <Dialog.Title className="dialog-title text-xl font-bold text-ink">{title}</Dialog.Title>
+          {sheet && <span className="app-sheet__handle" aria-hidden="true" />}
+          <div className={sheet ? 'app-sheet__header' : 'pr-14'}>
+            <Dialog.Title ref={titleRef} tabIndex={sheet ? -1 : undefined} className="dialog-title text-xl font-bold text-ink">{title}</Dialog.Title>
             {description && (
               <Dialog.Description className="mt-2 text-sm leading-6 text-muted">
                 {description}
               </Dialog.Description>
             )}
+            {header}
           </div>
-          <Dialog.Close className="dialog-close" aria-label="Cerrar ventana">
+          <Dialog.Close className={sheet ? "app-sheet__close" : "dialog-close"} aria-label="Cerrar ventana">
             <X aria-hidden="true" className="size-5" />
           </Dialog.Close>
-          <div className="mt-6">{children}</div>
+          <div className={sheet ? "app-sheet__scroll" : "mt-6"}>{children}{footer}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
