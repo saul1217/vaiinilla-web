@@ -5,25 +5,14 @@
 **Personalidad:** cálida, operativa, precisa y sobria  
 **Densidad:** 8/10 para tableros; **movimiento:** 3/10, siempre funcional
 
-## Identidad
+## Identidad vigente del personal
 
-| Uso | Color | Token |
-| --- | --- | --- |
-| Fondo principal | `#F4F0E4` | `--color-cream` |
-| Fondo secundario | `#EAE3D3` | `--color-cream-2` |
-| Texto principal | `#16150F` | `--color-ink` |
-| Superficie oscura | `#2A2820` | `--color-ink-soft` |
-| Acción de marca | `#B4E04D` | `--color-lime` |
-| Foco e iconos | `#668C16` | `--color-lime-dark` (3.5:1: no usar como texto) |
-| Superficie clara | `#FBF9F2` | `--color-white-warm` |
-| Texto secundario | `#655F50` | `--color-muted` (4.97:1 sobre `cream-2`) |
-| Texto de acento verde | `#4F6C12` | `--color-lime-text` (5.3:1 sobre `cream`; en UI oscura del personal `#BFE06A`) |
-
-- Tipografía: **Poppins**, con `system-ui` como respaldo.
-- Iconografía: únicamente Lucide, con trazo consistente. No usar emojis como iconos.
-- Administración/POS usa fondos crema; Plataforma usa navegación oscura para distinguir el contexto de autoridad.
-- Botones principales redondeados, controles de formulario de 48 px y objetivos táctiles mínimos de 44 px.
-- Sombras suaves y bordes cálidos. Evitar efectos decorativos que compitan con datos y acciones.
+El sistema actual de Mesero, Caja, Cocina y Admin está documentado en
+[STAFF-TOKENS.md](STAFF-TOKENS.md), con tokens claro/oscuro, referencias iOS,
+componentes base y adaptación móvil/escritorio. Ese documento sustituye la
+paleta anterior y la suposición de que Admin siempre usa tema claro.
+La selección se conserva en `html[data-admin-theme="claro"|"oscuro"]`.
+Poppins y Lucide siguen siendo los recursos web existentes.
 
 ## Reglas de interacción
 
@@ -63,8 +52,9 @@
 - [ ] Carga, vacío, error y reintento presentes donde corresponda.
 
 
-## Deuda técnica de contraste
+## Compatibilidad
 
-- Los paneles oscuros de Plataforma/Admin (`.dashboard-card--dark`, `.analytics-kpi--dark`, `.analytics-secondary`, `.cashback-help`, `.invitation-intro`, `.platform-security-note`, `.auth-visual`) usan grises hardcodeados (`#c8c2b5`, `#bdb7aa`, `#cbc5b7`, `#d5cfc1`) sobre `--color-ink`. Hoy leen bien porque esas vistas siempre van en tema claro; se romperían si adoptan el tema oscuro del personal (`--color-ink` pasa a claro). Migrarlos a tokens antes de oscurecerlas.
-- `.table-action` solo se renderiza en Invitaciones (Administración, tema claro); no aparece en Cocina, POS ni mesero. El hover sigue con fondos claros fijos (`#edf5dc`, `#fff0ee`): correcto en ese tema, no moverlo al tema oscuro del personal.
-- Logo: `/acceso`, `/accesos`, legales y recuperación usan `Logo` en tema claro sobre fondo claro. Plataforma y el splash de acceso de plataforma usan `theme="dark"`. El logo negro del personal solo se sustituye bajo `html[data-staff-ui='nueva']`.
+Conservar las clases y hooks existentes. Las reglas de base del personal se
+encuentran al final de `src/styles/index.css` para resolver la cascada actual.
+Las superficies especializadas mantienen su alcance; no ampliar funciones para
+imitar pantallas del cliente o de escuela presentes en las capturas.

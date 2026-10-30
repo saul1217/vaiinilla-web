@@ -343,7 +343,7 @@ export function SpaceAccountPanel({
           </div>
           <div className="form-actions">
             {pending.length > 0 && (
-              <Button variant="dark" onClick={beginCollect}>
+              <Button onClick={beginCollect}>
                 <Wallet aria-hidden="true" className="size-5" /> Cobrar cuenta
               </Button>
             )}
@@ -369,6 +369,7 @@ export function SpaceAccountPanel({
         open={collecting}
         onOpenChange={(next) => { if (!next) setCollecting(false); }}
         title={`Cobrar ${data.espacio.nombre}`}
+        contentClassName="staff-payment-dialog"
         description="Divide por pedidos, por un monto o en partes iguales."
       >
         <div className="charge-mode" role="radiogroup" aria-label="Cómo dividir" data-mode={chargeMode}>
@@ -473,7 +474,7 @@ export function SpaceAccountPanel({
           )}
           <div className="form-actions">
             <Button type="button" variant="ghost" onClick={() => setCollecting(false)}>Cancelar</Button>
-            <Button type="button" variant="dark" loading={collect.isPending} disabled={!canConfirmCharge} onClick={() => collect.mutate()}>
+            <Button type="button" loading={collect.isPending} disabled={!canConfirmCharge} onClick={() => collect.mutate()}>
               Confirmar cobro
             </Button>
           </div>

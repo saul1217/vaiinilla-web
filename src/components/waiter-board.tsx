@@ -379,13 +379,14 @@ export function WaiterBoard({
         open={Boolean(open)}
         onOpenChange={(next) => { if (!next) setOpenId(null); }}
         title={open?.espacio.nombre ?? 'Mesa'}
+        contentClassName="staff-table-dialog"
         description={open ? (open.pedidos.length ? `${open.pedidos.length} ${open.pedidos.length === 1 ? 'pedido' : 'pedidos'} en curso` : 'Sin pedidos en curso') : undefined}
       >
         {open && (
           <div className="mesero-sheet">
             {role === 'mesero' && onAddOrder && (
               <Button
-                variant="dark"
+                variant="secondary"
                 onClick={() => {
                   const spaceId = open.espacio.id;
                   setOpenId(null);
@@ -424,12 +425,12 @@ export function WaiterBoard({
                   </div>
                   {order.estado === 'listo' && canDeliver ? (
                     deliveryRequiresQr(order) ? (
-                      <Button variant="dark" onClick={() => { deliverMutation.reset(); setDelivering(order); setQrToken(''); }}>
+                      <Button onClick={() => { deliverMutation.reset(); setDelivering(order); setQrToken(''); }}>
                         <ScanLine aria-hidden="true" className="size-5" /> Entregar
                       </Button>
                     ) : (
                       <Button
-                        variant="dark"
+                        variant="primary"
                         loading={deliverMutation.isPending && deliverMutation.variables?.order.id === order.id}
                         disabled={deliverMutation.isPending}
                         onClick={() => deliverMutation.mutate({ order, qr: '' })}
@@ -459,6 +460,7 @@ export function WaiterBoard({
         open={Boolean(delivering)}
         onOpenChange={(next) => { if (!next) { setDelivering(null); setQrToken(''); } }}
         title={delivering ? `Entregar pedido ${delivering.folio}` : 'Entregar pedido'}
+        contentClassName="staff-delivery-dialog"
         description={delivering && deliveryRequiresQr(delivering)
           ? 'Escanea el QR del cliente. El sistema verificará que corresponda exactamente a este pedido.'
           : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
@@ -479,7 +481,7 @@ export function WaiterBoard({
               </Button>
               <Button
                 type="button"
-                variant="dark"
+                variant="primary"
                 loading={deliverMutation.isPending}
                 disabled={deliveryRequiresQr(delivering) && !qrToken.trim()}
                 onClick={() => latestDelivering && deliverMutation.mutate({ order: latestDelivering, qr: qrToken.trim() })}

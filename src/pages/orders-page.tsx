@@ -53,7 +53,7 @@ export function OrdersPage() {
   );
 
   return (
-    <div className="page-stack">
+    <div className="page-stack admin-screen admin-orders">
       <PageHeader
         eyebrow="Administración"
         title="Pedidos e historial"

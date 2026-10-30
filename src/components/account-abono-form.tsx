@@ -65,7 +65,7 @@ export function AccountAbonoForm({
   });
 
   return (
-    <div className="transaction-form">
+    <div className="transaction-form staff-payment">
       {abonar.isError && <Feedback tone="error">{errorMessage(abonar.error)}</Feedback>}
       <p className="space-account__hint">
         Falta por cobrar {formatMoney(restante)}. Los pedidos quedan cobrados cuando se cubre todo.
@@ -141,7 +141,7 @@ export function AccountAbonoForm({
       )}
       <div className="form-actions">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
-        <Button type="button" variant="dark" loading={abonar.isPending} disabled={!canConfirm} onClick={() => abonar.mutate()}>
+        <Button type="button" loading={abonar.isPending} disabled={!canConfirm} onClick={() => abonar.mutate()}>
           Confirmar pago
         </Button>
       </div>
