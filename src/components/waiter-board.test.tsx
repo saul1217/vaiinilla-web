@@ -98,6 +98,35 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     apiMock.deliverOrder.mockResolvedValue({ folio: 28 });
   });
 
+  it('mantiene propietario, consulta y filtro al cerrar y reabrir la hoja de Caja', async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<WaiterBoard token="token" role="cajero" sheetOpen={false} onSheetOpenChange={onChange} />, { wrapper: TestProvider });
+    await waitFor(() => expect(waiterClient.board).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    rerender(<WaiterBoard token="token" role="cajero" sheetOpen onSheetOpenChange={onChange} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('radio', { name: 'Por atender' }));
+    rerender(<WaiterBoard token="token" role="cajero" sheetOpen={false} onSheetOpenChange={onChange} />);
+    rerender(<WaiterBoard token="token" role="cajero" sheetOpen onSheetOpenChange={onChange} />);
+    expect(await screen.findByRole('radio', { name: 'Por atender' })).toBeChecked();
+    expect(waiterClient.board).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  });
+
+  it('vuelve del detalle al mosaico de Caja con un solo diálogo y foco', async () => {
+    const user = userEvent.setup();
+    render(<WaiterBoard token="token" role="cajero" sheetOpen onSheetOpenChange={vi.fn()} />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: /Mesa 67\. Llamando/ }));
+    const detail = await screen.findByRole('dialog', { name: 'Mesa 67' });
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    await waitFor(() => expect(detail).toContainElement(document.activeElement as HTMLElement));
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: 'Mesas y canchas' });
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Mesa 67\. Llamando/ })).toHaveFocus());
+    expect(waiterClient.board).toHaveBeenCalledTimes(1);
+  });
+
   it('abre cobro y QR dentro de la misma hoja de mesa y devuelve el foco al mosaico', async () => {
     const user = userEvent.setup();
     apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });

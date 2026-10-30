@@ -1,3 +1,4 @@
+import { AppSheet } from './app-sheet';
 import { SpacePaymentSheet } from './space-payment-sheet';
 import { SpaceDetailSheet } from './space-detail-sheet';
 import { WaiterSpaceGrid } from './waiter-space-grid';
@@ -53,7 +54,11 @@ export function WaiterBoard({
   role,
   businessName,
   onAddOrder,
+  sheetOpen,
+  onSheetOpenChange,
 }: {
+  sheetOpen?: boolean;
+  onSheetOpenChange?: (open: boolean) => void;
   token: string;
   role: 'mesero' | 'cajero';
   businessName?: string;
@@ -61,6 +66,7 @@ export function WaiterBoard({
 }) {
   const client = useMemo(() => createWaiterClient(() => Promise.resolve(token)), [token]);
   const queryClient = useQueryClient();
+  const lastOpenedSpace = useRef<number | null>(null);
   const tableHeading = useRef<HTMLHeadingElement>(null);
   const boardRoot = useRef<HTMLElement>(null);
   const closeAccount = useRef<(() => void) | null>(null);
@@ -214,6 +220,19 @@ export function WaiterBoard({
     ? tables.flatMap((table) => table.pedidos).find((order) => order.id === delivering.id) ?? delivering
     : null;
   const open = tables.find((table) => table.espacio.id === openId) ?? null;
+  useEffect(() => {
+    if (open) {
+      lastOpenedSpace.current = open.espacio.id;
+      return;
+    }
+    if (!onSheetOpenChange || !sheetOpen || lastOpenedSpace.current === null) return;
+    const spaceId = lastOpenedSpace.current;
+    const frame = requestAnimationFrame(() => {
+      const tile = boardRoot.current?.querySelector<HTMLButtonElement>(`[data-space-id="${spaceId}"]`);
+      (tile ?? boardRoot.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, onSheetOpenChange, sheetOpen]);
   const calling = tables.filter((table) => stateOf(table) === 'call').length;
   const ready = tables.reduce((sum, table) => sum + table.pedidos.filter((order) => order.estado === 'listo').length, 0);
   const active = tables.filter((table) => stateOf(table, spaces.get(table.espacio.id)) === 'active').length;
@@ -287,7 +306,7 @@ export function WaiterBoard({
   );
 
 
-  return (
+  const boardView = (
     <section ref={boardRoot} tabIndex={-1} className="mesero-board staff-board" aria-labelledby="mesero-board-title">
       <WaiterBoardHeader role={role} businessName={businessName} error={board.isError} loading={board.isPending}
         loaded={Boolean(board.data)} calling={calling} ready={ready} active={active} onlyPending={onlyPending} onFilter={setOnlyPending} />
@@ -328,6 +347,11 @@ export function WaiterBoard({
 
       {(availability.data ?? []).some((space) => space.precio_hora !== null) && <CourtBookingsCard />}
 
+    </section>
+  );
+
+  return (<>
+    {onSheetOpenChange ? <AppSheet open={Boolean(sheetOpen) && !open} onOpenChange={onSheetOpenChange} title="Mesas y canchas" size="large">{boardView}</AppSheet> : boardView}
       <SpaceDetailSheet
         headingRef={tableHeading}
         fallbackFocusRef={boardRoot}
@@ -442,6 +466,6 @@ export function WaiterBoard({
         )}
       </SpacePaymentSheet>
       </SpaceDetailSheet>
-    </section>
+    </>
   );
 }

@@ -104,3 +104,23 @@ for (const width of [320, 768]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
   });
 }
+
+for (const theme of ['claro', 'oscuro'] as const) {
+  test(`caja: ticket único y hojas de sesión/tablero (${theme})`, async ({ page }) => {
+    const { installStaffR2Mocks } = await import('./fixtures/staff-r2');
+    await installStaffR2Mocks(page, 'cajero', theme);
+    await page.goto('/app/pos');
+    await expect(page.locator('.cashier-queue__ticket')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Cerrar caja', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(page.getByLabel('Monto final (MXN)')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Cerrar caja', exact: true })).toBeFocused();
+    await page.getByRole('button', { name: 'Mesas y canchas', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Mesas y canchas', exact: true })).toBeVisible();
+    await expect(page.locator('.staff-board')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  });
+}

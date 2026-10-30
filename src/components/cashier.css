@@ -1,0 +1,39 @@
+.cashier-home { max-width: 1160px; margin-inline: auto; }
+.cashier-home > .app-page-header { order: -2; }
+.cashier-home > .staff-topbar { order: -1; }
+.cashier-home .staff-cashbar { min-width: 0; }
+.cashier-queue { display: grid; gap: 24px; min-width: 0; }
+.cashier-queue__heading { margin: 0; font-size: 24px; }
+.cashier-queue__ticket { min-width: 0; }
+.cashier-queue__groups { display: grid; gap: 24px; min-width: 0; }
+.cashier-queue__groups ul { margin: 0; padding: 0; list-style: none; }
+.cashier-queue__groups h3 { display: flex; align-items: center; gap: 12px; font-size: 22px; }
+.cashier-queue__groups h3 > span { font-size: 16px; padding: 4px 12px; border: 1px solid currentColor; border-radius: 24px; }
+.cashier-queue .app-order-row { min-height: 88px; overflow-wrap: anywhere; }
+.cashier-queue .app-order-row__heading { flex-wrap: wrap; }
+.cashier-queue__selected { font-size: 14px; }
+.cashier-receipt__header { display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+.cashier-receipt__folio { font-size: clamp(44px, 6vw, 56px); line-height: 1.15; margin: 20px 0 8px; overflow-wrap: anywhere; }
+.cashier-receipt__totals { border-top: 2px dashed var(--line-strong); padding-top: 20px; }
+.cashier-receipt__totals > div { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cashier-receipt__totals dd { margin: 0; font-size: 28px; font-weight: 700; }
+.cashier-receipt__actions { display: flex; flex-direction: column; gap: 12px; }
+.cashier-receipt__actions .button { min-height: 48px; white-space: normal; }
+@media (min-width: 1024px) {
+  .cashier-queue { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; }
+  .cashier-queue__heading { grid-column: 1 / -1; }
+  .cashier-queue__ticket { grid-column: 2; grid-row: 2; }
+  .cashier-queue__groups { grid-column: 1; grid-row: 2; }
+}
+@media (max-width: 479px) {
+  .cashier-queue .app-order-row { flex-wrap: wrap; }
+  .cashier-queue .app-order-row__action { margin-left: auto; }
+}
+.cashier-home__operation { display: grid; gap: 20px; min-width: 0; align-content: start; }
+@media (min-width: 1024px) {
+  .cashier-home { grid-template-columns: minmax(0, 1fr) 248px; grid-auto-flow: row dense; align-items: start; }
+  .cashier-home > * { grid-column: 1 / -1; }
+  .cashier-home > .cashier-home__operation { grid-column: 2; }
+  .cashier-home > .pos-orders { grid-column: 1; }
+  .cashier-home__operation .staff-cashbar { flex-direction: column; align-items: stretch; }
+}

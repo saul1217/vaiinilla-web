@@ -11,13 +11,13 @@ for (const theme of ['claro', 'oscuro']) {
     // Navigate directly to static HTML: the app must not keep running after setContent.
     await page.route('**/staff-contrast-fixture', (route) => route.fulfill({
       contentType: 'text/html',
-      body: `<html data-admin-theme="${theme}"><head><link rel="stylesheet" href="/src/styles/index.css"><link rel="stylesheet" href="/src/styles/app-primitives.css"><link rel="stylesheet" href="/src/styles/admin-screens.css"><link rel="stylesheet" href="/src/styles/mesero-slice.css"></head>
+      body: `<html data-admin-theme="${theme}"><head><link rel="stylesheet" href="/src/styles/index.css"><link rel="stylesheet" href="/src/styles/app-primitives.css"><link rel="stylesheet" href="/src/styles/admin-screens.css"><link rel="stylesheet" href="/src/styles/mesero-slice.css"><link rel="stylesheet" href="/src/components/cashier.css"></head>
       <body><div class="app-frame app-frame--tenant">
       <header class="app-identity"><button class="app-account-button">CA</button></header>
       <div class="queue-column"><header class="queue-column__header"><h2>Cola</h2><p>En espera</p></header>
       <article class="kitchen-ticket"><div class="kitchen-ticket__product"><strong>Producto</strong></div>
       <span class="kitchen-ticket__quantity">2</span><ul class="kitchen-ticket__options"><li>Opción</li></ul></article></div>
-      <span class="staff-chip">Cocina</span><span class="space-account__chip">Pagado</span>
+      <section class="cashier-queue"><div class="app-receipt"><h3 class="cashier-receipt__folio">#241</h3><dl class="cashier-receipt__totals"><div><dt>Total</dt><dd>$85.00</dd></div></dl></div></section><span class="staff-chip">Cocina</span><span class="space-account__chip">Pagado</span>
       <span class="space-account__chip space-account__chip--due">Pendiente</span><span class="guest-tag">Invitado</span>
       <button class="staff-tile staff-tile--call">Llamando</button>
       <button class="staff-tile staff-tile--ready">Listo</button>

@@ -80,7 +80,7 @@ export function OrderDetailContent({ order }: { order: OrderDetail }) {
   );
 }
 
-function OrderItems({ order, expanded = false }: { order: OrderDetail; expanded?: boolean }) {
+export function OrderItems({ order, expanded = false }: { order: OrderDetail; expanded?: boolean }) {
   return (
     <ul className={`order-items ${expanded ? 'order-items--expanded' : ''}`} aria-label="Productos del pedido">
       {order.items.map((item) => (
