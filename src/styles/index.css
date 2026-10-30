@@ -6929,25 +6929,6 @@ html:is([data-admin-theme='oscuro'], [data-staff-ui='nueva']) .brand-logo--compa
   gap: 10px;
 }
 
-.staff-ui-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  margin-left: auto;
-  padding: 0 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--color-white-warm);
-  color: var(--color-ink);
-  font-size: 0.875rem;
-  font-weight: 600;
-  transition: transform var(--spring-bouncy), background-color 240ms ease;
-}
-
-.staff-ui-switch svg { width: 16px; height: 16px; }
-.staff-ui-switch:active { transform: scale(0.96); }
-
 .staff-chip,
 .staff-live {
   display: inline-flex;
@@ -7283,7 +7264,7 @@ html:is([data-admin-theme='oscuro'], [data-staff-ui='nueva']) .brand-logo--compa
 @media (prefers-reduced-motion: reduce) {
   .staff-hero, .staff-board > *, .staff-cashbar, .staff-tile, .staff-tile small,
   .staff-cashbar__close[open] form, .staff-details[open] > :not(summary) { animation: none; }
-  .staff-segment__indicator, .staff-tile, .staff-ui-switch, .staff-segment button { transition: none; }
+  .staff-segment__indicator, .staff-tile, .staff-segment button { transition: none; }
 }
 
 html[data-staff-ui='nueva'] .mobile-header { background: rgba(27, 27, 25, 0.92); }

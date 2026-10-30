@@ -5,8 +5,10 @@ import { installPreloadErrorReload } from './app/preload-error';
 import { AppRouter } from './app/router';
 import { AuthProvider } from './context/auth-context';
 import { SessionProvider } from './context/session-context';
+import { readStaffUi } from './lib/staff-ui';
 import './styles/index.css';
 
+readStaffUi();
 installPreloadErrorReload();
 
 // Sentry solo se descarga si hay DSN configurado.

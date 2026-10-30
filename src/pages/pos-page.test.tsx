@@ -27,11 +27,9 @@ vi.mock('../hooks/use-operational-heartbeat', () => ({
   isHeartbeatRole: () => false,
   useOperationalHeartbeat: () => ({ isSuccess: true, isError: false }),
 }));
-vi.mock('../lib/staff-ui', () => ({ useStaffUi: () => ['nueva', vi.fn()] }));
 vi.mock('../components/operational-status-panel', () => ({ OperationalStatusPanel: () => null }));
 vi.mock('../components/pending-refunds', () => ({ PendingRefunds: () => null }));
 vi.mock('../components/waiter-board', () => ({ WaiterBoard: () => null }));
-vi.mock('../components/staff-ui-switch', () => ({ StaffUiSwitch: () => null }));
 vi.mock('../components/reject-order-dialog', () => ({ RejectOrderDialog: () => null }));
 
 const baseOrder: OrderDetail = {
@@ -94,6 +92,16 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: false });
     apiMock.listOrders.mockResolvedValue({ orders: [baseOrder], cursor: null });
     apiMock.collectCash.mockResolvedValue({ cambio: '0.00' });
+  });
+
+  it.each(['cajero', 'mesero', 'admin'])('retira el selector y migra la preferencia de %s', (role) => {
+    sesion.rol = role;
+    window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
+    const { unmount } = render(<PosPage />, { wrapper: Wrapper });
+    expect(screen.queryByRole('button', { name: /UI anterior|UI nueva/i })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
+    expect(document.documentElement.dataset.staffUi).toBe(role === 'admin' ? undefined : 'nueva');
+    unmount();
   });
 
   it('solo permite cobrar cuando está listo pero pendiente, y después ofrece imprimir y entregar', async () => {

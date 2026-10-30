@@ -25,7 +25,6 @@ import { StaffOrderForm } from '../components/staff-order-form';
 import { Button, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
 import { WaiterBoard } from '../components/waiter-board';
-import { StaffUiSwitch } from '../components/staff-ui-switch';
 import { useStaffUi } from '../lib/staff-ui';
 import { useSessions } from '../context/session-context';
 import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
@@ -72,9 +71,9 @@ export function PosPage() {
   const isCashier = role === 'cajero';
   const isOperationalWorker = isHeartbeatRole(role);
   const canOperateSession = role === 'admin' || isCashier;
-  // Mesero y Caja tienen la presentación de las apps (oscura) y pueden volver a la anterior.
+  // Mesero y Caja tienen la presentación de las apps (oscura).
   const staffRole = role === 'mesero' || isCashier;
-  const [ui, setUi] = useStaffUi(staffRole);
+  const ui = useStaffUi(staffRole);
   const nueva = staffRole && ui === 'nueva';
   const businessName = tenant?.access.establecimiento.nombre;
   const queryClient = useQueryClient();
@@ -249,7 +248,6 @@ export function PosPage() {
               Nuevo pedido
             </Button>
           )}
-          <StaffUiSwitch mode={ui} onChange={setUi} />
         </div>
       )}
       {!nueva ? (

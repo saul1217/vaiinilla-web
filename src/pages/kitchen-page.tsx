@@ -21,7 +21,6 @@ import { RejectOrderDialog, type RejectTarget } from '../components/reject-order
 import { itemRejectionNotice } from '../lib/rejection-notice';
 import { Button, Feedback, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
-import { StaffUiSwitch } from '../components/staff-ui-switch';
 import { useStaffUi } from '../lib/staff-ui';
 import { useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
@@ -47,9 +46,9 @@ export function KitchenPage() {
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const now = useKitchenClock();
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
-  // Cocina tiene la presentación de las apps (oscura) y puede volver a la anterior.
+  // Cocina tiene la presentación de las apps (oscura).
   const staffRole = role === 'cocina';
-  const [ui, setUi] = useStaffUi(staffRole);
+  const ui = useStaffUi(staffRole);
   const nueva = staffRole && ui === 'nueva';
   const ordersQueryKey = ['orders', 'kitchen', scopeId] as const;
 
@@ -158,11 +157,6 @@ export function KitchenPage() {
 
   return (
     <div className={nueva ? 'page-stack kitchen-page staff-page' : 'page-stack kitchen-page'}>
-      {staffRole && (
-        <div className="staff-topbar">
-          <StaffUiSwitch mode={ui} onChange={setUi} />
-        </div>
-      )}
       {nueva ? (
         <header className="staff-hero">
           <p className="staff-eyebrow">Comandas en vivo{tenant ? ` · ${tenant.access.establecimiento.nombre}` : ''}</p>
