@@ -717,7 +717,7 @@ export function SpacesPage() {
     if (name.trim()) create.mutate();
   }
   return (
-    <div className="page-stack">
+    <div className="page-stack admin-screen admin-spaces">
       <PageHeader
         eyebrow="Operación del establecimiento"
         title="Mesas y espacios"

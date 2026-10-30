@@ -7807,3 +7807,79 @@ html[data-admin-theme] :is(.staff-payment-dialog, .pos-orders) .order-items__not
   html[data-admin-theme] .staff-cashbar { align-items: stretch; }
   html[data-admin-theme] .staff-cashbar > :is(form, details) { width: 100%; }
 }
+
+/* Cocina · iOS ticket hierarchy, using the shared staff theme tokens. */
+html[data-admin-theme] .kitchen-page { --kitchen-column-min: 0px; }
+html[data-admin-theme] .kitchen-overview { background: var(--color-cream-2); border-radius: var(--radius-card); box-shadow: none; }
+html[data-admin-theme] .kitchen-metric { min-width: 0; }
+html[data-admin-theme] .kitchen-metric__icon { background: var(--status-neutral-bg); color: var(--status-neutral-text); }
+html[data-admin-theme] .kitchen-metric--pending .kitchen-metric__icon { background: var(--status-warning-bg); color: var(--status-warning-text); }
+html[data-admin-theme] .kitchen-metric--preparing .kitchen-metric__icon { background: var(--status-success-bg); color: var(--status-success-text); }
+html[data-admin-theme] .kitchen-metric small { font-size: .75rem; }
+html[data-admin-theme] .kitchen-board-grid .queue-column { min-width: 0; padding: 0; border: 0; background: transparent; }
+html[data-admin-theme] .kitchen-board-grid .queue-column__header { padding: 8px 0 16px; border: 0; }
+html[data-admin-theme] .kitchen-board-grid .queue-column__header h2 { font-size: 1.125rem; }
+html[data-admin-theme] .kitchen-board-grid .queue-column__header p { font-size: .75rem; }
+html[data-admin-theme] .kitchen-board-grid .queue-column__list { padding: 0 0 16px; gap: 24px; overflow: visible; }
+html[data-admin-theme] .kitchen-ticket { position: relative; gap: 18px; padding: 24px 20px 30px; border: 0; border-radius: 24px 24px 0 0; background: var(--color-white-warm); color: var(--color-ink); box-shadow: var(--shadow-sm); overflow-wrap: anywhere; }
+html[data-admin-theme] .kitchen-ticket::after { content: ''; position: absolute; inset: auto 0 -10px; height: 11px; background: linear-gradient(135deg, var(--color-white-warm) 50%, transparent 50%) 0 0 / 20px 20px repeat-x, linear-gradient(225deg, var(--color-white-warm) 50%, transparent 50%) 0 0 / 20px 20px repeat-x; }
+html[data-admin-theme] .kitchen-ticket__header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 8px; }
+html[data-admin-theme] .kitchen-ticket__folio span { font-size: .75rem; letter-spacing: .14em; }
+html[data-admin-theme] .kitchen-ticket__folio h3 { margin-top: 10px; font-size: clamp(2.75rem, 4vw, 4rem); font-weight: 850; }
+.kitchen-ticket__stamp { align-self: start; max-width: 130px; border: 2px solid currentColor; border-radius: 10px; padding: 5px 9px; color: var(--status-success-text); font-size: .75rem; font-weight: 800; text-align: center; transform: rotate(4deg); }
+html[data-admin-theme] .kitchen-ticket__timer { grid-column: 1 / -1; padding: 0; background: transparent; color: var(--color-ink); }
+html[data-admin-theme] .kitchen-ticket__timer strong { font-size: 1rem; white-space: normal; }
+html[data-admin-theme] .kitchen-ticket__timer small { font-size: .75rem; color: inherit; }
+html[data-admin-theme] .kitchen-ticket--age-medium .kitchen-ticket__timer { background: var(--status-warning-bg); color: var(--status-warning-text); padding: 10px; }
+html[data-admin-theme] .kitchen-ticket--age-high .kitchen-ticket__timer { background: var(--status-danger-bg); color: var(--status-danger-text); padding: 10px; }
+html[data-admin-theme] .kitchen-ticket__route { padding: 12px 0; border: 0; border-top: 2px dashed var(--line); border-bottom: 1px dashed var(--line); border-radius: 0; background: transparent; }
+html[data-admin-theme] .kitchen-ticket__route > svg,
+html[data-admin-theme] .kitchen-ticket__section-title > svg { color: var(--color-muted); }
+html[data-admin-theme] .kitchen-ticket__route strong { font-size: .875rem; }
+html[data-admin-theme] .kitchen-ticket__unit-count { background: var(--color-cream-2); color: var(--color-ink); font-size: .75rem; }
+html[data-admin-theme] .kitchen-ticket__section-title { flex-wrap: wrap; }
+html[data-admin-theme] .kitchen-ticket__section-title h4,
+html[data-admin-theme] .kitchen-ticket__customer strong { font-size: .875rem; }
+html[data-admin-theme] .kitchen-ticket__section-title > span,
+html[data-admin-theme] .kitchen-ticket__route small,
+html[data-admin-theme] .kitchen-ticket__customer small { font-size: .75rem; }
+html[data-admin-theme] .kitchen-ticket__items > ul > li { grid-template-columns: 28px minmax(0, 1fr); border: 0; border-radius: 0; padding: 8px 0; }
+html[data-admin-theme] .kitchen-ticket__quantity { width: 28px; height: auto; align-self: start; background: transparent; color: var(--color-ink); font-size: 1rem; }
+html[data-admin-theme] .kitchen-ticket__product > strong { font-size: 1rem; }
+html[data-admin-theme] .kitchen-ticket__options li { padding: 0; background: transparent; color: var(--color-muted); font-size: .875rem; font-weight: 500; }
+.kitchen-ticket__item-note { display: block; margin-top: 6px; color: var(--color-muted); font-size: .875rem; }
+html[data-admin-theme] .kitchen-ticket__note { background: var(--color-cream-2); border: 0; border-radius: var(--radius-control); padding: 14px; }
+html[data-admin-theme] .kitchen-ticket__note :is(svg, strong, p) { color: var(--color-ink-soft); }
+html[data-admin-theme] .kitchen-ticket__note strong { font-size: .75rem; }
+html[data-admin-theme] .kitchen-ticket__note p { font-size: .875rem; }
+html[data-admin-theme] .kitchen-ticket__note--empty { background: transparent; padding: 0; }
+html[data-admin-theme] .kitchen-ticket__note--empty :is(svg, strong, p) { color: var(--color-muted); }
+html[data-admin-theme] .kitchen-ticket__customer { flex-wrap: wrap; }
+html[data-admin-theme] .kitchen-ticket__ready-state { background: var(--status-success-bg); color: var(--status-success-text); font-size: .75rem; white-space: normal; }
+html[data-admin-theme] .kitchen-ticket__arrival { background: var(--status-success-bg); color: var(--status-success-text); flex-wrap: wrap; }
+html[data-admin-theme] .kitchen-ticket__action .button--ghost { color: var(--status-danger-text); }
+html[data-admin-theme] .kitchen-empty-state { min-height: 200px; border-radius: var(--radius-card); background: var(--color-cream-2); }
+html[data-admin-theme] .reject-order-dialog .reject-scope__option { min-height: 56px; border-radius: var(--radius-control); background: var(--color-cream-2); border-color: var(--line-strong); color: var(--color-ink); }
+html[data-admin-theme] .reject-order-dialog .reject-scope__option:has(input:checked) { background: var(--status-danger-bg); color: var(--status-danger-text); border-color: var(--status-danger-text); }
+html[data-admin-theme] .reject-order-dialog .reject-scope__option input { accent-color: var(--status-danger-text); }
+html[data-admin-theme] .reject-order-dialog .form-actions { border-top: 1px solid var(--line); padding-top: 20px; }
+@media (min-width: 1280px) { html[data-admin-theme] .kitchen-board-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 601px) and (max-width: 1279px) { html[data-admin-theme] .kitchen-board-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  html[data-admin-theme] .kitchen-board-grid { grid-template-columns: minmax(0, 1fr); }
+  html[data-admin-theme] .kitchen-overview { padding: 16px; }
+  html[data-admin-theme] .kitchen-overview__controls { flex-wrap: wrap; }
+  html[data-admin-theme] .kitchen-metric { display: block; padding: 12px 8px; }
+  html[data-admin-theme] .kitchen-metric__icon { display: none; }
+  html[data-admin-theme] .kitchen-metric dd { font-size: 1.75rem; }
+  html[data-admin-theme] .kitchen-ticket { padding: 24px 18px 30px; }
+}
+html[data-admin-theme] .kitchen-metric dt { font-size: .75rem; }
+@media (min-width: 1280px) {
+  html[data-admin-theme] .kitchen-board-grid .queue-column--ready { grid-column: auto; }
+  html[data-admin-theme] .kitchen-board-grid .queue-column--ready .queue-column__list { grid-template-columns: minmax(0, 1fr); }
+}
+html[data-admin-theme] .kitchen-page .live-indicator { background: var(--status-neutral-bg); color: var(--status-neutral-text); }
+html[data-admin-theme] .kitchen-page .live-indicator--online { background: var(--status-success-bg); color: var(--status-success-text); }
+html[data-admin-theme] .kitchen-ticket .item-rejection { color: var(--status-danger-text); }
+html[data-admin-theme] .kitchen-ticket li.is-rejected :is(.kitchen-ticket__product > strong, .kitchen-ticket__quantity) { color: var(--color-muted); }

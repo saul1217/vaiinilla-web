@@ -82,7 +82,7 @@ export function TenantDashboardPage() {
   const topProduct = report?.productos[0];
 
   return (
-    <div className="page-stack">
+    <div className="page-stack admin-screen admin-overview">
       <PageHeader
         eyebrow="Administración"
         title={`Hola, ${tenant?.access.establecimiento.nombre ?? 'Vaiinilla'}`}

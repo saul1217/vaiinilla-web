@@ -52,9 +52,10 @@ export function KitchenOrderCard({
     >
       <header className="kitchen-ticket__header">
         <div className="kitchen-ticket__folio">
-          <span>Pedido</span>
+          <span>Comanda</span>
           <h3>#{order.folio}</h3>
         </div>
+        <span className={`kitchen-ticket__stamp kitchen-ticket__stamp--${stage}`}>{stageCopy[stage].label}</span>
         <div className="kitchen-ticket__timer" aria-label={elapsedAccessibleLabel(stage, elapsedMinutes)}>
           <Clock3 aria-hidden="true" />
           <span>
@@ -96,7 +97,7 @@ export function KitchenOrderCard({
               </strong>
               <div className="kitchen-ticket__product">
                 <strong>{item.nombre_producto}</strong>
-                {item.notas && <small className="kitchen-ticket__item-note" style={{ display: 'block', fontStyle: 'italic', color: 'var(--color-ink-muted, #71717a)' }}>Nota: {item.notas}</small>}
+                {item.notas && <small className="kitchen-ticket__item-note">Nota: {item.notas}</small>}
                 {item.rechazo && <small className="item-rejection">Quitado: {item.rechazo.motivo}</small>}
                 {item.opciones.length > 0 && (
                   <ul className="kitchen-ticket__options" aria-label={`Opciones de ${item.nombre_producto}`}>

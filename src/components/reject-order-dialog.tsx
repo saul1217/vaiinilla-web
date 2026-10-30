@@ -67,6 +67,7 @@ export function RejectOrderDialog({
   const isItem = chosen?.kind === 'item';
   return (
     <Modal
+      contentClassName="reject-order-dialog"
       open={Boolean(order)}
       onOpenChange={(open) => { if (!open) close(); }}
       title={order ? `No se puede preparar · pedido ${order.folio}` : 'No se puede preparar'}
@@ -74,7 +75,7 @@ export function RejectOrderDialog({
     >
       {order && (
         <form
-          className="transaction-form"
+          className="transaction-form reject-order-form"
           onSubmit={(event) => {
             event.preventDefault();
             const motivo = reason.trim();

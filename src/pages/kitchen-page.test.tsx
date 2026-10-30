@@ -92,7 +92,7 @@ describe('tablero de Cocina', () => {
     window.localStorage.setItem('vaiinilla.panel.admin-theme', 'claro');
     const { unmount } = render(<KitchenPage />, { wrapper: TestProvider });
     try {
-      expect(screen.getByRole('heading', { name: 'Una comanda a la vez.' })).toHaveClass('staff-title');
+      expect(screen.getByRole('heading', { name: 'Cocina' })).toHaveClass('staff-title');
       expect(document.documentElement.dataset.adminTheme).toBe('claro');
       expect(window.localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
       unmount();
@@ -113,7 +113,7 @@ describe('tablero de Cocina', () => {
     const { container } = render(<KitchenPage />, { wrapper: TestProvider });
     expect(container.firstChild).toHaveClass('staff-page');
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Una comanda a la vez.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cocina' })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.listOrders).toHaveBeenCalled());
     await userEvent.setup().click(screen.getByText('Estado operativo del establecimiento'));
     expect(screen.getByText('Estado operativo')).toBeVisible();

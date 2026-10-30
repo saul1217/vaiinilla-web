@@ -124,7 +124,7 @@ export function MenuPage() {
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack admin-screen admin-catalog">
       <PageHeader
         eyebrow="Administración"
         title="Menú"

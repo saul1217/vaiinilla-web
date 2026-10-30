@@ -1,0 +1,104 @@
+/* Admin slices 7–10. Reference: J01/J03, B10, J06, J08/J10.
+   Scoped to the existing routes; shared staff tokens own both themes. */
+html[data-admin-theme] .admin-screen { gap: 28px; min-width: 0; }
+html[data-admin-theme] .admin-screen .page-header h1 {
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-weight: 850;
+  letter-spacing: -.055em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+html[data-admin-theme] .admin-screen :is(.panel-card, .analytics-card, .analytics-kpi, .cashback-kpi, .order-card, .category-panel, .product-card) {
+  border-radius: var(--radius-sheet);
+  border-color: var(--line);
+  box-shadow: none;
+}
+html[data-admin-theme] .admin-screen :is(.filter-chip, .period-chip) { min-height: 48px; padding: 10px 20px; font-size: .875rem; }
+html[data-admin-theme] .admin-screen :is(.filter-bar, .period-presets) { gap: 8px; }
+html[data-admin-theme] .admin-screen :is(.filter-chip--active, .period-chip--active, .category-row--active) {
+  background: var(--color-ink);
+  color: var(--color-cream);
+  border-color: var(--color-ink);
+}
+html[data-admin-theme] .admin-screen :is(.analytics-toolbar, .orders-section) { padding: 0; border: 0; background: transparent; box-shadow: none; }
+html[data-admin-theme] .admin-screen .analytics-toolbar { flex-wrap: wrap; gap: 16px; }
+html[data-admin-theme] .admin-screen .analytics-toolbar__icon { background: var(--color-cream-2); color: var(--color-ink); }
+html[data-admin-theme] .admin-screen .period-presets { background: transparent; padding: 0; flex-wrap: wrap; }
+html[data-admin-theme] .admin-screen .period-chip:not(.period-chip--active) { background: var(--color-cream-2); color: var(--color-ink); }
+html[data-admin-theme] .admin-screen .period-selector { flex-wrap: wrap; }
+html[data-admin-theme] .admin-screen .period-custom input { min-width: 0; min-height: 48px; background: var(--color-white-warm); border-color: var(--line-strong); }
+html[data-admin-theme] .admin-overview .analytics-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+html[data-admin-theme] .admin-overview .analytics-kpi { display: flex; flex-direction: column; align-items: start; gap: 12px; padding: 24px; background: var(--color-cream-2); }
+html[data-admin-theme] .admin-overview .analytics-kpi:first-child { grid-column: span 2; }
+html[data-admin-theme] .admin-overview .analytics-kpi__icon { width: 32px; height: 32px; background: transparent; color: var(--color-muted); }
+html[data-admin-theme] .admin-overview .analytics-kpi > p { font-size: .875rem; }
+html[data-admin-theme] .admin-overview .analytics-kpi > strong { font-size: clamp(1.75rem, 3.2vw, 3rem); font-variant-numeric: tabular-nums; }
+html[data-admin-theme] .admin-overview .analytics-kpi > .analytics-kpi__text { font-size: 1.375rem; }
+html[data-admin-theme] .admin-overview .analytics-card { padding: 24px; background: var(--color-cream-2); }
+html[data-admin-theme] .admin-overview .ranked-list > li { padding-block: 12px; }
+html[data-admin-theme] .admin-overview .bar-track { height: 8px; background: var(--color-cream-3); }
+html[data-admin-theme] .admin-overview .bar-fill { background: var(--color-ink-soft); }
+html[data-admin-theme] .admin-overview .ranked-list__line { gap: 12px; }
+html[data-admin-theme] .admin-overview .ranked-list__line > span { min-width: 0; overflow-wrap: anywhere; }
+html[data-admin-theme] .admin-orders .order-grid { gap: 16px; align-items: start; }
+html[data-admin-theme] .admin-orders .order-card { padding: 24px; background: var(--color-cream-2); }
+html[data-admin-theme] .admin-orders .order-card__folio { font-size: 1.5rem; font-weight: 850; letter-spacing: -.04em; color: var(--color-ink); }
+html[data-admin-theme] .admin-orders .order-card__footer { border-top: 1px solid var(--line); padding-top: 16px; }
+html[data-admin-theme] .admin-orders .order-card__footer strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+html[data-admin-theme] .admin-orders .order-items__note { color: var(--color-muted) !important; }
+html[data-admin-theme] .admin-catalog .search-box { border-radius: var(--radius-pill); background: var(--color-cream-2); }
+html[data-admin-theme] .admin-catalog .category-panel { background: transparent; padding: 0; border: 0; }
+html[data-admin-theme] .admin-catalog .category-panel__header { padding-inline: 12px; }
+html[data-admin-theme] .admin-catalog .category-row { border-radius: var(--radius-pill); margin-block: 6px; }
+html[data-admin-theme] .admin-catalog .category-row--active :is(strong, .category-row__edit) { color: inherit; background: transparent; }
+html[data-admin-theme] .admin-catalog .product-card { min-height: 0; background: var(--color-cream-2); }
+html[data-admin-theme] .admin-catalog .product-card__media { height: auto; aspect-ratio: 4 / 3; background: var(--color-cream-3); }
+html[data-admin-theme] .admin-catalog .product-card__body { gap: 12px; padding: 20px; }
+html[data-admin-theme] .admin-catalog .product-card h3 { font-size: 1.25rem; letter-spacing: -.035em; }
+html[data-admin-theme] .admin-catalog .product-card__prices dd { font-size: 1.375rem; }
+html[data-admin-theme] .admin-catalog .product-card__actions { padding: 0 20px 20px; flex-wrap: wrap; }
+html[data-admin-theme] .admin-catalog .product-card__actions .button { flex: 1 1 auto; }
+html[data-admin-theme] .admin-spaces .space-card-enter { background: var(--color-cream-2); gap: 20px; }
+html[data-admin-theme] .admin-spaces .space-card-enter h2 { font-size: 1.375rem; letter-spacing: -.035em; }
+html[data-admin-theme] .admin-spaces .space-card-enter > .bg-cream { background: var(--color-white-warm); }
+html[data-admin-theme] .admin-screen :is(.cashback-form, .cashback-operations) { background: var(--color-cream-2); }
+html[data-admin-theme] .admin-screen .cashback-kpi { background: var(--color-cream-2); padding: 24px; }
+html[data-admin-theme] .admin-screen .cashback-kpi > span { background: transparent; color: var(--color-muted); }
+html[data-admin-theme] .admin-screen .cashback-kpi strong { font-size: clamp(1.5rem, 2.5vw, 2.25rem); font-variant-numeric: tabular-nums; }
+html[data-admin-theme] .admin-screen .cashback-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+html[data-admin-theme] .admin-screen .cashback-days label { min-height: 48px; justify-content: center; padding: 8px; border-radius: var(--radius-pill); }
+html[data-admin-theme] .admin-screen .cashback-days label:has(input:checked) { background: var(--color-ink); color: var(--color-cream); border-color: var(--color-ink); }
+html[data-admin-theme] .admin-flow .panel-card { background: var(--color-cream-2); padding: clamp(20px, 3vw, 32px); }
+html[data-admin-theme] .admin-flow .panel-card h2 { letter-spacing: -.035em; font-size: 1.375rem; }
+html[data-admin-theme] .admin-flow [aria-labelledby='flow-preview-title'] ol > li { flex-wrap: wrap; }
+html[data-admin-theme] .admin-flow [aria-labelledby='flow-preview-title'] ol > li > .flex-1 { flex-basis: 180px; }
+html[data-admin-theme] .admin-flow [aria-labelledby='store-directory-title'] img { padding: 8px; background: #fff; }
+@media (max-width: 767px) {
+  html[data-admin-theme] .admin-screen { gap: 24px; }
+  html[data-admin-theme] .admin-screen .analytics-toolbar { align-items: start; }
+  html[data-admin-theme] .admin-screen .period-selector { justify-content: start; width: 100%; }
+  html[data-admin-theme] .admin-screen .period-chip { padding-inline: 13px; font-size: .8125rem; }
+  html[data-admin-theme] .admin-screen .period-custom { width: 100%; }
+  html[data-admin-theme] .admin-screen .period-custom label { flex: 1; min-width: 0; }
+  html[data-admin-theme] .admin-overview .analytics-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  html[data-admin-theme] .admin-overview .analytics-kpi { padding: 20px 16px; }
+  html[data-admin-theme] .admin-overview .analytics-kpi:first-child > strong { font-size: 2.75rem; }
+  html[data-admin-theme] .admin-catalog .menu-layout { grid-template-columns: minmax(0, 1fr); }
+  html[data-admin-theme] .admin-catalog .category-panel { display: flex; overflow-x: auto; align-items: center; gap: 8px; padding-bottom: 8px; }
+  html[data-admin-theme] .admin-catalog .category-panel__header { flex: 0 0 auto; padding: 0; }
+  html[data-admin-theme] .admin-catalog .category-panel__header > div { display: none; }
+  html[data-admin-theme] .admin-catalog .category-list { display: contents; }
+  html[data-admin-theme] .admin-catalog .category-row { flex: 0 0 auto; width: auto; min-height: 48px; }
+  html[data-admin-theme] .admin-catalog .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  html[data-admin-theme] .admin-catalog .product-card__body { padding: 14px; }
+  html[data-admin-theme] .admin-catalog .product-card h3 { font-size: 1rem; }
+  html[data-admin-theme] .admin-catalog .product-card__actions { padding: 0 12px 14px; gap: 8px; }
+  html[data-admin-theme] .admin-catalog .product-card__actions .button { width: 100%; font-size: .75rem; padding-inline: 8px; }
+  html[data-admin-theme] .admin-catalog .availability-badge { max-width: calc(100% - 12px); right: 6px; top: 6px; font-size: .6875rem; }
+  html[data-admin-theme] .admin-screen .cashback-days { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  html[data-admin-theme] .admin-orders .order-card { padding: 20px; }
+}
+/* Split category buttons retain the selected pill's foreground in both themes. */
+html[data-admin-theme] .admin-catalog .category-row--active > button:first-child { color: inherit; }
+html[data-admin-theme] .admin-catalog .category-row__edit { min-height: 44px; }
+html[data-admin-theme] .admin-screen .cashback-days label:focus-within { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
