@@ -15,7 +15,7 @@ for (const theme of ['claro', 'oscuro']) {
       <body><div class="app-frame app-frame--tenant">
       <header class="app-identity"><button class="app-account-button">CA</button></header>
       <div class="queue-column"><header class="queue-column__header"><h2>Cola</h2><p>En espera</p></header>
-      <article class="kitchen-ticket"><div class="kitchen-ticket__product"><strong>Producto</strong></div>
+      <section class="kitchen-work"><h2 class="kitchen-work__heading">Comanda activa</h2><section class="kitchen-work__queue"><p>Seleccionada</p></section></section><article class="kitchen-ticket"><span class="kitchen-ticket__stamp">Nueva</span><div class="kitchen-ticket__product"><strong>Producto</strong></div>
       <span class="kitchen-ticket__quantity">2</span><ul class="kitchen-ticket__options"><li>Opción</li></ul></article></div>
       <section class="cashier-queue"><div class="app-receipt"><h3 class="cashier-receipt__folio">#241</h3><dl class="cashier-receipt__totals"><div><dt>Total</dt><dd>$85.00</dd></div></dl></div></section><span class="staff-chip">Cocina</span><span class="space-account__chip">Pagado</span>
       <span class="space-account__chip space-account__chip--due">Pendiente</span><span class="guest-tag">Invitado</span>
@@ -24,7 +24,7 @@ for (const theme of ['claro', 'oscuro']) {
       <div class="staff-stat staff-stat--ready"><dt>Listas</dt></div>
       <fieldset class="app-segments"><legend>Mesas</legend><div class="app-segments__options"><label class="app-segments__option"><input type="radio" checked /><span>Todas</span></label><label class="app-segments__option"><input type="radio" /><span>Por atender</span></label></div></fieldset>
       <input class="field__control" value="Pedido" />
-      <nav class="app-mobile-nav"><a href="/app/pos" class="app-link--active">Caja</a><button>Más</button></nav></div><section class="app-sheet"><p class="space-payment-balance"><span>Pendiente</span><strong>$100.00 MXN</strong></p><div class="app-sheet__header"><h2>Cuenta</h2></div><button class="app-sheet__close">X</button></section></body></html>`,
+      <nav class="app-mobile-nav"><a href="/app/pos" class="app-link--active">Caja</a><button>Más</button></nav></div><section class="app-sheet"><p class="space-payment-balance"><span>Pendiente</span><strong>$100.00 MXN</strong></p><div class="reject-order-form__suggestions"><button class="button button--secondary">Faltan ingredientes</button></div><p class="reject-order-form__folio">#72</p><div class="app-sheet__header"><h2>Cuenta</h2></div><button class="app-sheet__close">X</button></section></body></html>`,
     }));
     await page.goto('/staff-contrast-fixture');
     await page.locator('link').evaluateAll((links) => Promise.all(links.map((el) => (el as HTMLLinkElement).sheet ? Promise.resolve() : new Promise((resolve) => el.onload = resolve))));

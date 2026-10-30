@@ -12,7 +12,7 @@ import { formatElapsed, minutesSince, type KitchenStage } from '../lib/kitchen';
 import type { OrderDetail } from '../types/api';
 
 const stageCopy: Record<KitchenStage, { label: string; timeLabel: string }> = {
-  pending: { label: 'Pendiente', timeLabel: 'Esperando' },
+  pending: { label: 'Nueva', timeLabel: 'Esperando' },
   preparing: { label: 'En preparación', timeLabel: 'Preparando' },
   ready: { label: 'Listo', timeLabel: 'Listo hace' },
 };
@@ -29,6 +29,7 @@ export function KitchenOrderCard({
   now,
   action,
   leaving = false,
+  variant = 'standard',
 }: {
   order: OrderDetail;
   stage: KitchenStage;
@@ -36,6 +37,7 @@ export function KitchenOrderCard({
   action?: ReactNode;
   /** Se está yendo (Cocina lo rechazó): se encoge antes de salir de la lista. */
   leaving?: boolean;
+  variant?: 'standard' | 'protagonist';
 }) {
   const referenceTime = stage === 'pending' ? order.creado_en : order.actualizado_en;
   const elapsedMinutes = minutesSince(referenceTime, now);
@@ -47,7 +49,7 @@ export function KitchenOrderCard({
 
   return (
     <article
-      className={`kitchen-ticket kitchen-ticket--${stage} kitchen-ticket--age-${ageTone}${leaving ? ' kitchen-ticket--leaving' : ''}`}
+      className={`kitchen-ticket kitchen-ticket--${variant} kitchen-ticket--${stage} kitchen-ticket--age-${ageTone}${leaving ? ' kitchen-ticket--leaving' : ''}`}
       aria-label={`Pedido ${order.folio}, ${stageCopy[stage].label}`}
     >
       <header className="kitchen-ticket__header">
@@ -112,13 +114,15 @@ export function KitchenOrderCard({
         </ul>
       </section>
 
-      <div className={`kitchen-ticket__note ${order.notas_cocina ? '' : 'kitchen-ticket__note--empty'}`}>
-        <MessageSquareText aria-hidden="true" />
-        <span>
-          <strong>Indicaciones especiales</strong>
-          <p>{order.notas_cocina || 'Sin indicaciones especiales.'}</p>
-        </span>
-      </div>
+      {order.notas_cocina ? (
+        <div className="kitchen-ticket__note">
+          <MessageSquareText aria-hidden="true" />
+          <span>
+            <strong>Indicaciones especiales</strong>
+            <p>{order.notas_cocina}</p>
+          </span>
+        </div>
+      ) : <p className="kitchen-ticket__note-empty">Sin indicaciones especiales.</p>}
 
       <div className="kitchen-ticket__customer">
         <UserRound aria-hidden="true" />

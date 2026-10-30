@@ -105,7 +105,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     }] }], cursor: null });
     render(<PosPage />, { wrapper: Wrapper });
     await user.click(await screen.findByRole('button', { name: 'Quitar artículo' }));
-    const dialog = await screen.findByRole('dialog', { name: 'No se puede preparar · pedido 14' });
+    const dialog = await screen.findByRole('dialog', { name: 'Rechazar pedido' });
     expect(within(dialog).getByRole('radio', { name: 'Todo el pedido' })).toBeChecked();
     expect(within(dialog).getByRole('button', { name: 'Rechazar pedido' })).toBeDisabled();
     await user.type(within(dialog).getByLabelText('Motivo'), 'Producto agotado');

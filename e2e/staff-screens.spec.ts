@@ -124,3 +124,55 @@ for (const theme of ['claro', 'oscuro'] as const) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
   });
 }
+
+for (const theme of ['claro', 'oscuro']) {
+  test(`cocina: selección, versiones, listo y rechazo parcial (${theme})`, async ({ page }) => {
+    const { installKitchenSliceMocks } = await import('./fixtures/kitchen-slice');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installKitchenSliceMocks(page, theme);
+    await page.goto('/app/cocina');
+    const ticket = page.locator('.kitchen-work__ticket--selected');
+    await expect(ticket.getByRole('heading', { name: '#72', exact: true })).toBeVisible();
+    for (const text of ['Salsa aparte', 'Verde', 'Ya llegó', 'A123', 'Invitado']) await expect(ticket.getByText(text, { exact: true })).toBeVisible();
+    const request = page.waitForRequest('**/mock-kitchen/transition');
+    await ticket.getByRole('button', { name: 'Marcar como listo' }).click();
+    expect((await request).postDataJSON()).toEqual({ token: 'capturas', id: 'kitchen-1', target: 'listo', version: 4 });
+    await expect(ticket.getByRole('heading', { name: '#71', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ver comanda 72' })).toBeVisible();
+    await ticket.getByRole('button', { name: 'No se puede preparar' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toHaveCount(1);
+    await expect(dialog.getByRole('radio', { name: /Agua/ })).toHaveCount(0);
+    await dialog.getByRole('radio', { name: /Tacos/ }).click();
+    await dialog.getByRole('button', { name: 'Faltan ingredientes', exact: true }).click();
+    await expect(dialog.getByRole('textbox', { name: 'Motivo', exact: true })).toHaveValue('Faltan ingredientes');
+    const partial = page.waitForRequest('**/mock-kitchen/item');
+    await dialog.getByRole('button', { name: 'Quitar artículo', exact: true }).click();
+    expect((await partial).postDataJSON()).toEqual({ token: 'capturas', id: 'kitchen-0', itemId: 1, version: 4, motivo: 'Faltan ingredientes' });
+    await expect(dialog).toHaveCount(0);
+    await expect(ticket.getByText('Quitado: Faltan ingredientes')).toBeVisible();
+    await expect(ticket.getByText('Agua', { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  });
+}
+
+test('cocina: cancelar restaura foco y el rechazo total deja la siguiente comanda', async ({ page }) => {
+  const { installKitchenSliceMocks } = await import('./fixtures/kitchen-slice');
+  await installKitchenSliceMocks(page, 'claro');
+  await page.goto('/app/cocina');
+  const ticket = page.locator('.kitchen-work__ticket--selected');
+  const opener = ticket.getByRole('button', { name: 'No se puede preparar' });
+  await opener.click();
+  await page.getByRole('textbox', { name: 'Motivo', exact: true }).fill('Borrador');
+  await page.keyboard.press('Escape');
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(page.getByRole('textbox', { name: 'Motivo', exact: true })).toHaveValue('');
+  await page.getByRole('button', { name: 'Se acabó el producto', exact: true }).click();
+  const request = page.waitForRequest('**/mock-kitchen/reject');
+  await page.getByRole('button', { name: 'Rechazar pedido', exact: true }).click();
+  expect((await request).postDataJSON()).toEqual({ token: 'capturas', id: 'kitchen-1', version: 4, motivo: 'Se acabó el producto' });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('Pedido 72 rechazado. El cliente verá el motivo.')).toBeVisible();
+  await expect(ticket.getByRole('heading', { name: '#71', exact: true })).toBeVisible();
+});

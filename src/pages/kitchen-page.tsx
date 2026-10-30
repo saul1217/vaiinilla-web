@@ -16,7 +16,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { KitchenOrderCard } from '../components/kitchen-order-card';
+import { KitchenWorkView } from '../components/kitchen-work-view';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { RejectOrderDialog, type RejectTarget } from '../components/reject-order-dialog';
 import { itemRejectionNotice } from '../lib/rejection-notice';
@@ -157,12 +157,34 @@ export function KitchenPage() {
     <div className="page-stack kitchen-page staff-page">
       <AppPageHeader eyebrow={`Cocina${tenant ? ` · ${tenant.access.establecimiento.nombre}` : ''}`} title="Cocina" connected={heartbeat.isSuccess} />
 
-      <section className="kitchen-overview" aria-labelledby="kitchen-overview-title">
+      <div className="kitchen-overview__controls">
+        <span
+          className={`live-indicator ${heartbeat.isSuccess ? 'live-indicator--online' : ''}`}
+          role="status"
+        >
+          <span /> {heartbeat.isSuccess ? 'Cocina en línea' : 'Conectando Cocina'}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          className="kitchen-refresh"
+          disabled={orders.isPending || isRefreshing}
+          aria-label="Actualizar comandas ahora"
+          aria-busy={isRefreshing}
+          onClick={() => void orders.refetch()}
+        >
+          <RefreshCw aria-hidden="true" className={isRefreshing ? 'kitchen-refresh__icon--active' : ''} />
+          {isRefreshing ? 'Actualizando' : 'Actualizar'}
+        </Button>
+      </div>
+
+      <details className="kitchen-overview">
+        <summary id="kitchen-overview-title">Carga actual · {!orders.data ? (orders.isError ? 'Sin datos disponibles' : 'Cargando…') : `${allOrders.length} ${allOrders.length === 1 ? 'comanda activa' : 'comandas activas'}`}</summary>
         <header className="kitchen-overview__header">
           <div>
             <p className="eyebrow">Carga actual</p>
-            <h2 id="kitchen-overview-title">
-              {allOrders.length} {allOrders.length === 1 ? 'comanda activa' : 'comandas activas'}
+            <h2>
+              {orders.data ? allOrders.length : '—'} {allOrders.length === 1 ? 'comanda activa' : 'comandas activas'}
             </h2>
             <p>
               {orders.dataUpdatedAt
@@ -170,47 +192,27 @@ export function KitchenPage() {
                 : 'Conectando con el establecimiento…'}
             </p>
           </div>
-          <div className="kitchen-overview__controls">
-            <span
-              className={`live-indicator ${heartbeat.isSuccess ? 'live-indicator--online' : ''}`}
-              role="status"
-            >
-              <span /> {heartbeat.isSuccess ? 'Cocina en línea' : 'Conectando Cocina'}
-            </span>
-            <Button
-              type="button"
-              variant="secondary"
-              className="kitchen-refresh"
-              disabled={orders.isPending || isRefreshing}
-              aria-label="Actualizar comandas ahora"
-              aria-busy={isRefreshing}
-              onClick={() => void orders.refetch()}
-            >
-              <RefreshCw aria-hidden="true" className={isRefreshing ? 'kitchen-refresh__icon--active' : ''} />
-              {isRefreshing ? 'Actualizando' : 'Actualizar'}
-            </Button>
-          </div>
         </header>
 
         <dl className="kitchen-metrics">
           <KitchenMetric
             tone="pending"
             label="Pendientes"
-            value={String(pending.length)}
+            value={!orders.data ? '—' : String(pending.length)}
             detail="Por comenzar"
             icon={<TimerReset aria-hidden="true" />}
           />
           <KitchenMetric
             tone="preparing"
             label="Preparando"
-            value={String(preparing.length)}
+            value={!orders.data ? '—' : String(preparing.length)}
             detail="En elaboración"
             icon={<Flame aria-hidden="true" />}
           />
           <KitchenMetric
             tone="units"
             label="Piezas activas"
-            value={String(activeUnits)}
+            value={!orders.data ? '—' : String(activeUnits)}
             detail="Pendientes y preparando"
             icon={<UtensilsCrossed aria-hidden="true" />}
           />
@@ -222,22 +224,6 @@ export function KitchenPage() {
             icon={<Activity aria-hidden="true" />}
           />
         </dl>
-      </section>
-
-      <details className="kitchen-system-details">
-        <summary>
-          <span>
-            <Activity aria-hidden="true" />
-            <span>
-              <strong>Estado operativo del establecimiento</strong>
-              <small>Consulta Caja, dispositivos y recepción de pedidos.</small>
-            </span>
-          </span>
-          <ChevronDown aria-hidden="true" />
-        </summary>
-        <div className="kitchen-system-details__content">
-          <OperationalStatusPanel />
-        </div>
       </details>
 
       <p className="sr-only" aria-live="polite">
@@ -261,113 +247,41 @@ export function KitchenPage() {
 
       {orders.isPending ? (
         <KitchenBoardSkeleton />
-      ) : (
-        <section className="kitchen-board-grid" aria-label="Pedidos de Cocina">
-          <KitchenColumn
-            id="pending"
-            title="Pendientes"
-            description="Más antiguos primero"
-            count={pending.length}
-            icon={<TimerReset aria-hidden="true" />}
-          >
-            {pending.length ? (
-              <>
-                <Button
-                  className="kitchen-ticket__button"
-                  loading={transition.isPending}
-                  disabled={transition.isPending}
-                  onClick={() => pending.forEach((order) => transition.mutate({ order, target: 'preparando' }))}
-                >
-                  <Flame aria-hidden="true" /> Poner todo en preparación
-                </Button>
-                {pending.map((order) => (
-                  <KitchenOrderCard
-                    key={order.id}
-                    order={order}
-                    stage="pending"
-                    now={now}
-                    leaving={leavingId === order.id}
-                    action={(
-                      <>
-                        <Button
-                          className="kitchen-ticket__button"
-                          loading={changingOrderId === order.id}
-                          disabled={transition.isPending}
-                          onClick={() => transition.mutate({ order, target: 'preparando' })}
-                        >
-                          <Flame aria-hidden="true" /> Comenzar preparación
-                        </Button>
-                        {rejectButton(order)}
-                      </>
-                    )}
-                  />
-                ))}
-              </>
-            ) : (
-              <KitchenEmptyState
-                icon={<TimerReset aria-hidden="true" />}
-                title="Sin pedidos pendientes"
-                description="Las nuevas comandas aparecerán aquí automáticamente, incluso si siguen pendientes de pago."
-              />
-            )}
-          </KitchenColumn>
+      ) : orders.data ? (
+        <KitchenWorkView
+          pending={pending} preparing={preparing} ready={ready} now={now}
+          leavingId={leavingId}
+          actions={(order, stage) => stage === 'ready' ? null : <>
+            <Button className="kitchen-ticket__button"
+              loading={changingOrderId === order.id} disabled={transition.isPending}
+              onClick={() => transition.mutate({ order, target: stage === 'pending' ? 'preparando' : 'listo' })}>
+              {stage === 'pending' ? <><Flame aria-hidden="true" /> Comenzar preparación</> : <><CheckCircle2 aria-hidden="true" /> Marcar como listo</>}
+            </Button>
+            {rejectButton(order)}
+          </>}
+          startAll={<Button className="kitchen-ticket__button" variant="secondary"
+            loading={transition.isPending} disabled={transition.isPending}
+            onClick={() => pending.forEach((order) => transition.mutate({ order, target: 'preparando' }))}>
+            <Flame aria-hidden="true" /> Poner todo en preparación
+          </Button>}
+        />
+      ) : null}
 
-          <KitchenColumn
-            id="preparing"
-            title="En preparación"
-            description="Pedidos que se están elaborando"
-            count={preparing.length}
-            icon={<Flame aria-hidden="true" />}
-          >
-            {preparing.length ? preparing.map((order) => (
-              <KitchenOrderCard
-                key={order.id}
-                order={order}
-                stage="preparing"
-                now={now}
-                leaving={leavingId === order.id}
-                action={(
-                  <>
-                    <Button
-                      className="kitchen-ticket__button"
-                      loading={changingOrderId === order.id}
-                      disabled={transition.isPending}
-                      onClick={() => transition.mutate({ order, target: 'listo' })}
-                    >
-                      <CheckCircle2 aria-hidden="true" /> Marcar como listo
-                    </Button>
-                    {rejectButton(order)}
-                  </>
-                )}
-              />
-            )) : (
-              <KitchenEmptyState
-                icon={<Flame aria-hidden="true" />}
-                title="Nada en preparación"
-                description="Inicia una comanda pendiente para moverla a esta columna."
-              />
-            )}
-          </KitchenColumn>
-
-          <KitchenColumn
-            id="ready"
-            title="Listos"
-            description="Esperando entrega o servicio"
-            count={ready.length}
-            icon={<CheckCircle2 aria-hidden="true" />}
-          >
-            {ready.length ? ready.map((order) => (
-              <KitchenOrderCard key={order.id} order={order} stage="ready" now={now} />
-            )) : (
-              <KitchenEmptyState
-                icon={<CheckCircle2 aria-hidden="true" />}
-                title="Sin pedidos listos"
-                description="Los pedidos terminados permanecerán aquí hasta que se entreguen."
-              />
-            )}
-          </KitchenColumn>
-        </section>
-      )}
+      <details className="kitchen-system-details">
+        <summary>
+          <span>
+            <Activity aria-hidden="true" />
+            <span>
+              <strong>Estado operativo del establecimiento</strong>
+              <small>Consulta Caja, dispositivos y recepción de pedidos.</small>
+            </span>
+          </span>
+          <ChevronDown aria-hidden="true" />
+        </summary>
+        <div className="kitchen-system-details__content">
+          <OperationalStatusPanel />
+        </div>
+      </details>
 
       <RejectOrderDialog
         token={token}
@@ -414,54 +328,6 @@ function KitchenMetric({
         <dd>{value}</dd>
         <small>{detail}</small>
       </div>
-    </div>
-  );
-}
-
-function KitchenColumn({
-  id,
-  title,
-  description,
-  count,
-  icon,
-  children,
-}: {
-  id: string;
-  title: string;
-  description: string;
-  count: number;
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className={`queue-column queue-column--${id}`} aria-labelledby={`kitchen-${id}`}>
-      <header className="queue-column__header">
-        <span className="queue-column__icon">{icon}</span>
-        <div>
-          <h2 id={`kitchen-${id}`}>{title}</h2>
-          <p>{description}</p>
-        </div>
-        <strong aria-label={`${count} pedidos`}>{count}</strong>
-      </header>
-      <div className="queue-column__list">{children}</div>
-    </section>
-  );
-}
-
-function KitchenEmptyState({
-  icon,
-  title,
-  description,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="kitchen-empty-state">
-      <span>{icon}</span>
-      <h3>{title}</h3>
-      <p>{description}</p>
     </div>
   );
 }

@@ -97,3 +97,26 @@ describe('no se puede preparar', () => {
     expect(itemRejectionNotice(o, 'Torta', r('ninguno'))).toBe('Se quitó Torta del pedido 12. El cliente verá el motivo.');
   });
 });
+
+it('los motivos sugeridos rellenan sin enviar; el error conserva alcance y motivo al reintentar', async () => {
+  const user = userEvent.setup();
+  apiMock.rejectOrderItem.mockReset().mockRejectedValueOnce(new Error('Sin conexión')).mockResolvedValueOnce(null);
+  render(<RejectOrderDialog token="t" order={order([item(1, 'Tacos', 'cocina'), item(2, 'Torta', 'cocina')])}
+    allowWholeOrder onClose={vi.fn()} onRejected={vi.fn()} />, { wrapper: Wrapper });
+  await user.click(screen.getByRole('radio', { name: /Torta/ }));
+  expect(screen.getByRole('dialog', { name: 'Quitar Torta' })).toBeInTheDocument();
+  for (const text of ['Se acabó el producto', 'Faltan ingredientes', 'Cocina saturada']) {
+    await user.click(screen.getByRole('button', { name: text }));
+    expect(screen.getByLabelText('Motivo')).toHaveValue(text);
+  }
+  expect(apiMock.rejectOrderItem).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Quitar artículo' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Sin conexión');
+  expect(screen.getByRole('radio', { name: /Torta/ })).toBeChecked();
+  expect(screen.getByLabelText('Motivo')).toHaveValue('Cocina saturada');
+  await user.click(screen.getByRole('button', { name: 'Quitar artículo' }));
+  await waitFor(() => expect(apiMock.rejectOrderItem).toHaveBeenCalledTimes(2));
+  expect(apiMock.rejectOrderItem.mock.calls).toEqual([
+    ['t', 'p1', 2, 3, 'Cocina saturada'], ['t', 'p1', 2, 3, 'Cocina saturada'],
+  ]);
+});

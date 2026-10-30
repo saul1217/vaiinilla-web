@@ -19,7 +19,7 @@ async function healthy(page: Page, errors: string[]) {
 const scenarios = [
   { role: 'mesero', path: '/app/pos', ready: '.staff-tile', seed: 'Mesas' },
   { role: 'cajero', path: '/app/pos', ready: '.cashier-queue__ticket', seed: 'Mariana López' },
-  { role: 'cocina', path: '/app/cocina', ready: '.kitchen-ticket', seed: 'Chilaquiles verdes' },
+  { role: 'cocina', path: '/app/cocina', ready: '.kitchen-work__ticket--selected .kitchen-ticket', seed: 'Chilaquiles verdes' },
   ...['/app', '/app/pedidos', '/app/menu', '/app/espacios', '/app/cashback', '/app/flujo'].map((path) => ({
     role: 'admin', path, ready: '.admin-screen', seed: ({ '/app': 'Café del Jardín', '/app/pedidos': 'Mariana López',
       '/app/menu': 'Chilaquiles verdes', '/app/espacios': 'Mesa 1', '/app/cashback': 'Cashback y wallet', '/app/flujo': 'Flujo de mi tienda' } as Record<string, string>)[path],
@@ -41,6 +41,8 @@ for (const scenario of scenarios) {
         await expect(page.getByRole('heading', { name: 'Hola, Café del Jardín', exact: true })).toBeVisible();
       } else if (scenario.role === 'mesero' || scenario.path === '/app/cashback' || scenario.path === '/app/flujo') {
         await expect(page.getByRole('heading', { level: 1, name: scenario.seed, exact: true })).toBeVisible();
+      } else if (scenario.role === 'cocina') {
+        await expect(page.locator('.kitchen-work__ticket--selected').getByText(scenario.seed, { exact: false })).toBeVisible();
       } else {
         await expect(page.getByText(scenario.seed, { exact: false }).first()).toBeVisible();
       }
@@ -66,7 +68,7 @@ for (const scenario of scenarios) {
         await capture('-cobro');
       } else if (scenario.role === 'cocina') {
         await page.getByRole('button', { name: 'No se puede preparar', exact: true }).first().click();
-        await expect(page.getByRole('dialog', { name: /No se puede preparar/ })).toBeVisible();
+        await expect(page.getByRole('dialog', { name: 'Rechazar pedido', exact: true })).toBeVisible();
         await capture('-rechazo');
       } else if (scenario.path === '/app/pedidos') {
         await page.getByRole('button', { name: 'Ver detalle', exact: true }).first().click();
