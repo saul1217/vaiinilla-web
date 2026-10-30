@@ -628,6 +628,32 @@ export interface StaffBooking {
   /** Hora en que vence el apartado en efectivo; null si ya no aplica. */
   expira_en?: string | null;
   version?: number;
+  /** Cómo pagó el cliente, si el backend lo manda. */
+  metodo_pago?: string | null;
+}
+
+export interface BookingRefundInput {
+  /** 3 a 240 caracteres. */
+  motivo: string;
+  /** De 0 al total pagado (decimal como texto). */
+  monto_reembolso: string;
+}
+
+/** Fila del reporte GET /reservas/reembolsos (registro solo de inserción). */
+export interface BookingRefund {
+  id: string;
+  reserva_id: string;
+  espacio?: { nombre: string } | null;
+  cliente?: { nombre: string } | null;
+  monto: string;
+  metodo: string;
+  motivo: string;
+  rol: string;
+  por?: { nombre: string } | null;
+  sesion_caja_id?: string | null;
+  /** `devolucion_pendiente` cuando no había caja abierta o fue tarjeta. */
+  salida?: string | null;
+  creado_en: string;
 }
 
 export interface CounterRentalPayment {

@@ -54,7 +54,7 @@ const SURFACES: Surface[] = [
     email: () => cajeroEmail,
     password: () => cajeroPassword,
     ready: async (page) => {
-      await expect(page.locator('html')).toHaveAttribute('data-staff-ui', 'nueva', { timeout: 20_000 });
+      await expect(page.locator('html')).toHaveAttribute('data-admin-theme', 'claro', { timeout: 20_000 });
       await page.waitForLoadState('networkidle');
     },
   },
@@ -83,6 +83,7 @@ async function blockIfDataFailed(page: Page, info: TestInfo, surface: Surface) {
 }
 
 async function open(page: Page, info: TestInfo, surface: Surface, viewport: (typeof VIEWPORTS)[number]) {
+  await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'));
   await page.setViewportSize({ width: viewport.width, height: viewport.height });
   await page.clock.install({ time: FROZEN_TIME });
   await login(page, surface.email(), surface.password());
@@ -162,6 +163,7 @@ test.describe('Reservas de hoy · teclado y estados', () => {
       await gate;
       await route.continue();
     });
+    await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'));
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await login(page, surface.email(), surface.password());
     await page.goto(surface.route);
@@ -171,6 +173,7 @@ test.describe('Reservas de hoy · teclado y estados', () => {
 
   test('estado vacío', async ({ page }) => {
     await page.route('**/reservas?*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"data":[],"items":[]}' }));
+    await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'));
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await login(page, surface.email(), surface.password());
     await page.goto(surface.route);
@@ -179,6 +182,7 @@ test.describe('Reservas de hoy · teclado y estados', () => {
 
   test('estado de error', async ({ page }) => {
     await page.route('**/reservas?*', (route) => route.fulfill({ status: 403, contentType: 'application/json', body: '{"message":"forbidden"}' }));
+    await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'));
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await login(page, surface.email(), surface.password());
     await page.goto(surface.route);

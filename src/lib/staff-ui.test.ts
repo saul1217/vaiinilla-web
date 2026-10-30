@@ -1,13 +1,32 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { readStaffUi, splitSpaceName } from './staff-ui';
+import { renderHook } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { clearLegacyStaffUi, splitSpaceName, useStaffTheme } from './staff-ui';
 
 describe('presentación del personal', () => {
   afterEach(() => window.localStorage.clear());
 
-  it('empieza en la nueva y recuerda la anterior si se eligió', () => {
-    expect(readStaffUi()).toBe('nueva');
+  it.each(['anterior', 'nueva', 'desconocida'])('ignora y borra la preferencia %s', (saved) => {
+    window.localStorage.setItem('vaiinilla.panel.staff-ui', saved);
+    expect(clearLegacyStaffUi()).toBeUndefined();
+    expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
+  });
+
+  it('usa la nueva aunque el almacenamiento esté bloqueado', () => {
+    const remove = vi.spyOn(window.localStorage, 'removeItem').mockImplementation(() => {
+      throw new Error('Storage blocked');
+    });
+    try {
+      expect(clearLegacyStaffUi()).toBeUndefined();
+    } finally {
+      remove.mockRestore();
+    }
+  });
+
+  it('limpia la preferencia obsoleta sin activar un tema del personal', () => {
     window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
-    expect(readStaffUi()).toBe('anterior');
+    const { unmount } = renderHook(() => useStaffTheme());
+    expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
+    unmount();
   });
 
   it('separa el número del tipo de espacio, como los mosaicos de la app', () => {

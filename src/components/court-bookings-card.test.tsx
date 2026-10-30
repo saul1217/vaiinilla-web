@@ -53,7 +53,48 @@ describe('CourtBookingsCard', () => {
     await userEvent.click(screen.getByRole('button', { name: /Liberar cancha/ }));
     expect(await screen.findByText(/reserva de Ana en Cancha 1/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Sí, cancelar reserva' }));
-    await waitFor(() => expect(apiMock.cancelCounterRental).toHaveBeenCalledWith('t', 'b1'));
+    await waitFor(() => expect(apiMock.cancelCounterRental).toHaveBeenCalledWith('t', 'b1', undefined));
+  });
+
+  it('cancela una reserva pagada con motivo y reembolso parcial; con 0 también', async () => {
+    apiMock.listStaffBookings.mockResolvedValue([{ ...base, id: 'b2', estado: 'confirmada', expira_en: null }]);
+    renderCard();
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancelar y reembolsar' }));
+    const confirm = screen.getByRole('button', { name: 'Sí, cancelar reserva' });
+    expect(confirm).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText('Motivo (3 a 240 caracteres)'), 'Llovió');
+    const amount = screen.getByLabelText('Monto a reembolsar');
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '300.01');
+    expect(screen.getByText('El reembolso no puede ser mayor a lo pagado.')).toBeInTheDocument();
+    expect(confirm).toBeDisabled();
+
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '100');
+    await userEvent.click(confirm);
+    await waitFor(() =>
+      expect(apiMock.cancelCounterRental).toHaveBeenCalledWith('t', 'b2', { motivo: 'Llovió', monto_reembolso: '100.00' }),
+    );
+  });
+
+  it('permite reembolsar 0 y no ofrece cancelar una reserva en curso', async () => {
+    apiMock.listStaffBookings.mockResolvedValue([
+      { ...base, id: 'b2', estado: 'confirmada', expira_en: null },
+      { ...base, id: 'b3', estado: 'en_curso', expira_en: null },
+    ]);
+    renderCard();
+    expect(await screen.findAllByRole('button', { name: 'Cancelar y reembolsar' })).toHaveLength(1);
+    expect(screen.getByText('La reserva ya inició: no se puede cancelar.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar y reembolsar' }));
+    await userEvent.type(screen.getByLabelText('Motivo (3 a 240 caracteres)'), 'No llegó');
+    const amount = screen.getByLabelText('Monto a reembolsar');
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '0');
+    await userEvent.click(screen.getByRole('button', { name: 'Sí, cancelar reserva' }));
+    await waitFor(() =>
+      expect(apiMock.cancelCounterRental).toHaveBeenCalledWith('t', 'b2', { motivo: 'No llegó', monto_reembolso: '0.00' }),
+    );
   });
 
   it('muestra el estado de carga mientras consulta', () => {

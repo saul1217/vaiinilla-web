@@ -7,8 +7,9 @@ import { Bell, BellOff, CheckCircle2, ScanLine, Table2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, EmptyState, Feedback, Modal } from './ui';
 import { SpaceAccountPanel } from './space-account-panel';
+import { CourtBookingsCard } from './court-bookings-card';
 import { spaceStatusLine } from '../lib/space-status';
-import { splitSpaceName, type StaffUi } from '../lib/staff-ui';
+import { splitSpaceName } from '../lib/staff-ui';
 import { OrderStatusBadge } from './status-badge';
 import { alertKeys, newAlerts, type WaiterAlert } from '../lib/waiter-alerts';
 import { playAlert, systemNotify, unlockAlertSound } from '../lib/alert-sound';
@@ -47,14 +48,11 @@ function since(iso: string, now: number): string {
 export function WaiterBoard({
   token,
   role,
-  variant = 'anterior',
   businessName,
   onAddOrder,
 }: {
   token: string;
   role: 'mesero' | 'cajero';
-  /** 'nueva' = presentación de las apps (oscura); misma función. */
-  variant?: StaffUi;
   businessName?: string;
   onAddOrder?: (spaceId: number) => void;
 }) {
@@ -65,7 +63,7 @@ export function WaiterBoard({
   const [qrToken, setQrToken] = useState('');
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  // Solo en la presentación nueva, como en las apps: todas o solo las que piden algo.
+  // Todas las mesas o solo las que piden algo.
   const [onlyPending, setOnlyPending] = useState(false);
 
   useEffect(() => {
@@ -213,8 +211,7 @@ export function WaiterBoard({
   const calling = tables.filter((table) => stateOf(table) === 'call').length;
   const ready = tables.reduce((sum, table) => sum + table.pedidos.filter((order) => order.estado === 'listo').length, 0);
   const active = tables.filter((table) => stateOf(table, spaces.get(table.espacio.id)) === 'active').length;
-  const nueva = variant === 'nueva';
-  const shownTables = nueva && onlyPending
+  const shownTables = onlyPending
     ? tables.filter((table) => {
       const state = stateOf(table, spaces.get(table.espacio.id));
       return state === 'call' || state === 'ready';
@@ -283,7 +280,7 @@ export function WaiterBoard({
     </>
   );
 
-  const summary = nueva ? (
+  const summary = (
     <>
       <header className="staff-board-head">
         <div>
@@ -316,37 +313,10 @@ export function WaiterBoard({
         <button type="button" role="radio" aria-checked={onlyPending} onClick={() => setOnlyPending(true)}>Por atender</button>
       </div>
     </>
-  ) : (
-    <>
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Servicio en mesa</p>
-          <h2 id="mesero-board-title">Mesas</h2>
-        </div>
-        <span className={`live-indicator ${!board.isError ? 'live-indicator--online' : ''}`} role="status">
-          <span /> {board.isError ? 'Sin conexión' : 'En vivo'}
-        </span>
-      </div>
-
-      <dl className="mesero-summary" role="status">
-        <div className={calling ? 'mesero-summary__item--call' : 'mesero-summary__item'}>
-          <dt>Llamando</dt>
-          <dd>{calling}</dd>
-        </div>
-        <div className={ready ? 'mesero-summary__item--ready' : 'mesero-summary__item'}>
-          <dt>{ready === 1 ? 'Listo' : 'Listos'}</dt>
-          <dd>{ready}</dd>
-        </div>
-        <div className="mesero-summary__item">
-          <dt>Activas</dt>
-          <dd>{active}</dd>
-        </div>
-      </dl>
-    </>
   );
 
   return (
-    <section className={nueva ? 'mesero-board staff-board' : 'mesero-board'} aria-labelledby="mesero-board-title">
+    <section className="mesero-board staff-board" aria-labelledby="mesero-board-title">
       {summary}
       {alertsBlock}
 
@@ -359,9 +329,9 @@ export function WaiterBoard({
       {notice && <Feedback tone={notice.tone}>{notice.text}</Feedback>}
 
       {board.isPending ? (
-        <div className={nueva ? 'staff-tiles' : 'mesero-grid'} aria-hidden="true">
+        <div className="staff-tiles" aria-hidden="true">
           {Array.from({ length: 6 }, (_, index) => (
-            <span key={index} className={nueva ? 'staff-tile staff-tile--skeleton' : 'mesero-tile mesero-tile--skeleton'} />
+            <span key={index} className="staff-tile staff-tile--skeleton" />
           ))}
         </div>
       ) : tables.length === 0 ? (
@@ -370,7 +340,7 @@ export function WaiterBoard({
           title="Sin mesas"
           description="El establecimiento todavía no tiene espacios configurados en Administración."
         />
-      ) : nueva ? (
+      ) : (
         shownTables.length === 0 ? (
           <p className="staff-empty">Nadie está llamando y no hay pedidos listos.</p>
         ) : (
@@ -400,41 +370,10 @@ export function WaiterBoard({
             })}
           </div>
         )
-      ) : (
-        <div className="mesero-grid">
-          {tables.map((table) => {
-            const space = spaces.get(table.espacio.id);
-            const state = stateOf(table, space);
-            const readyOrders = table.pedidos.filter((order) => order.estado === 'listo');
-            return (
-              <button
-                key={table.espacio.id}
-                type="button"
-                className={`mesero-tile mesero-tile--${state}`}
-                onClick={() => setOpenId(table.espacio.id)}
-                aria-label={`${table.espacio.nombre}. ${
-                  state === 'call' ? 'Llamando' : state === 'ready' ? 'Pedido listo' : state === 'active' ? 'Con pedidos' : 'Libre'
-                }`}
-              >
-                <strong>{table.espacio.nombre}</strong>
-                {state === 'call' && table.llamada ? (
-                  <small>
-                    {table.llamada.estado === 'en_camino' ? `Va ${table.llamada.tomada_por?.nombre ?? 'alguien'}` : 'Llamando'} · {since(table.llamada.creado_en, now)}
-                  </small>
-                ) : state === 'ready' ? (
-                  <small>#{readyOrders.map((order) => order.folio).join(', #')} listo</small>
-                ) : state === 'active' ? (
-                  <small>{table.pedidos.length} {table.pedidos.length === 1 ? 'pedido' : 'pedidos'}</small>
-                ) : space ? (
-                  <small key={spaceStatusLine(space)}>{spaceStatusLine(space)}</small>
-                ) : (
-                  <small>Libre</small>
-                )}
-              </button>
-            );
-          })}
-        </div>
+
       )}
+
+      {(availability.data ?? []).some((space) => space.precio_hora !== null) && <CourtBookingsCard />}
 
       <Modal
         open={Boolean(open)}

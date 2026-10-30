@@ -8,7 +8,7 @@ import { Button, Feedback, Field, Modal } from './ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { VaiinillaApiError, errorMessage } from '../lib/api-error';
-import { MONEY_PATTERN, calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
+import { MONEY_PATTERN, calculateChange, moneyToCents, formatMoney, normalizeMoneyInput } from '../lib/money';
 import { clock } from '../lib/space-status';
 import type { StaffBooking } from '../types/api';
 
@@ -28,6 +28,8 @@ const STATUS_LABEL: Record<string, string> = {
   conflicto: 'Con conflicto',
 };
 const PAID = new Set(['confirmada', 'en_curso', 'terminada']);
+// Solo la confirmada se cancela; una reserva iniciada o terminada ya no (RESERVATION_IN_PROGRESS).
+const REFUNDABLE = new Set(['confirmada']);
 
 function actionError(error: unknown): string {
   if (error instanceof VaiinillaApiError && error.status === 403) {
@@ -45,6 +47,8 @@ export function CourtBookingsCard() {
   const [paying, setPaying] = useState<StaffBooking | null>(null);
   const [received, setReceived] = useState('');
   const [canceling, setCanceling] = useState<StaffBooking | null>(null);
+  const [reason, setReason] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const queryKey = ['court-bookings', scopeId, date];
   // Espera sesión y establecimiento (evita pedir sin token o con otro alcance). Un 404 puntual
@@ -74,16 +78,41 @@ export function CourtBookingsCard() {
     },
   });
   const cancel = useMutation({
-    mutationFn: (booking: StaffBooking) => api.cancelCounterRental(token, booking.id),
+    mutationFn: (booking: StaffBooking) =>
+      api.cancelCounterRental(
+        token,
+        booking.id,
+        REFUNDABLE.has(booking.estado)
+          ? { motivo: reason.trim(), monto_reembolso: normalizeMoneyInput(refundAmount) }
+          : undefined,
+      ),
     onSuccess: async () => {
+      const refunded = canceling && REFUNDABLE.has(canceling.estado);
       setCanceling(null);
-      setNotice('Cancha liberada. La reserva quedó cancelada.');
+      setNotice(refunded ? 'Reserva cancelada y reembolso registrado.' : 'Cancha liberada. La reserva quedó cancelada.');
       await refresh();
     },
     onError: () => void refresh(),
   });
 
   const rows = (bookings.data ?? []).filter((booking) => booking.estado !== 'cancelada');
+  const cancelingPaid = Boolean(canceling && REFUNDABLE.has(canceling.estado));
+  const refundCents = moneyToCents(normalizeMoneyInput(refundAmount));
+  const paidCents = canceling?.monto ? moneyToCents(canceling.monto) : null;
+  const refundError =
+    refundCents === null
+      ? 'Escribe un monto válido, de 0 al total pagado.'
+      : paidCents !== null && refundCents > paidCents
+        ? 'El reembolso no puede ser mayor a lo pagado.'
+        : null;
+  const reasonLength = reason.trim().length;
+  const canConfirmCancel = !cancelingPaid || (reasonLength >= 3 && reasonLength <= 240 && !refundError);
+  const openCancel = (booking: StaffBooking) => {
+    cancel.reset();
+    setReason('');
+    setRefundAmount(booking.monto ?? '0.00');
+    setCanceling(booking);
+  };
   const change = paying?.monto && MONEY_PATTERN.test(received) ? calculateChange(received, paying.monto) : null;
 
   return (
@@ -146,16 +175,19 @@ export function CourtBookingsCard() {
                     <Button
                       type="button"
                       variant="danger"
-                      onClick={() => {
-                        cancel.reset();
-                        setCanceling(booking);
-                      }}
+                      onClick={() => openCancel(booking)}
                     >
                       Liberar cancha / Cancelar
                     </Button>
                   </div>
+                ) : REFUNDABLE.has(booking.estado) ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="danger" onClick={() => openCancel(booking)}>
+                      Cancelar y reembolsar
+                    </Button>
+                  </div>
                 ) : paid ? (
-                  <p className="text-xs text-muted">Ya está pagada: no se cancela desde aquí hasta definir el reembolso.</p>
+                  <p className="text-xs text-muted">La reserva ya inició: no se puede cancelar.</p>
                 ) : null}
               </li>
             );
@@ -165,15 +197,42 @@ export function CourtBookingsCard() {
       <Modal
         open={Boolean(canceling)}
         onOpenChange={(open) => !open && setCanceling(null)}
-        title="Liberar cancha"
+        title={cancelingPaid ? 'Cancelar reserva pagada' : 'Liberar cancha'}
         description={
           canceling
-            ? `¿Cancelar la reserva de ${canceling.cliente?.nombre ?? 'el cliente'} en ${canceling.espacio?.nombre ?? 'la cancha'}, de ${clock(canceling.inicio)} a ${clock(canceling.fin)}? El horario queda libre y el cliente verá su pedido como cancelado por el establecimiento.`
+            ? `¿Cancelar la reserva de ${canceling.cliente?.nombre ?? 'el cliente'} en ${canceling.espacio?.nombre ?? 'la cancha'}, de ${clock(canceling.inicio)} a ${clock(canceling.fin)}? El horario queda libre${cancelingPaid ? '. Elige cuánto se reembolsa (de $0 a lo pagado) y escribe el motivo.' : ' y el cliente verá su pedido como cancelado por el establecimiento.'}`
             : undefined
         }
       >
+        {cancelingPaid && (
+          <div className="mb-3 grid gap-3">
+            <Field
+              label="Monto a reembolsar"
+              name="booking-refund-amount"
+              inputMode="decimal"
+              value={refundAmount}
+              onChange={(event) => setRefundAmount(event.target.value)}
+              error={refundError ?? undefined}
+              hint={canceling?.monto ? `Pagado: ${formatMoney(canceling.monto)}. Puedes reembolsar $0.` : undefined}
+            />
+            <Field
+              label="Motivo (3 a 240 caracteres)"
+              name="booking-refund-reason"
+              maxLength={240}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </div>
+        )}
+        {cancel.isError && <Feedback tone="error">{actionError(cancel.error)}</Feedback>}
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="danger" loading={cancel.isPending} onClick={() => canceling && cancel.mutate(canceling)}>
+          <Button
+            type="button"
+            variant="danger"
+            loading={cancel.isPending}
+            disabled={!canConfirmCancel}
+            onClick={() => canceling && cancel.mutate(canceling)}
+          >
             Sí, cancelar reserva
           </Button>
           <Button type="button" variant="ghost" onClick={() => setCanceling(null)}>
