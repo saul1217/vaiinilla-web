@@ -272,6 +272,7 @@ export function Modal({
   footer,
   returnFocusRef,
   fallbackFocusRef,
+  headingRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -285,6 +286,7 @@ export function Modal({
   footer?: ReactNode;
   returnFocusRef?: RefObject<HTMLElement | null>;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
+  headingRef?: RefObject<HTMLHeadingElement | null>;
 }) {
   // Los diálogos son controlados y sin Trigger: Radix no sabe a dónde devolver el foco,
   // así que recordamos el elemento activo al abrir y lo restauramos al cerrar.
@@ -325,7 +327,7 @@ export function Modal({
         >
           {sheet && <span className="app-sheet__handle" aria-hidden="true" />}
           <div className={sheet ? 'app-sheet__header' : 'pr-14'}>
-            <Dialog.Title ref={titleRef} tabIndex={sheet ? -1 : undefined} className="dialog-title text-xl font-bold text-ink">{title}</Dialog.Title>
+            <Dialog.Title ref={(node) => { titleRef.current = node; if (headingRef) headingRef.current = node; }} tabIndex={sheet ? -1 : undefined} className="dialog-title text-xl font-bold text-ink">{title}</Dialog.Title>
             {description && (
               <Dialog.Description className="mt-2 text-sm leading-6 text-muted">
                 {description}

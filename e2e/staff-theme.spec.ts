@@ -11,7 +11,7 @@ for (const theme of ['claro', 'oscuro']) {
     // Navigate directly to static HTML: the app must not keep running after setContent.
     await page.route('**/staff-contrast-fixture', (route) => route.fulfill({
       contentType: 'text/html',
-      body: `<html data-admin-theme="${theme}"><head><link rel="stylesheet" href="/src/styles/index.css"><link rel="stylesheet" href="/src/styles/app-primitives.css"><link rel="stylesheet" href="/src/styles/admin-screens.css"></head>
+      body: `<html data-admin-theme="${theme}"><head><link rel="stylesheet" href="/src/styles/index.css"><link rel="stylesheet" href="/src/styles/app-primitives.css"><link rel="stylesheet" href="/src/styles/admin-screens.css"><link rel="stylesheet" href="/src/styles/mesero-slice.css"></head>
       <body><div class="app-frame app-frame--tenant">
       <header class="app-identity"><button class="app-account-button">CA</button></header>
       <div class="queue-column"><header class="queue-column__header"><h2>Cola</h2><p>En espera</p></header>
@@ -24,7 +24,7 @@ for (const theme of ['claro', 'oscuro']) {
       <div class="staff-stat staff-stat--ready"><dt>Listas</dt></div>
       <fieldset class="app-segments"><legend>Mesas</legend><div class="app-segments__options"><label class="app-segments__option"><input type="radio" checked /><span>Todas</span></label><label class="app-segments__option"><input type="radio" /><span>Por atender</span></label></div></fieldset>
       <input class="field__control" value="Pedido" />
-      <nav class="app-mobile-nav"><a href="/app/pos" class="app-link--active">Caja</a><button>Más</button></nav></div><section class="app-sheet"><div class="app-sheet__header"><h2>Cuenta</h2></div><button class="app-sheet__close">X</button></section></body></html>`,
+      <nav class="app-mobile-nav"><a href="/app/pos" class="app-link--active">Caja</a><button>Más</button></nav></div><section class="app-sheet"><p class="space-payment-balance"><span>Pendiente</span><strong>$100.00 MXN</strong></p><div class="app-sheet__header"><h2>Cuenta</h2></div><button class="app-sheet__close">X</button></section></body></html>`,
     }));
     await page.goto('/staff-contrast-fixture');
     await page.locator('link').evaluateAll((links) => Promise.all(links.map((el) => (el as HTMLLinkElement).sheet ? Promise.resolve() : new Promise((resolve) => el.onload = resolve))));

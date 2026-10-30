@@ -3,6 +3,7 @@
 // por /dev/test-setup. Condiciones de QA_INTERFAZ_REGRESION: docs/qa-ui-regresion.md.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { installStaffR2Mocks } from './fixtures/staff-r2';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
@@ -32,7 +33,7 @@ const VIEWPORTS = [
 ] as const;
 // Solo se usa tema claro: no hay capturas del tema oscuro del personal.
 test.use({ baseURL: env.E2E_BASE_URL ?? 'http://127.0.0.1:5173', colorScheme: 'light', contextOptions: { reducedMotion: 'reduce' } });
-test.skip(!adminPassword || !cajeroPassword, 'Faltan las cuentas QA (contraseñas y correos) de la tienda de CI.');
+
 
 type Surface = { name: string; route: string; email: () => string; password: () => string; ready: (page: Page) => Promise<void>; trigger?: (page: Page) => ReturnType<Page['locator']> };
 
@@ -61,6 +62,7 @@ const SURFACES: Surface[] = [
 ];
 
 async function login(page: Page, email: string, password: string) {
+  test.skip(!adminPassword || !cajeroPassword, 'Faltan las cuentas QA de la tienda de CI.');
   await page.goto('/acceso');
   await page.getByLabel('Correo').fill(email);
   await page.getByLabel('Contraseña').fill(password);
@@ -237,4 +239,54 @@ for (const theme of ['claro', 'oscuro']) {
     await expect(dialog).toHaveCount(0);
     await expect(account).toBeFocused();
   });
+}
+
+// Mesero uses deterministic local fixtures and requires Vite, independently of preview/API cases above.
+for (const theme of ['claro', 'oscuro']) {
+  for (const viewport of VIEWPORTS) {
+    test(`Mesero · cuenta y pasos · ${theme} · ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await installStaffR2Mocks(page, 'mesero', theme);
+      await page.goto('/app/pos');
+      await expect(page.getByRole('heading', { level: 1, name: 'Mesas', exact: true })).toBeVisible();
+      await expect(page.locator('.staff-tile--skeleton')).toHaveCount(0);
+      await stabilize(page);
+      const capture = async (state: string) => {
+        await expect(page).toHaveScreenshot(`mesero-${state}-${theme}-${viewport.name}.png`, { fullPage: true, animations: 'disabled' });
+      };
+      const accessible = async () => {
+        const { violations } = await new AxeBuilder({ page }).analyze();
+        expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+      };
+      await capture('tablero');
+      await page.getByRole('button', { name: 'Mesa 3. Pedido listo', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Cobrar cuenta' })).toBeVisible();
+      await capture('mesa-diferida');
+      await accessible();
+      await page.getByRole('button', { name: 'Cobrar cuenta' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await page.getByRole('radio', { name: 'Por monto', exact: true }).click();
+      await page.getByRole('textbox', { name: 'Monto de este pago', exact: true }).fill('20.25');
+      await page.getByRole('textbox', { name: 'Efectivo recibido', exact: true }).fill('10');
+      await expect(page.getByRole('button', { name: 'Confirmar pago' })).toBeDisabled();
+      await expect(page.getByText('El efectivo no alcanza.', { exact: true })).toBeVisible();
+      await capture('monto-faltante');
+      await accessible();
+      await page.getByRole('radio', { name: 'Partes iguales', exact: true }).click();
+      await page.getByRole('button', { name: 'Una persona más', exact: true }).click();
+      await page.getByRole('radio', { name: 'Terminal', exact: true }).click();
+      await capture('partes-terminal');
+      await accessible();
+      await page.getByRole('radio', { name: 'Por monto', exact: true }).click();
+      await expect(page.getByRole('textbox', { name: 'Monto de este pago', exact: true })).toHaveValue('20.25');
+      await page.getByRole('button', { name: 'Volver a la cuenta', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Cobrar cuenta' })).toBeFocused();
+      await page.getByRole('button', { name: 'Nuevo pedido en esta mesa', exact: true }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await expect(page.getByRole('heading', { name: 'Pedido para Mesa 3', exact: true })).toBeVisible();
+      await capture('tomar-pedido');
+      await accessible();
+    });
+  }
 }

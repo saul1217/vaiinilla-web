@@ -1,0 +1,49 @@
+/* Slice 2. I01/L01 tiles, I02 catalog and I04–I07 payment steps.
+   Only the migrated board and operational sheets opt into these rules. */
+html[data-admin-theme] .mesero-board { max-width: 1120px; }
+html[data-admin-theme] .mesero-board .staff-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+html[data-admin-theme] .mesero-board .staff-tile__name strong { font-size: 2rem; }
+html[data-admin-theme] .mesero-board .staff-tile__name span { white-space: normal; overflow-wrap: anywhere; }
+html[data-admin-theme] .app-sheet.staff-table-dialog { width: min(640px, calc(100vw - 24px)); }
+.app-sheet .mesero-sheet[data-delivering='true'] { display: none; }
+.app-sheet .mesero-sheet:has(.space-account[data-operation='true']) > :not(.space-account),
+.app-sheet .space-account[data-operation='true'] > :not(.space-payment-step) { display: none; }
+.space-payment-step:not([hidden]) { display: grid; gap: 20px; min-width: 0; }
+.space-payment-step[hidden], .space-payment-step [hidden], .staff-payment-dialog [hidden] { display: none; }
+.space-payment-step h3 { font-size: 1.5rem; font-weight: 750; }
+.space-payment-balance { display: grid; gap: 4px; padding-block: 16px; }
+.space-payment-balance > span { color: var(--color-muted); font-size: .875rem; }
+.space-payment-balance > strong { font-size: clamp(2rem, 7vw, 3.5rem); line-height: 1.15; letter-spacing: -.045em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.app-sheet .space-payment-step :is(.button, input) { min-height: 48px; }
+html[data-admin-theme] .app-sheet .staff-order__photo { height: auto; aspect-ratio: 4 / 3; }
+html[data-admin-theme] .app-sheet .staff-order__photo--empty { background: var(--color-cream-3); }
+html[data-admin-theme] .app-sheet .staff-order__producto[data-agregado='true'] { grid-column: auto; }
+html[data-admin-theme] .app-sheet .staff-order__producto[data-agregado='true'] .staff-order__photo { height: auto; }
+html[data-admin-theme] .app-sheet .staff-order__pie { bottom: 0; padding: 16px 0 max(16px, env(safe-area-inset-bottom)); }
+.app-sheet .staff-order__catalog > .field { grid-column: 1 / -1; }
+.app-sheet .staff-order input { font-size: 16px; }
+.app-sheet .staff-order__context { grid-column: 1 / -1; font-weight: 750; font-size: 1.25rem; }
+.app-sheet .staff-order__producto :is(button, .staff-order__cantidad button) { min-height: 48px; }
+@media (max-width: 359px) {
+  html[data-admin-theme] .mesero-board .staff-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  html[data-admin-theme] .app-sheet.staff-table-dialog { width: 100%; }
+  .app-sheet .mesero-orders li { flex-wrap: wrap; }
+  .app-sheet .mesero-orders li > div { flex: 1 1 150px; }
+  .app-sheet .staff-order__categoria { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  html[data-admin-theme] .mesero-board .staff-tiles { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  html[data-admin-theme] .app-sheet .staff-order { grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); }
+  .app-sheet .staff-order > :is(.field, .staff-order__context) { grid-column: 1 / -1; }
+  .app-sheet .staff-order__catalog { grid-column: 1; grid-row: span 2; }
+  .app-sheet .staff-order__customer { grid-column: 2; }
+  html[data-admin-theme] .app-sheet .staff-order > .staff-order__pie { grid-column: 2; position: sticky; top: 0; align-self: start; flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mesero-board *, .staff-table-dialog *, .staff-order-dialog * { animation: none !important; transition: none !important; }
+}
+.app-sheet .staff-order__selected { flex-basis: 100%; min-width: 0; font-size: .875rem; }
+.app-sheet .staff-order__selected summary { min-height: 44px; padding-block: 12px; cursor: pointer; }
+.app-sheet .staff-order__selected li { padding-block: 4px; overflow-wrap: anywhere; }

@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Button, Field } from './ui';
 import { formatMoney } from '../lib/money';
 import { TIP_PERCENTS, tipAmount, type TipChoice } from '../lib/tips';
@@ -18,6 +19,7 @@ export function TipPicker({
   /** La propina no puede ser mayor a lo que se cobra. */
   error?: string | null;
 }) {
+  const id = useId();
   const amount = tipAmount(base, value);
   const isOn = (choice: TipChoice) =>
     choice.kind === value.kind && (choice.kind !== 'percent' || (value.kind === 'percent' && value.percent === choice.percent));
@@ -47,6 +49,7 @@ export function TipPicker({
       </div>
       {value.kind === 'custom' && (
         <Field
+          id={id}
           name="tip-amount"
           label="Monto de la propina"
           inputMode="decimal"

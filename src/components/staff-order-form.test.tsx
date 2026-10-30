@@ -88,6 +88,23 @@ describe('StaffOrderForm', () => {
     apiMock.createStaffOrder.mockResolvedValue(PEDIDO_CREADO);
   });
 
+  it('buscar y limpiar conserva cliente, cantidad y pago diferido sin enviar', async () => {
+    const user = userEvent.setup();
+    renderForm('mesero', vi.fn(), 2);
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    await user.type(screen.getByLabelText(/Nombre del cliente/), 'Ana');
+    const deferred = screen.getByLabelText('Pagar al final, con la cuenta de la mesa');
+    await user.click(deferred);
+    await user.click(screen.getByRole('button', { name: 'Agregar uno' }));
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar en el menú' }), 'no existe');
+    expect(screen.getByText('Sin coincidencias.')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }));
+    expect(screen.getByRole('group', { name: 'Cantidad de Taco al pastor' })).toHaveTextContent('2');
+    expect(screen.getByLabelText(/Nombre del cliente/)).toHaveValue('Ana');
+    expect(deferred).toBeChecked();
+    expect(apiMock.createStaffOrder).not.toHaveBeenCalled();
+  });
+
   it('para llevar: envía el pedido en efectivo con la opción obligatoria ya elegida', async () => {
     const user = userEvent.setup();
     const { onCreated } = renderForm('mesero');
