@@ -71,3 +71,36 @@ for (const role of ['mesero', 'cajero', 'cocina']) {
     expect(pageErrors).toEqual([]);
   });
 }
+
+// Slice 2 smoke cases use the same deterministic data as the opt-in captures.
+for (const width of [320, 768]) {
+  test(`mesero: teclado, hoja única y filtro vacío a ${width}px`, async ({ page }) => {
+    const { installStaffR2Mocks } = await import('./fixtures/staff-r2');
+    await page.setViewportSize({ width, height: 844 });
+    await installStaffR2Mocks(page, 'mesero', 'oscuro');
+    await page.goto('/app/pos');
+    const tile = page.getByRole('button', { name: 'Mesa 3. Pedido listo', exact: true });
+    await tile.click();
+    await page.getByRole('button', { name: 'Cobrar cuenta' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    const orders = page.getByRole('radio', { name: 'Por pedidos', exact: true });
+    await orders.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('radio', { name: 'Por monto', exact: true })).toBeChecked();
+    await page.keyboard.press('End');
+    await expect(page.getByRole('radio', { name: 'Partes iguales', exact: true })).toBeChecked();
+    await page.keyboard.press('Home');
+    await expect(orders).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(tile).toBeFocused();
+    await page.route('**/mock-api/espacios/tablero', (route) => route.fulfill({
+      json: { data: [{ espacio: { id: 9, nombre: 'Terraza', tipo: 'mesa' }, pedidos: [], llamada: null }] },
+    }));
+    await page.reload();
+    await page.getByRole('radio', { name: 'Por atender', exact: true }).click();
+    await expect(page.getByText('Nada por atender', { exact: true })).toBeVisible();
+    await expect(page.getByText('Sin mesas', { exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  });
+}

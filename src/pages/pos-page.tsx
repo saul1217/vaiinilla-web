@@ -1,3 +1,4 @@
+import { AppSheet } from '../components/app-sheet';
 import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -487,7 +488,8 @@ export function PosPage() {
           <OperationalStatusPanel />
       </details>
 
-      <Modal
+      <AppSheet
+        size="large"
         open={newOrderOpen}
         onOpenChange={setNewOrderOpen}
         title="Nuevo pedido"
@@ -510,7 +512,7 @@ export function PosPage() {
             }}
           />
         )}
-      </Modal>
+      </AppSheet>
 
       <Modal
         open={Boolean(cashOrder)}

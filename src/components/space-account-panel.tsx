@@ -1,15 +1,17 @@
+import { SpacePaymentSheet } from './space-payment-sheet';
+import { SegmentedControl } from './segmented-control';
 // La cuenta de un espacio en el tablero del personal: lo que va pedido, cobrarla (toda o
 // dividida, en efectivo o con la terminal), imprimirla y liberar el espacio. En una cancha
 // con precio, además rentar o renovar en mostrador cobrando en efectivo (la renta se paga
 // primero). Contrato: GET/POST /espacios/:id/sesion*, POST /reservas y /reservas/:id/pago.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock3, CreditCard, Printer, ReceiptText, Unlock, Wallet } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Clock3, Printer, ReceiptText, Unlock, Wallet } from 'lucide-react';
+import { useImperativeHandle, useMemo, useState, type Ref, type RefObject } from 'react';
 import { AccountAbonoForm } from './account-abono-form';
 import { PendingRefunds } from './pending-refunds';
 import { RollingMoney } from './rolling-money';
 import { TipPicker } from './tip-picker';
-import { Button, Feedback, Field, Modal } from './ui';
+import { Button, Feedback, Field } from './ui';
 import { api } from '../lib/api';
 import { buildSpaceAccountPrintHtml } from '../lib/space-account-print';
 import { claimAliases } from '../lib/account-split';
@@ -129,7 +131,13 @@ export function SpaceAccountPanel({
   businessName,
   canConfirmRefunds = false,
   onReleased,
+  embedded = false,
+  closeRef,
+  fallbackFocusRef,
 }: {
+  embedded?: boolean;
+  closeRef?: Ref<() => void>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
   token: string;
   spaceId: number;
   availability: SpaceAvailability | undefined;
@@ -142,6 +150,7 @@ export function SpaceAccountPanel({
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [collecting, setCollecting] = useState(false);
+  const [paymentStep, setPaymentStep] = useState(true);
   // Cómo se divide: por pedidos completos, por un monto o en partes iguales.
   const [chargeMode, setChargeMode] = useState<'pedidos' | 'monto' | 'partes'>('pedidos');
   const [method, setMethod] = useState<AccountPaymentMethod>('efectivo');
@@ -243,7 +252,10 @@ export function SpaceAccountPanel({
     if (pendingRental) void api.cancelCounterRental(token, pendingRental.id).catch(() => undefined);
   }
 
+  useImperativeHandle(closeRef, () => closeRental);
+
   function beginCollect() {
+    setPaymentStep(true);
     collect.reset();
     // Con abonos en curso ya no se cobra por pedidos: se sigue por monto.
     setChargeMode(abonado > 0 ? 'monto' : 'pedidos');
@@ -269,7 +281,7 @@ export function SpaceAccountPanel({
   const data = detail.data;
 
   return (
-    <section className="space-account" aria-label={`Cuenta de ${data.espacio.nombre}`}>
+    <section className="space-account" data-operation={(collecting && paymentStep) || Boolean(rental)} aria-label={`Cuenta de ${data.espacio.nombre}`}>
       <div className="space-account__status">
         <Clock3 aria-hidden="true" className="size-5" />
         <span>
@@ -311,6 +323,7 @@ export function SpaceAccountPanel({
             <strong>Cuenta</strong>
             <span>{account.pedidos.length} {account.pedidos.length === 1 ? 'pedido' : 'pedidos'}</span>
           </div>
+          <p className="space-payment-balance"><span>Pendiente</span><strong>{formatMoney(restante)}</strong></p>
           {account.grupos?.length ? (
             <AccountGroups account={account} />
           ) : (
@@ -343,7 +356,7 @@ export function SpaceAccountPanel({
           </div>
           <div className="form-actions">
             {pending.length > 0 && (
-              <Button onClick={beginCollect}>
+              <Button onClick={collecting ? () => setPaymentStep(true) : beginCollect}>
                 <Wallet aria-hidden="true" className="size-5" /> Cobrar cuenta
               </Button>
             )}
@@ -365,41 +378,27 @@ export function SpaceAccountPanel({
         </Button>
       )}
 
-      <Modal
-        open={collecting}
+      <SpacePaymentSheet embedded={embedded} fallbackFocusRef={fallbackFocusRef}
+        open={collecting && paymentStep}
+        onBack={() => setPaymentStep(false)}
         onOpenChange={(next) => { if (!next) setCollecting(false); }}
         title={`Cobrar ${data.espacio.nombre}`}
         contentClassName="staff-payment-dialog"
         description="Divide por pedidos, por un monto o en partes iguales."
       >
-        <div className="charge-mode" role="radiogroup" aria-label="Cómo dividir" data-mode={chargeMode}>
-          <span className="charge-mode__indicator" aria-hidden="true" />
-          <button
-            type="button"
-            role="radio"
-            aria-checked={chargeMode === 'pedidos'}
-            disabled={abonado > 0}
-            onClick={() => setChargeMode('pedidos')}
-          >
-            Por pedidos
-          </button>
-          <button type="button" role="radio" aria-checked={chargeMode === 'monto'} onClick={() => setChargeMode('monto')}>
-            Por monto
-          </button>
-          <button type="button" role="radio" aria-checked={chargeMode === 'partes'} onClick={() => setChargeMode('partes')}>
-            Partes iguales
-          </button>
-        </div>
+        <p className="space-payment-balance"><span>Pendiente</span><strong>{formatMoney(restante)}</strong></p>
+        <SegmentedControl legend="Cómo dividir" value={chargeMode}
+          options={[{ value: 'pedidos', label: 'Por pedidos', disabled: abonado > 0 }, { value: 'monto', label: 'Por monto' }, { value: 'partes', label: 'Partes iguales' }]}
+          onChange={setChargeMode} />
         {abonado > 0 && (
           <p className="space-account__hint">Ya se abonó {formatMoney(centsToMoney(toCents(abonado)))}: termina por monto o partes.</p>
         )}
-        {chargeMode !== 'pedidos' ? (
+        {collecting && (<div hidden={chargeMode === 'pedidos'}>
           <AccountAbonoForm
-            key={chargeMode}
             token={token}
             spaceId={spaceId}
             restante={restante}
-            mode={chargeMode}
+            mode={chargeMode === 'partes' ? 'partes' : 'monto'}
             onCancel={() => setCollecting(false)}
             onDone={async (result) => {
               setCollecting(false);
@@ -413,8 +412,8 @@ export function SpaceAccountPanel({
               await refresh();
             }}
           />
-        ) : (
-        <div className="transaction-form">
+        </div>)}
+        <div className="transaction-form" hidden={chargeMode !== 'pedidos'}>
           {collect.isError && <Feedback tone="error">{errorMessage(collect.error)}</Feedback>}
           {aliases.length > 0 && (
             <div className="space-account__chips" role="group" aria-label="Cobrar la parte de">
@@ -444,15 +443,8 @@ export function SpaceAccountPanel({
               </li>
             ))}
           </ul>
-          <div className="pay-method" role="radiogroup" aria-label="Forma de pago" data-method={method}>
-            <span className="pay-method__indicator" aria-hidden="true" />
-            <button type="button" role="radio" aria-checked={method === 'efectivo'} onClick={() => setMethod('efectivo')}>
-              <Wallet aria-hidden="true" className="size-5" /> Efectivo
-            </button>
-            <button type="button" role="radio" aria-checked={method === 'terminal'} onClick={() => setMethod('terminal')}>
-              <CreditCard aria-hidden="true" className="size-5" /> Terminal
-            </button>
-          </div>
+          <SegmentedControl legend="Forma de pago" value={method}
+            options={[{ value: 'efectivo', label: 'Efectivo' }, { value: 'terminal', label: 'Terminal' }]} onChange={setMethod} />
           <TipPicker base={charge} value={tip} onChange={setTip} />
           <p className="space-account__charge">
             <ReceiptText aria-hidden="true" className="size-5" /> {tipValue !== '0.00' ? 'A cobrar con propina' : 'A cobrar'}{' '}
@@ -479,10 +471,9 @@ export function SpaceAccountPanel({
             </Button>
           </div>
         </div>
-        )}
-      </Modal>
+      </SpacePaymentSheet>
 
-      <Modal
+      <SpacePaymentSheet embedded={embedded} fallbackFocusRef={fallbackFocusRef}
         open={Boolean(rental)}
         onOpenChange={(next) => { if (!next) closeRental(); }}
         title={rental ? `Renta de ${rental.espacio.nombre ?? data.espacio.nombre}` : 'Renta'}
@@ -512,7 +503,7 @@ export function SpaceAccountPanel({
             </div>
           </div>
         )}
-      </Modal>
+      </SpacePaymentSheet>
     </section>
   );
 }
