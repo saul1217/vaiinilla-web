@@ -1,13 +1,13 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readStaffUi, splitSpaceName, useStaffUi } from './staff-ui';
+import { clearLegacyStaffUi, splitSpaceName, useStaffTheme } from './staff-ui';
 
 describe('presentación del personal', () => {
   afterEach(() => window.localStorage.clear());
 
   it.each(['anterior', 'nueva', 'desconocida'])('ignora y borra la preferencia %s', (saved) => {
     window.localStorage.setItem('vaiinilla.panel.staff-ui', saved);
-    expect(readStaffUi()).toBe('nueva');
+    expect(clearLegacyStaffUi()).toBeUndefined();
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
   });
 
@@ -16,7 +16,7 @@ describe('presentación del personal', () => {
       throw new Error('Storage blocked');
     });
     try {
-      expect(readStaffUi()).toBe('nueva');
+      expect(clearLegacyStaffUi()).toBeUndefined();
     } finally {
       remove.mockRestore();
     }
@@ -24,25 +24,11 @@ describe('presentación del personal', () => {
 
   it('aplica la UI nueva y retira el tema al salir de la vista', () => {
     window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
-    const { result, rerender, unmount } = renderHook(({ enabled }) => useStaffUi(enabled), {
-      initialProps: { enabled: true },
-    });
-    expect(result.current).toBe('nueva');
+    const { unmount } = renderHook(() => useStaffTheme());
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
     expect(document.documentElement.dataset.staffUi).toBe('nueva');
-    rerender({ enabled: false });
-    expect(document.documentElement.dataset.staffUi).toBeUndefined();
-    rerender({ enabled: true });
     unmount();
     expect(document.documentElement.dataset.staffUi).toBeUndefined();
-  });
-
-  it('limpia la preferencia sin aplicar el tema fuera del personal, incluido admin', () => {
-    window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
-    const { unmount } = renderHook(() => useStaffUi(false));
-    expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
-    expect(document.documentElement.dataset.staffUi).toBeUndefined();
-    unmount();
   });
 
   it('separa el número del tipo de espacio, como los mosaicos de la app', () => {

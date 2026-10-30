@@ -1,33 +1,26 @@
 import { useEffect } from 'react';
 
-/** Conservado para las ramas de presentación antiguas pendientes de limpieza. */
-export type StaffUi = 'nueva' | 'anterior';
-
 const KEY = 'vaiinilla.panel.staff-ui';
 
 /** Retira la preferencia obsoleta; ninguna elección guardada activa la UI anterior. */
-export function readStaffUi(): 'nueva' {
+export function clearLegacyStaffUi(): void {
   try {
     window.localStorage.removeItem(KEY);
   } catch {
     // Sin almacenamiento: la presentación actual sigue siendo obligatoria.
   }
-  return 'nueva';
 }
 
 /** Aplica la presentación actual mientras está montada una vista del personal. */
-export function useStaffUi(enabled: boolean): 'nueva' {
+export function useStaffTheme(): void {
   useEffect(() => {
-    readStaffUi();
-    if (!enabled) return;
+    clearLegacyStaffUi();
     const root = document.documentElement;
     root.dataset.staffUi = 'nueva';
     return () => {
       delete root.dataset.staffUi;
     };
-  }, [enabled]);
-
-  return 'nueva';
+  }, []);
 }
 
 /** "Mesa 12" → { number: "12", kind: "Mesa" }; un nombre sin número queda completo. */

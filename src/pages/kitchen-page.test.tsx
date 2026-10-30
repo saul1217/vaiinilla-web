@@ -12,12 +12,14 @@ const apiMock = vi.hoisted(() => ({
   rejectOrder: vi.fn(),
 }));
 
+const sessionRole = vi.hoisted(() => ({ value: 'cocina' }));
+
 vi.mock('../lib/api', () => ({ api: apiMock }));
 vi.mock('../context/session-context', () => ({
   useSessions: () => ({
     tenant: {
       token: 'tenant-token',
-      context: { establecimiento_id: 'establecimiento-1', rol: 'cocina' },
+      context: { establecimiento_id: 'establecimiento-1', rol: sessionRole.value },
       access: { establecimiento: { nombre: 'Caffenio' } },
     },
   }),
@@ -73,12 +75,26 @@ function TestProvider({ children }: { children: ReactNode }) {
 describe('tablero de Cocina', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionRole.value = 'cocina';
     apiMock.listOrders.mockResolvedValue({ orders: [pendingOrder], cursor: null });
     apiMock.transitionOrder.mockResolvedValue({
       ...pendingOrder,
       estado: 'preparando',
       version: 3,
     });
+  });
+
+  it('aplica la UI nueva a Admin y conserva su encabezado y estado operativo', async () => {
+    sessionRole.value = 'admin';
+    window.localStorage.setItem('vaiinilla.panel.staff-ui', 'anterior');
+    const { container } = render(<KitchenPage />, { wrapper: TestProvider });
+    expect(container.firstChild).toHaveClass('staff-page');
+    expect(document.documentElement.dataset.staffUi).toBe('nueva');
+    expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Comandas de Cocina' })).toBeInTheDocument();
+    expect(apiMock.listOrders).not.toHaveBeenCalled();
+    await userEvent.setup().click(screen.getByText('Estado operativo del establecimiento'));
+    expect(screen.getByText('Estado operativo')).toBeVisible();
   });
 
   it('muestra las tres etapas y únicamente los artículos devueltos para Cocina', async () => {

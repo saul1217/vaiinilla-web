@@ -21,7 +21,7 @@ import { RejectOrderDialog, type RejectTarget } from '../components/reject-order
 import { itemRejectionNotice } from '../lib/rejection-notice';
 import { Button, Feedback, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
-import { useStaffUi } from '../lib/staff-ui';
+import { useStaffTheme } from '../lib/staff-ui';
 import { useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -46,10 +46,7 @@ export function KitchenPage() {
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const now = useKitchenClock();
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
-  // Cocina tiene la presentación de las apps (oscura).
-  const staffRole = role === 'cocina';
-  const ui = useStaffUi(staffRole);
-  const nueva = staffRole && ui === 'nueva';
+  useStaffTheme();
   const ordersQueryKey = ['orders', 'kitchen', scopeId] as const;
 
   const orders = useInfiniteQuery({
@@ -156,8 +153,8 @@ export function KitchenPage() {
   const isRefreshing = orders.isFetching && !orders.isFetchingNextPage && !orders.isPending;
 
   return (
-    <div className={nueva ? 'page-stack kitchen-page staff-page' : 'page-stack kitchen-page'}>
-      {nueva ? (
+    <div className="page-stack kitchen-page staff-page">
+      {role !== 'admin' ? (
         <header className="staff-hero">
           <p className="staff-eyebrow">Comandas en vivo{tenant ? ` · ${tenant.access.establecimiento.nombre}` : ''}</p>
           <h1 className="staff-title">Una comanda a la vez.</h1>

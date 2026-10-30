@@ -27,7 +27,7 @@ vi.mock('../hooks/use-operational-heartbeat', () => ({
   isHeartbeatRole: () => false,
   useOperationalHeartbeat: () => ({ isSuccess: true, isError: false }),
 }));
-vi.mock('../components/operational-status-panel', () => ({ OperationalStatusPanel: () => null }));
+vi.mock('../components/operational-status-panel', () => ({ OperationalStatusPanel: () => <div>Estado operativo</div> }));
 vi.mock('../components/pending-refunds', () => ({ PendingRefunds: () => null }));
 vi.mock('../components/waiter-board', () => ({ WaiterBoard: () => null }));
 vi.mock('../components/reject-order-dialog', () => ({ RejectOrderDialog: () => null }));
@@ -100,8 +100,31 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     const { unmount } = render(<PosPage />, { wrapper: Wrapper });
     expect(screen.queryByRole('button', { name: /UI anterior|UI nueva/i })).not.toBeInTheDocument();
     expect(window.localStorage.getItem('vaiinilla.panel.staff-ui')).toBeNull();
-    expect(document.documentElement.dataset.staffUi).toBe(role === 'admin' ? undefined : 'nueva');
+    expect(document.documentElement.dataset.staffUi).toBe('nueva');
     unmount();
+  });
+
+  it('conserva los controles y datos de Administración en la UI nueva', async () => {
+    sesion.rol = 'admin';
+    render(<PosPage />, { wrapper: Wrapper });
+    expect(await screen.findByText('Caja abierta')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText('Cerrar caja')); 
+    expect(screen.getByRole('heading', { name: 'Sesión de Caja' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Datos de la sesión de Caja')).toHaveTextContent('2026-10-07');
+    expect(screen.getByRole('button', { name: 'Nuevo pedido' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Revisar cierre' })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText('Estado del local'));
+    expect(screen.getByText('Estado operativo')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Cobrar \$/ })).not.toBeInTheDocument();
+  });
+
+  it('ofrece apertura de Caja a Admin cuando no hay sesión', async () => {
+    sesion.rol = 'admin';
+    apiMock.activeCashSession.mockResolvedValue(null);
+    render(<PosPage />, { wrapper: Wrapper });
+    expect(await screen.findByText('Caja cerrada')).toBeInTheDocument();
+    expect(screen.getByLabelText('Monto inicial (MXN)')).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Abrir Caja' })).toBeEnabled();
   });
 
   it('solo permite cobrar cuando está listo pero pendiente, y después ofrece imprimir y entregar', async () => {
