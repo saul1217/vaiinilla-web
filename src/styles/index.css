@@ -15,6 +15,7 @@
 }
 
 :root {
+  --on-accent: #171817;
   font-family: var(--font-sans);
   color: var(--color-ink);
   background: var(--color-cream);
@@ -86,7 +87,7 @@ select:enabled {
 
 ::selection {
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
 }
 
 .sr-only {
@@ -194,6 +195,7 @@ select:enabled {
 
 .button--primary {
   background: var(--color-lime);
+  color: var(--on-accent);
   box-shadow: 0 8px 20px rgba(180, 224, 77, 0.32);
 }
 
@@ -613,7 +615,7 @@ select:enabled {
   place-items: center;
   border-radius: 16px;
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
 }
 
 .auth-card__icon svg {
@@ -975,7 +977,7 @@ select:enabled {
 .preparation-progress__step--active > span {
   border-color: var(--color-lime-dark);
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
 }
 
 .preparation-panel {
@@ -1166,6 +1168,7 @@ select:enabled {
   place-items: center;
   border-radius: 17px;
   background: var(--color-lime);
+  color: var(--on-accent);
   line-height: 0;
 }
 
@@ -1279,7 +1282,7 @@ select:enabled {
 .app-frame--platform .sidebar__context-icon,
 .app-frame--platform .nav-item--active {
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
 }
 
 .app-frame--platform .nav-item--active span {
@@ -1363,7 +1366,7 @@ select:enabled {
 
 .nav-item--active {
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
 }
 
 .nav-item--active:hover {
@@ -1437,6 +1440,7 @@ select:enabled {
 
 .stat-card__icon--lime {
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .stat-card__icon svg,
@@ -1509,7 +1513,7 @@ select:enabled {
 
 .dashboard-card--dark .dashboard-card__icon {
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
 }
 
 .dashboard-card h2 {
@@ -1832,7 +1836,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 18px;
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
 }
 
 .operational-panel__main-icon svg {
@@ -2207,6 +2211,7 @@ tbody tr:last-child td {
 
 .empty-state__icon {
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .cash-hero {
@@ -2233,6 +2238,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 20px;
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .cash-hero__icon svg {
@@ -2782,7 +2788,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 13px;
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
   font-size: 1.15rem;
   font-variant-numeric: tabular-nums;
 }
@@ -2944,6 +2950,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 16px;
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .kitchen-empty-state > span svg {
@@ -2990,6 +2997,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 14px;
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .queue-column__icon svg {
@@ -3139,7 +3147,7 @@ tbody tr:last-child td {
   border-radius: 26px;
   background: var(--color-lime);
   padding: clamp(24px, 4vw, 40px);
-  color: var(--color-ink);
+  color: var(--on-accent);
   transition:
     transform 200ms var(--ease),
     box-shadow 200ms ease;
@@ -3250,6 +3258,7 @@ tbody tr:last-child td {
   flex: 0 0 auto;
   border-radius: 18px;
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .establishment-card__media .establishment-card__icon,
@@ -3273,6 +3282,7 @@ tbody tr:last-child td {
 
 .establishment-card__icon {
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .establishment-card h2 {
@@ -3382,6 +3392,7 @@ tbody tr:last-child td {
 .stripe-panel--ready .stripe-panel__icon,
 .stripe-panel--connected .stripe-panel__icon {
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .stripe-panel--warning .stripe-panel__icon {
@@ -3758,6 +3769,7 @@ tbody tr:last-child td {
 .invitation-progress__step--active > span {
   border-color: var(--color-lime);
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .invitation-card__icon {
@@ -3768,6 +3780,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 17px;
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .invitation-card__icon svg {
@@ -3936,6 +3949,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 20px;
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .verification-icon--error {
@@ -4403,6 +4417,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 11px;
   background: var(--color-lime);
+  color: var(--on-accent);
   font-size: 0.78rem;
   font-weight: 800;
 }
@@ -5311,7 +5326,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 13px;
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
 }
 
 .analytics-toolbar__icon svg,
@@ -5844,7 +5859,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 14px;
   background: var(--color-lime);
-  color: var(--color-ink);
+  color: var(--on-accent);
 }
 
 .cashback-context svg,
@@ -6064,6 +6079,7 @@ tbody tr:last-child td {
   place-items: center;
   border-radius: 12px;
   background: var(--color-lime);
+  color: var(--on-accent);
 }
 
 .cashback-kpi svg {
@@ -6326,7 +6342,7 @@ tbody tr:last-child td {
   padding: 10px 14px;
   border-radius: 14px;
   background: var(--color-lime, #bde063);
-  color: var(--color-ink, #16150f);
+  color: var(--on-accent);
   font-size: 0.875rem;
 }
 
