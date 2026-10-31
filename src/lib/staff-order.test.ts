@@ -3,12 +3,14 @@ import type { CatalogProduct, SpaceAvailability } from '../types/api';
 import {
   alternarOpcion,
   BORRADOR_VACIO,
+  borradorInicialStaff,
   construirPedidoStaff,
   erroresDeLinea,
   erroresDePedido,
   espaciosParaPedido,
   llaveParaEnvio,
   opcionesIniciales,
+  pagoAlFinalPorDefecto,
   totalLineaCents,
   totalPedidoCents,
   type StaffOrderDraft,
@@ -176,8 +178,19 @@ describe('payload del pedido de staff', () => {
       metodo_pago: 'efectivo',
       destino: 'para_llevar',
       espacio_id: null,
+      pago_diferido: false,
       items: [{ producto_id: 1, cantidad: 1, opcion_ids: [101] }],
     });
+  });
+
+  it('mostrador o barra (para llevar) manda pago_diferido false aunque el borrador lo tuviera', () => {
+    const body = construirPedidoStaff(borrador({ destino: 'para_llevar', pagoAlFinal: true }));
+    expect(body.pago_diferido).toBe(false);
+  });
+
+  it('en mesa con pagar al final desmarcado manda pago_diferido false explícito', () => {
+    const body = construirPedidoStaff(borrador({ destino: 'en_espacio', espacioId: 5, pagoAlFinal: false }));
+    expect(body).toMatchObject({ destino: 'en_espacio', espacio_id: 5, pago_diferido: false });
   });
 
   it('en una mesa a pagar al final lleva el espacio y la bandera', () => {
@@ -207,6 +220,28 @@ describe('payload del pedido de staff', () => {
   it('las opciones van ordenadas para que el hash idempotente no dependa del orden de clic', () => {
     const body = construirPedidoStaff(borrador({ lineas: [linea({ opcionIds: [203, 201] })] }));
     expect(body.items[0]?.opcion_ids).toEqual([201, 203]);
+  });
+});
+
+describe('pago al final por defecto', () => {
+  it('solo aplica en mesa cuando el negocio lo permite', () => {
+    expect(pagoAlFinalPorDefecto('en_espacio', true)).toBe(true);
+    expect(pagoAlFinalPorDefecto('en_espacio', false)).toBe(false);
+    expect(pagoAlFinalPorDefecto('para_llevar', true)).toBe(false);
+  });
+
+  it('el borrador inicial respeta mesa precargada y la configuración', () => {
+    expect(borradorInicialStaff()).toMatchObject({ destino: 'para_llevar', pagoAlFinal: false });
+    expect(borradorInicialStaff({ espacioId: 3, permitePagoAlFinal: true })).toMatchObject({
+      destino: 'en_espacio',
+      espacioId: 3,
+      pagoAlFinal: true,
+    });
+    expect(borradorInicialStaff({ espacioId: 3, permitePagoAlFinal: false })).toMatchObject({
+      destino: 'en_espacio',
+      espacioId: 3,
+      pagoAlFinal: false,
+    });
   });
 });
 

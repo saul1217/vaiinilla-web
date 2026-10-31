@@ -228,7 +228,7 @@ export interface StaffOrderInput {
   espacio_id: number | null;
   items: Array<{ producto_id: number; cantidad: number; opcion_ids: number[] }>;
   nombre_cliente?: string;
-  pago_diferido?: true;
+  pago_diferido: boolean;
   cobrar_ahora?: true;
   monto_recibido?: string;
 }

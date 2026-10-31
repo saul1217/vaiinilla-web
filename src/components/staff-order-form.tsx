@@ -1,19 +1,20 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Minus, Plus } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
 import { formatMoney } from '../lib/money';
 import {
   alternarOpcion,
-  BORRADOR_VACIO,
+  borradorInicialStaff,
   construirPedidoStaff,
   erroresDePedido,
   espaciosParaPedido,
   llaveParaEnvio,
   MAX_LINE_QUANTITY,
   opcionesIniciales,
+  pagoAlFinalPorDefecto,
   totalPedidoTexto,
   type LlaveDeEnvio,
   type StaffOrderDraft,
@@ -37,13 +38,44 @@ interface StaffOrderFormProps {
   initialSpaceId?: number;
 }
 
-export function StaffOrderForm({ token, rol, onCreated, initialSpaceId }: StaffOrderFormProps) {
+export function StaffOrderForm(props: StaffOrderFormProps) {
+  const negocio = useQuery({
+    queryKey: ['business-settings', 'staff-order'],
+    queryFn: () => api.businessSettings(props.token),
+  });
+  if (props.initialSpaceId !== undefined && negocio.isPending) {
+    return <Feedback tone="info">Cargando configuración del negocio…</Feedback>;
+  }
+  return (
+    <StaffOrderFormBody
+      {...props}
+      permitePagoAlFinal={negocio.data?.permite_pago_al_final ?? false}
+    />
+  );
+}
+
+function StaffOrderFormBody({
+  token,
+  rol,
+  onCreated,
+  initialSpaceId,
+  permitePagoAlFinal,
+}: StaffOrderFormProps & { permitePagoAlFinal: boolean }) {
   const puedeCobrarAhora = rol === 'cajero';
-  const [draft, setDraft] = useState<StaffOrderDraft>(() => initialSpaceId === undefined
-    ? BORRADOR_VACIO
-    : { ...BORRADOR_VACIO, destino: 'en_espacio', espacioId: initialSpaceId });
+  const [draft, setDraft] = useState<StaffOrderDraft>(() =>
+    borradorInicialStaff({ espacioId: initialSpaceId, permitePagoAlFinal }),
+  );
   const [errores, setErrores] = useState<string[]>([]);
   const [llave, setLlave] = useState<LlaveDeEnvio | null>(null);
+  const pagoAlFinalTocado = useRef(false);
+
+  useEffect(() => {
+    if (!permitePagoAlFinal || pagoAlFinalTocado.current) return;
+    setDraft((previo) => {
+      if (previo.destino !== 'en_espacio' || previo.pagoAlFinal) return previo;
+      return { ...previo, pagoAlFinal: true };
+    });
+  }, [permitePagoAlFinal]);
 
   const catalogo = useQuery({
     queryKey: ['staff-order', 'catalog'],
@@ -132,7 +164,12 @@ export function StaffOrderForm({ token, rol, onCreated, initialSpaceId }: StaffO
           <button
             type="button"
             aria-pressed={draft.destino === 'en_espacio'}
-            onClick={() => actualizar({ destino: 'en_espacio' })}
+            onClick={() =>
+              actualizar({
+                destino: 'en_espacio',
+                pagoAlFinal: pagoAlFinalPorDefecto('en_espacio', permitePagoAlFinal),
+              })
+            }
           >
             En mesa
           </button>
@@ -260,9 +297,10 @@ export function StaffOrderForm({ token, rol, onCreated, initialSpaceId }: StaffO
             <input
               type="checkbox"
               checked={draft.pagoAlFinal}
-              onChange={(event) =>
-                actualizar({ pagoAlFinal: event.target.checked, cobrarAhora: false, montoRecibido: '' })
-              }
+              onChange={(event) => {
+                pagoAlFinalTocado.current = true;
+                actualizar({ pagoAlFinal: event.target.checked, cobrarAhora: false, montoRecibido: '' });
+              }}
             />
             Pagar al final, con la cuenta de la mesa
           </label>

@@ -18,6 +18,7 @@ import { QrTokenField } from './qr-token-field';
 import { api } from '../lib/api';
 import { deliveryRequiresQr as orderRequiresQr } from '../lib/delivery-policy';
 import { errorMessage } from '../lib/api-error';
+import { mustCollectBeforeDelivery, mensajeCobroAntesDeEntregar } from '../lib/cashier-queue';
 import type { SpaceAvailability } from '../types/api';
 import {
   CALL_REASON_LABEL,
@@ -424,7 +425,20 @@ export function WaiterBoard({
                     <p>{order.items_resumen}</p>
                   </div>
                   {order.estado === 'listo' && canDeliver ? (
-                    deliveryRequiresQr(order) ? (
+                    mustCollectBeforeDelivery(order) ? (
+                      <div className="mesero-orders__blocked">
+                        <span
+                          className="mesero-orders__blocked-tag"
+                          aria-describedby={`mesero-order-${order.id}-pay-first`}
+                        >
+                          <CheckCircle2 aria-hidden="true" className="size-5" />
+                          Entregar
+                        </span>
+                        <p id={`mesero-order-${order.id}-pay-first`} role="status">
+                          {mensajeCobroAntesDeEntregar(order.saldo_pendiente)}
+                        </p>
+                      </div>
+                    ) : deliveryRequiresQr(order) ? (
                       <Button onClick={() => { deliverMutation.reset(); setDelivering(order); setQrToken(''); }}>
                         <ScanLine aria-hidden="true" className="size-5" /> Entregar
                       </Button>

@@ -30,6 +30,28 @@ export const BORRADOR_VACIO: StaffOrderDraft = {
   montoRecibido: '',
 };
 
+/** Pagar al final solo aplica en mesa y cuando el negocio lo permite (Flujo de mi tienda). */
+export function pagoAlFinalPorDefecto(
+  destino: StaffOrderDraft['destino'],
+  permitePagoAlFinal: boolean,
+): boolean {
+  return destino === 'en_espacio' && permitePagoAlFinal;
+}
+
+export function borradorInicialStaff(options: {
+  espacioId?: number;
+  permitePagoAlFinal?: boolean;
+} = {}): StaffOrderDraft {
+  const destino = options.espacioId !== undefined ? 'en_espacio' : 'para_llevar';
+  const espacioId = options.espacioId ?? null;
+  return {
+    ...BORRADOR_VACIO,
+    destino,
+    espacioId,
+    pagoAlFinal: pagoAlFinalPorDefecto(destino, options.permitePagoAlFinal ?? false),
+  };
+}
+
 /** Las canchas que se rentan se cobran con su renta; no se les abre un pedido de mostrador. */
 export function espaciosParaPedido(disponibilidad: SpaceAvailability[]): SpaceAvailability[] {
   return disponibilidad
@@ -143,7 +165,7 @@ export function construirPedidoStaff(draft: StaffOrderDraft): StaffOrderInput {
       opcion_ids: [...linea.opcionIds].sort((a, b) => a - b),
     })),
     ...(nombre ? { nombre_cliente: nombre } : {}),
-    ...(draft.pagoAlFinal ? { pago_diferido: true } : {}),
+    pago_diferido: draft.destino === 'en_espacio' && draft.pagoAlFinal,
     ...(draft.cobrarAhora ? { cobrar_ahora: true } : {}),
     ...(montoRecibido ? { monto_recibido: montoRecibido } : {}),
   };
