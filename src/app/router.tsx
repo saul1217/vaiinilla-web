@@ -4,6 +4,7 @@ import { PlatformShell, TenantShell } from '../components/app-shell';
 import { PlatformGuard, RoleGuard, TenantGuard } from '../components/route-guards';
 import { Spinner } from '../components/brand-mark';
 import { useAdminTheme } from '../lib/admin-theme';
+import { CASHBACK_ENABLED } from '../lib/features';
 
 const AuthPage = lazy(() => import('../pages/auth-page').then((module) => ({ default: module.AuthPage })));
 const AccessSelectionPage = lazy(() => import('../pages/access-selection-page').then((module) => ({ default: module.AccessSelectionPage })));
@@ -13,7 +14,9 @@ const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
 const KitchenPage = lazy(() => import('../pages/kitchen-page').then((module) => ({ default: module.KitchenPage })));
 const MenuPage = lazy(() => import('../pages/menu-page').then((module) => ({ default: module.MenuPage })));
-const CashbackPage = lazy(() => import('../pages/cashback-page').then((module) => ({ default: module.CashbackPage })));
+const CashbackPage = CASHBACK_ENABLED
+  ? lazy(() => import('../pages/cashback-page').then((module) => ({ default: module.CashbackPage })))
+  : null;
 const StoreFlowPage = lazy(() => import('../pages/store-flow-page').then((module) => ({ default: module.StoreFlowPage })));
 const SpacesPage = lazy(() => import('../pages/spaces-page').then((module) => ({ default: module.SpacesPage })));
 const PlatformDashboardPage = lazy(() => import('../pages/platform-dashboard-page').then((module) => ({ default: module.PlatformDashboardPage })));
@@ -63,11 +66,15 @@ function TenantArea() {
               <MenuPage />
             </RoleGuard>
           </Route>
-          <Route path="/app/cashback">
-            <RoleGuard allowed={['admin']}>
-              <CashbackPage />
-            </RoleGuard>
-          </Route>
+          {CASHBACK_ENABLED && CashbackPage ? (
+            <Route path="/app/cashback">
+              <RoleGuard allowed={['admin']}>
+                <CashbackPage />
+              </RoleGuard>
+            </Route>
+          ) : (
+            <Redirect from="/app/cashback" to="/app" />
+          )}
           <Route path="/app/flujo">
             <RoleGuard allowed={['admin']}>
               <StoreFlowPage />

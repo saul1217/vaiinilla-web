@@ -1,6 +1,7 @@
 import { Clock3, MapPin, ReceiptText, UserRound } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { formatMoney } from '../lib/money';
+import { CASHBACK_ENABLED } from '../lib/features';
 import type { OrderDetail } from '../types/api';
 import { OrderStatusBadge } from './status-badge';
 
@@ -59,28 +60,30 @@ export function OrderCard({
   );
 }
 
-export function OrderDetailContent({ order }: { order: OrderDetail }) {
+export function OrderDetailContent({ order, hideSummary = false }: { order: OrderDetail; hideSummary?: boolean }) {
   return (
     <div className="order-detail">
-      <div className="order-detail__summary">
+      {!hideSummary && <div className="order-detail__summary">
         <div><small>Folio</small><strong>{order.folio}</strong></div>
         <div><small>Estado</small><OrderStatusBadge status={order.estado} /></div>
         <div><small>Cliente</small><strong>{order.usuario?.nombre ?? 'Cliente'}</strong></div>
         <div><small>Creado</small><strong>{formatDateTime(order.creado_en)}</strong></div>
-      </div>
+      </div>}
       <OrderItems order={order} expanded />
       {order.notas_cocina && <div className="order-note"><strong>Notas de cocina</strong><p>{order.notas_cocina}</p></div>}
       <dl className="order-totals">
         <div><dt>Subtotal</dt><dd>{formatMoney(order.subtotal)}</dd></div>
         <div><dt>Ahorro combinado</dt><dd>− {formatMoney(order.ahorro_combinado)}</dd></div>
-        {order.cashback_otorgado !== '0.00' && <div><dt>Cashback</dt><dd>{formatMoney(order.cashback_otorgado)}</dd></div>}
+        {CASHBACK_ENABLED && order.cashback_otorgado !== '0.00' && (
+          <div><dt>Cashback</dt><dd>{formatMoney(order.cashback_otorgado)}</dd></div>
+        )}
         <div className="order-totals__total"><dt>Total</dt><dd>{formatMoney(order.total)}</dd></div>
       </dl>
     </div>
   );
 }
 
-function OrderItems({ order, expanded = false }: { order: OrderDetail; expanded?: boolean }) {
+export function OrderItems({ order, expanded = false }: { order: OrderDetail; expanded?: boolean }) {
   return (
     <ul className={`order-items ${expanded ? 'order-items--expanded' : ''}`} aria-label="Productos del pedido">
       {order.items.map((item) => (

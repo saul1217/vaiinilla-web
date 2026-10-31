@@ -1,30 +1,18 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  CalendarClock,
-  Copy,
-  Download,
-  ExternalLink,
-  ImageIcon,
-  Nfc,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Store,
-  Table2,
-  Trash2,
-  UploadCloud,
-  X,
-} from 'lucide-react';
-import QRCode from 'qrcode';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { CalendarClock, ImageIcon, Plus, RefreshCw, Store, Trash2, UploadCloud, X } from 'lucide-react';
+import { useRef, useState, type FormEvent } from 'react';
 import { CourtBookingsCard } from '../components/court-bookings-card';
 import { BookingRefundsCard } from '../components/booking-refunds-card';
-import { Button, CustomSelect, Feedback, Field, PageHeader } from '../components/ui';
+import { AppSheet } from '../components/app-sheet';
+import { SpaceListItem } from '../components/space-list-item';
+import { SpaceQrSheet } from '../components/space-qr-sheet';
+import { SpaceEditorSheet } from '../components/space-editor-sheet';
+import { Button, CustomSelect, Feedback, Field } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { parseHourlyPrice } from '../lib/hourly-price';
-import { canWriteNfc, writeNfcUrl } from '../lib/nfc-tag';
 import {
   addFeature,
   COURT_FEATURE_SUGGESTIONS,
@@ -105,8 +93,7 @@ function SpaceProfile({
   const [features, setFeatures] = useState(savedFeatures);
   const [draftFeature, setDraftFeature] = useState('');
   const [imageError, setImageError] = useState<string | null>(null);
-  const changed =
-    (description.trim() || null) !== savedDescription || !sameFeatures(features, savedFeatures);
+  const changed = (description.trim() || null) !== savedDescription || !sameFeatures(features, savedFeatures);
   const full = features.length >= MAX_FEATURES;
   const suggestions = COURT_FEATURE_SUGGESTIONS.filter(
     (suggestion) => !features.some((feature) => feature.toLocaleLowerCase('es') === suggestion.toLocaleLowerCase('es')),
@@ -190,7 +177,10 @@ function SpaceProfile({
         {features.length > 0 && (
           <ul className="flex flex-wrap gap-2" aria-label="Características">
             {features.map((feature) => (
-              <li key={feature} className="flex items-center gap-1 rounded-full bg-lime px-3 py-1 text-sm font-bold text-ink">
+              <li
+                key={feature}
+                className="flex items-center gap-1 rounded-full bg-lime px-3 py-1 text-sm font-bold text-ink"
+              >
                 {feature}
                 <button
                   type="button"
@@ -251,7 +241,15 @@ function SpaceProfile({
 const MAX_BATCH = 500;
 
 /** Crear muchos espacios numerados de una vez: "Asiento 1" … "Asiento 100", cada uno con su QR. */
-function BatchSpacesCard({ onCreated }: { onCreated: (message: string) => void }) {
+function BatchSpacesCard({
+  onCreated,
+  open,
+  onOpenChange,
+}: {
+  onCreated: (message: string) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { tenant } = useSessions();
   const token = tenant?.token ?? '';
   const scopeId = tenant?.context.establecimiento_id ?? '';
@@ -263,7 +261,12 @@ function BatchSpacesCard({ onCreated }: { onCreated: (message: string) => void }
   const start = Number(from);
   const end = Number(to);
   const validRange =
-    from.trim() !== '' && to.trim() !== '' && Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end >= start;
+    from.trim() !== '' &&
+    to.trim() !== '' &&
+    Number.isInteger(start) &&
+    Number.isInteger(end) &&
+    start >= 0 &&
+    end >= start;
   const count = validRange ? end - start + 1 : 0;
   const tooMany = count > MAX_BATCH;
   const label = prefix.trim();
@@ -279,52 +282,85 @@ function BatchSpacesCard({ onCreated }: { onCreated: (message: string) => void }
     },
   });
   return (
-    <section className="panel-card p-5 sm:p-6" aria-labelledby="batch-spaces-title">
-      <h2 id="batch-spaces-title" className="text-xl font-extrabold text-ink">
-        Crear varios a la vez
-      </h2>
-      <p className="mt-1 text-sm text-muted">
-        Para un cine, un estadio o un evento: crea asientos numerados, cada uno con su propio QR.
-      </p>
-      {create.isError && <Feedback tone="error">{errorMessage(create.error)}</Feedback>}
-      <form
-        className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_120px_120px_auto] md:items-end [&>*]:min-w-0"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (validRange && !tooMany && label) create.mutate();
-        }}
-      >
-        <CustomSelect
-          label="Tipo"
-          value={type}
-          onChange={(next) => setType(next as SpaceType)}
-          options={[
-            { value: 'asiento', label: 'Asiento' },
-            { value: 'mesa', label: 'Mesa' },
-            { value: 'barra', label: 'Barra' },
-            { value: 'drive_thru', label: 'Drive-thru' },
-          ]}
-        />
-        <Field label="Nombre base" name="batch-prefix" value={prefix} onChange={(event) => setPrefix(event.target.value)} maxLength={70} required />
-        <Field label="Desde" name="batch-from" type="number" min={0} value={from} onChange={(event) => setFrom(event.target.value)} required />
-        <Field label="Hasta" name="batch-to" type="number" min={0} value={to} onChange={(event) => setTo(event.target.value)} required />
-        <Button type="submit" loading={create.isPending} disabled={!validRange || tooMany || !label}>
-          <Plus aria-hidden="true" className="size-4" />
-          Crear {count > 0 ? count : ''}
-        </Button>
-      </form>
-      <p className="mt-3 text-xs leading-5 text-muted" role="status">
-        {!validRange
-          ? 'Escribe el número inicial y el final (el final no puede ser menor).'
-          : tooMany
-            ? `Máximo ${MAX_BATCH} a la vez.`
-            : `Se crearán ${count}: ${label} ${start}${count > 1 ? ` … ${label} ${end}` : ''}. Los nombres que ya existan se omiten.`}
-      </p>
-    </section>
+    <AppSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Crear varios espacios"
+      description="Crea un rango de espacios con nombres numerados."
+      size="large"
+    >
+      <AppSheet.Body>
+        <section aria-labelledby="batch-spaces-title">
+          <h2 id="batch-spaces-title" className="sr-only">
+            Crear varios a la vez
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Para un cine, un estadio o un evento: crea asientos numerados, cada uno con su propio QR.
+          </p>
+          {create.isError && <Feedback tone="error">{errorMessage(create.error)}</Feedback>}
+          <form
+            className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_120px_120px_auto] md:items-end [&>*]:min-w-0"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (validRange && !tooMany && label) create.mutate();
+            }}
+          >
+            <CustomSelect
+              label="Tipo"
+              value={type}
+              onChange={(next) => setType(next as SpaceType)}
+              options={[
+                { value: 'asiento', label: 'Asiento' },
+                { value: 'mesa', label: 'Mesa' },
+                { value: 'barra', label: 'Barra' },
+                { value: 'drive_thru', label: 'Drive-thru' },
+              ]}
+            />
+            <Field
+              label="Nombre base"
+              name="batch-prefix"
+              value={prefix}
+              onChange={(event) => setPrefix(event.target.value)}
+              maxLength={70}
+              required
+            />
+            <Field
+              label="Desde"
+              name="batch-from"
+              type="number"
+              min={0}
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              required
+            />
+            <Field
+              label="Hasta"
+              name="batch-to"
+              type="number"
+              min={0}
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+              required
+            />
+            <Button type="submit" loading={create.isPending} disabled={!validRange || tooMany || !label}>
+              <Plus aria-hidden="true" className="size-4" />
+              Crear {count > 0 ? count : ''}
+            </Button>
+          </form>
+          <p className="mt-3 text-xs leading-5 text-muted" role="status">
+            {!validRange
+              ? 'Escribe el número inicial y el final (el final no puede ser menor).'
+              : tooMany
+                ? `Máximo ${MAX_BATCH} a la vez.`
+                : `Se crearán ${count}: ${label} ${start}${count > 1 ? ` … ${label} ${end}` : ''}. Los nombres que ya existan se omiten.`}
+          </p>
+        </section>
+      </AppSheet.Body>
+    </AppSheet>
   );
 }
 
-function BookingSettingsCard() {
+function BookingSettingsCard({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { tenant } = useSessions();
   const token = tenant?.token ?? '';
   const scopeId = tenant?.context.establecimiento_id ?? '';
@@ -345,78 +381,95 @@ function BookingSettingsCard() {
     },
   });
   const current = settings.data;
-  const values = draft ?? (current ? { apertura: current.apertura, cierre: current.cierre, dias: String(current.dias_adelanto) } : null);
+  const values =
+    draft ??
+    (current ? { apertura: current.apertura, cierre: current.cierre, dias: String(current.dias_adelanto) } : null);
   const days = values ? Number(values.dias) : NaN;
   const sameHours = Boolean(values && values.cierre === values.apertura);
   const crossesMidnight = Boolean(values && values.cierre < values.apertura);
   const invalid = !values || sameHours || !Number.isInteger(days) || days < 0 || days > 60;
   const changed =
-    Boolean(draft) && current !== undefined &&
-    (draft?.apertura !== current.apertura || draft?.cierre !== current.cierre || Number(draft?.dias) !== current.dias_adelanto);
+    Boolean(draft) &&
+    current !== undefined &&
+    (draft?.apertura !== current.apertura ||
+      draft?.cierre !== current.cierre ||
+      Number(draft?.dias) !== current.dias_adelanto);
   return (
-    <section className="panel-card p-5 sm:p-6" aria-labelledby="booking-settings-title">
-      <div className="mb-5 flex items-start gap-3">
-        <span className="grid size-11 place-items-center rounded-2xl bg-ink text-white-warm">
-          <CalendarClock aria-hidden="true" />
-        </span>
-        <div>
-          <h2 id="booking-settings-title" className="text-xl font-extrabold text-ink">
-            Horario de reservas
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Las canchas con precio se rentan dentro de este horario{current ? ` (hora de ${current.zona_horaria})` : ''}.
+    <AppSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Configurar reservas y horarios"
+      description="Ajusta la anticipación y el horario disponible."
+      size="large"
+    >
+      <AppSheet.Body>
+        <section aria-labelledby="booking-settings-title">
+          <div className="mb-5 flex items-start gap-3">
+            <span className="grid size-11 place-items-center rounded-2xl bg-ink text-white-warm">
+              <CalendarClock aria-hidden="true" />
+            </span>
+            <div>
+              <h2 id="booking-settings-title" className="text-xl font-extrabold text-ink">
+                Horario de reservas
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                Las canchas con precio se rentan dentro de este horario
+                {current ? ` (hora de ${current.zona_horaria})` : ''}.
+              </p>
+            </div>
+          </div>
+          {settings.isError && <Feedback tone="error">{errorMessage(settings.error)}</Feedback>}
+          {save.isError && <Feedback tone="error">{errorMessage(save.error)}</Feedback>}
+          {saved && !save.isError && <Feedback tone="success">Horario guardado.</Feedback>}
+          {values && (
+            <form
+              className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end [&>*]:min-w-0"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setSaved(false);
+                if (!invalid && changed)
+                  save.mutate({ apertura: values.apertura, cierre: values.cierre, dias_adelanto: days });
+              }}
+            >
+              <Field
+                label="Abre"
+                name="booking-open"
+                type="time"
+                value={values.apertura}
+                onChange={(event) => setDraft({ ...values, apertura: event.target.value })}
+                required
+              />
+              <Field
+                label="Cierra"
+                name="booking-close"
+                type="time"
+                value={values.cierre}
+                onChange={(event) => setDraft({ ...values, cierre: event.target.value })}
+                error={sameHours ? 'El cierre debe ser distinto de la apertura.' : undefined}
+                hint={crossesMidnight ? 'Cruza la medianoche (del día siguiente)' : undefined}
+                required
+              />
+              <Field
+                label="Días de anticipación"
+                name="booking-days"
+                type="number"
+                min={0}
+                max={60}
+                value={values.dias}
+                onChange={(event) => setDraft({ ...values, dias: event.target.value })}
+                required
+              />
+              <Button type="submit" loading={save.isPending} disabled={invalid || !changed}>
+                Guardar horario
+              </Button>
+            </form>
+          )}
+          <p className="mt-3 text-xs leading-5 text-muted">
+            Días de anticipación: cuántos días adelante se puede reservar (de 0 a 60).
           </p>
-        </div>
-      </div>
-      {settings.isError && <Feedback tone="error">{errorMessage(settings.error)}</Feedback>}
-      {save.isError && <Feedback tone="error">{errorMessage(save.error)}</Feedback>}
-      {saved && !save.isError && <Feedback tone="success">Horario guardado.</Feedback>}
-      {values && (
-        <form
-          className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end [&>*]:min-w-0"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSaved(false);
-            if (!invalid && changed) save.mutate({ apertura: values.apertura, cierre: values.cierre, dias_adelanto: days });
-          }}
-        >
-          <Field
-            label="Abre"
-            name="booking-open"
-            type="time"
-            value={values.apertura}
-            onChange={(event) => setDraft({ ...values, apertura: event.target.value })}
-            required
-          />
-          <Field
-            label="Cierra"
-            name="booking-close"
-            type="time"
-            value={values.cierre}
-            onChange={(event) => setDraft({ ...values, cierre: event.target.value })}
-            error={sameHours ? 'El cierre debe ser distinto de la apertura.' : undefined}
-            hint={crossesMidnight ? 'Cruza la medianoche (del día siguiente)' : undefined}
-            required
-          />
-          <Field
-            label="Días de anticipación"
-            name="booking-days"
-            type="number"
-            min={0}
-            max={60}
-            value={values.dias}
-            onChange={(event) => setDraft({ ...values, dias: event.target.value })}
-            required
-          />
-          <Button type="submit" loading={save.isPending} disabled={invalid || !changed}>
-            Guardar horario
-          </Button>
-        </form>
-      )}
-      <p className="mt-3 text-xs leading-5 text-muted">
-        Días de anticipación: cuántos días adelante se puede reservar (de 0 a 60).
-      </p>
-    </section>
+        </section>
+      </AppSheet.Body>
+    </AppSheet>
   );
 }
 
@@ -443,234 +496,158 @@ function SpaceCard({
   onUploadImage: (file: File) => void;
   onRemoveImage: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const [nfc, setNfc] = useState<'idle' | 'waiting' | 'done' | 'error'>('idle');
-  const [qr, setQr] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [draftName, setDraftName] = useState(space.nombre);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
-  const nameValue = editing ? draftName : space.nombre;
-
-  useEffect(() => {
-    let mounted = true;
-    void QRCode.toDataURL(space.qr_url, { margin: 2, width: 180, color: { dark: '#16150F', light: '#FBF9F2' } }).then(
-      (value) => {
-        if (mounted) setQr(value);
-      },
-    );
-    return () => {
-      mounted = false;
-    };
-  }, [space.qr_url]);
-
-  async function writeTag() {
-    setNfc('waiting');
-    try {
-      await writeNfcUrl(space.qr_url);
-      setNfc('done');
-    } catch {
-      setNfc('error');
-    }
-  }
-
-  async function copyUrl() {
-    await navigator.clipboard.writeText(space.qr_url);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  }
-
+  const editButton = useRef<HTMLButtonElement>(null);
+  const qrButton = useRef<HTMLButtonElement>(null);
   function saveName(event: FormEvent) {
     event.preventDefault();
     const next = draftName.trim();
     if (!next || next === space.nombre) {
-      setEditing(false);
       setDraftName(space.nombre);
       return;
     }
     onRename(next);
     setEditing(false);
   }
-
   return (
-    <article className="panel-card space-card-enter flex flex-col gap-5 p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-lime text-ink">
-            <Table2 aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            {editing ? (
-              <form className="swap-enter grid gap-2" onSubmit={saveName}>
-                <Field
-                  label="Nombre"
-                  value={nameValue}
-                  onChange={(event) => setDraftName(event.target.value)}
-                  maxLength={80}
-                  required
-                />
+    <>
+      <SpaceListItem
+        space={space}
+        qrRef={qrButton}
+        editRef={editButton}
+        onQr={() => setShowQr(true)}
+        onEdit={() => {
+          setDraftName(space.nombre);
+          setEditing(true);
+        }}
+      />
+      <SpaceQrSheet space={space} open={showQr} onOpenChange={setShowQr} returnFocusRef={qrButton} />
+      <SpaceEditorSheet space={space} open={editing} onOpenChange={setEditing} returnFocusRef={editButton}>
+        <div className="grid gap-5">
+          <p className="text-sm text-muted">
+            <strong>Se guarda al instante:</strong> tipo, estado y foto. <strong>Requiere Guardar:</strong> nombre,
+            precio y texto de la ficha.
+          </p>
+          <form className="grid gap-3 rounded-2xl bg-cream p-4" onSubmit={saveName}>
+            <Field
+              label="Nombre"
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              maxLength={80}
+              required
+            />
+            <Button type="submit" disabled={!draftName.trim() || draftName.trim() === space.nombre}>
+              Guardar nombre
+            </Button>
+          </form>
+          <CustomSelect
+            label="Tipo (se guarda al instante)"
+            value={space.tipo}
+            onChange={(next) => onChangeType(next as SpaceType)}
+            options={(Object.keys(typeLabels) as SpaceType[]).map((tipo) => ({ value: tipo, label: typeLabels[tipo] }))}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-cream p-4">
+            <div>
+              <p className="font-bold text-ink">Estado (se guarda al instante)</p>
+              <p className="text-sm text-muted">{space.activo ? 'Activo' : 'Inactivo'}</p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (space.activo) {
+                  setConfirmingDelete(false);
+                  setConfirmingDeactivate(true);
+                } else onToggle();
+              }}
+            >
+              {space.activo ? 'Desactivar' : 'Activar'}
+            </Button>
+          </div>
+          {confirmingDeactivate && space.activo && (
+            <div
+              className="grid gap-3 rounded-2xl bg-cream p-4"
+              role="alertdialog"
+              aria-label={`Desactivar ${space.nombre}`}
+            >
+              <p>
+                ¿Desactivar «{space.nombre}»? Dejará de estar disponible para los clientes hasta que lo actives de
+                nuevo.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="danger"
+                  onClick={() => {
+                    setConfirmingDeactivate(false);
+                    onToggle();
+                  }}
+                >
+                  Sí, desactivar
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => setConfirmingDeactivate(false)}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+          {space.tipo === 'cancha' && (
+            <HourlyPrice key={space.precio_hora ?? ''} space={space} onSave={onChangePrice} />
+          )}
+          {space.tipo === 'cancha' && (
+            <SpaceProfile
+              key={`${space.descripcion ?? ''}|${(space.caracteristicas ?? []).join('|')}`}
+              space={space}
+              saving={profileSaving}
+              onSave={onSaveProfile}
+              onUploadImage={onUploadImage}
+              onRemoveImage={onRemoveImage}
+            />
+          )}
+          <div className="border-t border-line pt-4">
+            {confirmingDelete ? (
+              <div className="grid gap-3" role="alertdialog" aria-label={`Eliminar ${space.nombre}`}>
+                <p>
+                  ¿Eliminar «{space.nombre}»? Deja de aparecer en esta lista. Sus pedidos y cuentas anteriores se
+                  conservan.
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="submit">Guardar</Button>
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="danger"
                     onClick={() => {
-                      setEditing(false);
-                      setDraftName(space.nombre);
+                      setConfirmingDelete(false);
+                      onDelete();
                     }}
                   >
+                    Sí, eliminar
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setConfirmingDelete(false)}>
                     Cancelar
                   </Button>
                 </div>
-              </form>
+              </div>
             ) : (
-              <>
-                <h2 className="text-lg font-extrabold text-ink">{space.nombre}</h2>
-                <p className="text-sm text-muted">{typeLabels[space.tipo]}</p>
-              </>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  setConfirmingDeactivate(false);
+                  setConfirmingDelete(true);
+                }}
+              >
+                <Trash2 aria-hidden="true" className="size-4" />
+                Eliminar espacio
+              </Button>
             )}
           </div>
         </div>
-        <span className={`status-badge shrink-0 ${space.activo ? 'status-badge--success' : 'status-badge--muted'}`}>
-          {space.activo ? 'Activo' : 'Inactivo'}
-        </span>
-      </div>
-      <CustomSelect
-        label="Tipo"
-        value={space.tipo}
-        onChange={(next) => onChangeType(next as SpaceType)}
-        options={(Object.keys(typeLabels) as SpaceType[]).map((tipo) => ({ value: tipo, label: typeLabels[tipo] }))}
-      />
-      {space.tipo === 'cancha' && <HourlyPrice key={space.precio_hora ?? ''} space={space} onSave={onChangePrice} />}
-      {space.tipo === 'cancha' && (
-        <SpaceProfile
-          key={`${space.descripcion ?? ''}|${(space.caracteristicas ?? []).join('|')}`}
-          space={space}
-          saving={profileSaving}
-          onSave={onSaveProfile}
-          onUploadImage={onUploadImage}
-          onRemoveImage={onRemoveImage}
-        />
-      )}
-      <div className="swap-enter flex items-center gap-4 rounded-2xl bg-cream p-4">
-        {qr && <img src={qr} alt={`Código QR de ${space.nombre}`} width="96" height="96" className="qr-enter size-24 shrink-0 rounded-xl" />}
-        <div className="min-w-0 flex-1">
-          {space.codigo ? (
-            <div className="mb-3">
-              <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-muted">Código de la mesa</p>
-              <p className="font-mono text-3xl font-extrabold tracking-[0.25em] text-ink">{space.codigo}</p>
-              <p className="text-xs leading-5 text-muted">Imprímelo junto al QR: quien no pueda escanear lo escribe en la app.</p>
-            </div>
-          ) : null}
-          <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.08em] text-muted">Enlace del QR y NFC</p>
-          <p className="break-all text-xs leading-5 text-ink">{space.qr_url}</p>
-          {canWriteNfc() ? null : (
-            <p className="mt-1 text-xs leading-5 text-muted">Para NFC, graba este enlace en la etiqueta con cualquier app de NFC.</p>
-          )}
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" onClick={() => void copyUrl()}>
-          <Copy aria-hidden="true" className="size-4" />
-          {copied ? 'Copiado' : 'Copiar enlace'}
-        </Button>
-        {qr ? (
-          <a className="button button--ghost" href={qr} download={`${space.nombre.replace(/\s+/g, '-')}-qr.png`}>
-            <Download aria-hidden="true" className="size-4" />
-            Descargar QR
-          </a>
-        ) : null}
-        <a className="button button--ghost" href={space.qr_url} target="_blank" rel="noreferrer">
-          <ExternalLink aria-hidden="true" className="size-4" />
-          Abrir
-        </a>
-        {canWriteNfc() ? (
-          <Button type="button" variant="ghost" onClick={() => void writeTag()} disabled={nfc === 'waiting'}>
-            <Nfc aria-hidden="true" className="size-4" />
-            {nfc === 'waiting'
-              ? 'Acerca la etiqueta…'
-              : nfc === 'done'
-                ? 'Grabada'
-                : nfc === 'error'
-                  ? 'No se grabó, reintenta'
-                  : 'Grabar en NFC'}
-          </Button>
-        ) : null}
-        <Button type="button" variant="ghost" onClick={() => {
-          setDraftName(space.nombre);
-          setEditing(true);
-        }}>
-          <Pencil aria-hidden="true" className="size-4" />
-          Editar nombre
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => {
-            if (space.activo) {
-              setConfirmingDelete(false);
-              setConfirmingDeactivate(true);
-            } else onToggle();
-          }}
-        >
-          {space.activo ? 'Desactivar' : 'Activar'}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => {
-            setConfirmingDeactivate(false);
-            setConfirmingDelete(true);
-          }}
-        >
-          Eliminar
-        </Button>
-      </div>
-      {confirmingDeactivate && space.activo && (
-        <div className="mt-4 grid gap-3 rounded-2xl bg-cream p-4" role="alertdialog" aria-label={`Desactivar ${space.nombre}`}>
-          <p className="text-sm leading-6 text-ink">
-            ¿Desactivar «{space.nombre}»? Dejará de estar disponible para los clientes hasta que lo actives de nuevo.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => {
-                setConfirmingDeactivate(false);
-                onToggle();
-              }}
-            >
-              Sí, desactivar
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setConfirmingDeactivate(false)}>
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      )}
-      {confirmingDelete && (
-        <div className="mt-4 grid gap-3 rounded-2xl bg-cream p-4">
-          <p className="text-sm leading-6 text-ink">
-            ¿Eliminar «{space.nombre}»? Deja de aparecer en esta lista. Sus pedidos y cuentas anteriores se conservan.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => {
-                setConfirmingDelete(false);
-                onDelete();
-              }}
-            >
-              Sí, eliminar
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setConfirmingDelete(false)}>
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      )}
-    </article>
+      </SpaceEditorSheet>
+    </>
   );
 }
 
@@ -682,6 +659,9 @@ export function SpacesPage() {
   const [name, setName] = useState('');
   const [type, setType] = useState<SpaceType>('mesa');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const spaces = useQuery({
     queryKey: ['managed-spaces', scopeId],
     enabled: Boolean(token),
@@ -691,6 +671,7 @@ export function SpacesPage() {
     mutationFn: () => api.createSpace(token, { nombre: name.trim(), tipo: type }),
     onSuccess: () => {
       setName('');
+      setCreateOpen(false);
       setFeedback('Espacio creado. El enlace ya puede convertirse en QR.');
       void queryClient.invalidateQueries({ queryKey: ['managed-spaces', scopeId] });
     },
@@ -718,49 +699,66 @@ export function SpacesPage() {
   }
   return (
     <div className="page-stack admin-screen admin-spaces">
-      <PageHeader
+      <AppPageHeader
         eyebrow="Operación del establecimiento"
         title="Mesas y espacios"
-        description="Crea espacios para que tus clientes puedan pedir desde un QR. Los enlaces pertenecen únicamente a este establecimiento."
+        action={
+          <>
+            <Button type="button" onClick={() => setCreateOpen(true)}>
+              <Plus aria-hidden="true" className="size-4" />
+              Nuevo espacio
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setBatchOpen(true)}>
+              Crear varios
+            </Button>
+          </>
+        }
       />
+      <AppSheet
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        title="Nuevo espacio"
+        description="Crea una mesa, cancha u otro espacio."
+        size="compact"
+      >
+        <AppSheet.Body>
+          <form className="grid gap-4" onSubmit={submit}>
+            {create.error && <Feedback tone="error">{errorMessage(create.error)}</Feedback>}
+            <Field
+              label="Nombre"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Mesa 01"
+              maxLength={80}
+              required
+            />
+            <CustomSelect
+              label="Tipo"
+              value={type}
+              onChange={(next) => setType(next as SpaceType)}
+              options={(Object.keys(typeLabels) as SpaceType[]).map((tipo) => ({
+                value: tipo,
+                label: typeLabels[tipo],
+              }))}
+            />
+            <Button type="submit" loading={create.isPending} disabled={!name.trim()}>
+              <Plus aria-hidden="true" className="size-4" />
+              Crear espacio
+            </Button>
+          </form>
+        </AppSheet.Body>
+      </AppSheet>
       {feedback && <Feedback tone="success">{feedback}</Feedback>}
       {mutationError && <Feedback tone="error">{errorMessage(mutationError)}</Feedback>}
       {spaces.isError && <Feedback tone="error">{errorMessage(spaces.error)}</Feedback>}
-      <section className="panel-card p-5 sm:p-6">
-        <div className="mb-5 flex items-start gap-3">
-          <span className="grid size-11 place-items-center rounded-2xl bg-ink text-white-warm">
-            <Plus aria-hidden="true" />
-          </span>
-          <div>
-            <h2 className="text-xl font-extrabold text-ink">Nuevo espacio</h2>
-            <p className="mt-1 text-sm text-muted">Puedes usar mesas, canchas o espacios drive-thru.</p>
-          </div>
-        </div>
-        <form className="grid gap-4 md:grid-cols-[1fr_220px_auto] md:items-end [&>*]:min-w-0" onSubmit={submit}>
-          <Field
-            label="Nombre"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Mesa 01"
-            maxLength={80}
-            required
-          />
-          <CustomSelect
-            label="Tipo"
-            value={type}
-            onChange={(next) => setType(next as SpaceType)}
-            options={(Object.keys(typeLabels) as SpaceType[]).map((tipo) => ({ value: tipo, label: typeLabels[tipo] }))}
-          />
-          <Button type="submit" loading={create.isPending} disabled={!name.trim()}>
-            <Plus aria-hidden="true" className="size-4" />
-            Crear espacio
-          </Button>
-        </form>
-      </section>
-      <BatchSpacesCard onCreated={setFeedback} />
-      {spaces.data?.some((space) => space.tipo === 'cancha') && <CourtBookingsCard />}
-      {spaces.data?.some((space) => space.tipo === 'cancha') && <BookingRefundsCard />}
-      {spaces.data?.some((space) => space.tipo === 'cancha') && <BookingSettingsCard />}
+      <BatchSpacesCard
+        open={batchOpen}
+        onOpenChange={setBatchOpen}
+        onCreated={(message) => {
+          setFeedback(message);
+          setBatchOpen(false);
+        }}
+      />
       <section className="space-y-4" aria-labelledby="spaces-list-title">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -784,7 +782,7 @@ export function SpacesPage() {
             <p className="mt-2 text-sm text-muted">Crea el primero arriba para comenzar a recibir pedidos en mesa.</p>
           </div>
         )}
-        <div className="spaces-grid grid gap-4 lg:grid-cols-2">
+        <div className="spaces-grid grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {spaces.data?.map((space) => (
             <SpaceCard
               key={space.id}
@@ -804,6 +802,17 @@ export function SpacesPage() {
           ))}
         </div>
       </section>
+      {spaces.data?.some((space) => space.tipo === 'cancha') && <CourtBookingsCard />}
+      {spaces.data?.some((space) => space.tipo === 'cancha') && <BookingRefundsCard />}
+      {spaces.data?.some((space) => space.tipo === 'cancha') && (
+        <Button type="button" variant="secondary" onClick={() => setSettingsOpen(true)}>
+          <CalendarClock aria-hidden="true" className="size-4" />
+          Configurar reservas y horarios
+        </Button>
+      )}
+      {spaces.data?.some((space) => space.tipo === 'cancha') && (
+        <BookingSettingsCard open={settingsOpen} onOpenChange={setSettingsOpen} />
+      )}
     </div>
   );
 }

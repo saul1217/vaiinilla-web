@@ -1,5 +1,6 @@
+import { SegmentedControl } from './segmented-control';
 import { useMutation } from '@tanstack/react-query';
-import { CreditCard, Minus, Plus, ReceiptText, Wallet } from 'lucide-react';
+import { Minus, Plus, ReceiptText } from 'lucide-react';
 import { useState } from 'react';
 import { RollingMoney } from './rolling-money';
 import { TipPicker } from './tip-picker';
@@ -111,15 +112,8 @@ export function AccountAbonoForm({
         </div>
       )}
 
-      <div className="pay-method" role="radiogroup" aria-label="Forma de pago" data-method={method}>
-        <span className="pay-method__indicator" aria-hidden="true" />
-        <button type="button" role="radio" aria-checked={method === 'efectivo'} onClick={() => setMethod('efectivo')}>
-          <Wallet aria-hidden="true" className="size-5" /> Efectivo
-        </button>
-        <button type="button" role="radio" aria-checked={method === 'terminal'} onClick={() => setMethod('terminal')}>
-          <CreditCard aria-hidden="true" className="size-5" /> Terminal
-        </button>
-      </div>
+      <SegmentedControl legend="Forma de pago" value={method}
+        options={[{ value: 'efectivo', label: 'Efectivo' }, { value: 'terminal', label: 'Terminal' }]} onChange={setMethod} />
       <TipPicker base={charge} value={tip} onChange={setTip} />
       <p className="space-account__charge">
         <ReceiptText aria-hidden="true" className="size-5" /> {tipValue !== '0.00' ? 'Este pago con propina' : 'Este pago'}{' '}

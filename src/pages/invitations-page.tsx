@@ -1,3 +1,4 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MailPlus, MoreHorizontal, RefreshCw, UserPlus, UserX, Pencil } from 'lucide-react';
@@ -5,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { InvitationStatusBadge } from '../components/status-badge';
-import { Button, CustomSelect, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { Button, CustomSelect, EmptyState, Feedback, Field, Modal } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -135,7 +136,7 @@ export function InvitationsPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader
+      <AppPageHeader
         eyebrow="Administración"
         title="Personal e invitaciones"
         description="Cada acceso pertenece únicamente a este establecimiento y se activa con una invitación válida de un solo uso."

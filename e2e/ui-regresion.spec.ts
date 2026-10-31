@@ -3,6 +3,7 @@
 // por /dev/test-setup. Condiciones de QA_INTERFAZ_REGRESION: docs/qa-ui-regresion.md.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { installStaffR2Mocks } from './fixtures/staff-r2';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
@@ -32,7 +33,7 @@ const VIEWPORTS = [
 ] as const;
 // Solo se usa tema claro: no hay capturas del tema oscuro del personal.
 test.use({ baseURL: env.E2E_BASE_URL ?? 'http://127.0.0.1:5173', colorScheme: 'light', contextOptions: { reducedMotion: 'reduce' } });
-test.skip(!adminPassword || !cajeroPassword, 'Faltan las cuentas QA (contraseñas y correos) de la tienda de CI.');
+
 
 type Surface = { name: string; route: string; email: () => string; password: () => string; ready: (page: Page) => Promise<void>; trigger?: (page: Page) => ReturnType<Page['locator']> };
 
@@ -61,6 +62,7 @@ const SURFACES: Surface[] = [
 ];
 
 async function login(page: Page, email: string, password: string) {
+  test.skip(!adminPassword || !cajeroPassword, 'Faltan las cuentas QA de la tienda de CI.');
   await page.goto('/acceso');
   await page.getByLabel('Correo').fill(email);
   await page.getByLabel('Contraseña').fill(password);
@@ -83,7 +85,7 @@ async function blockIfDataFailed(page: Page, info: TestInfo, surface: Surface) {
 }
 
 async function open(page: Page, info: TestInfo, surface: Surface, viewport: (typeof VIEWPORTS)[number]) {
-  await page.addInitScript(() => localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'));
+  await page.addInitScript(() => { if (!localStorage.getItem('vaiinilla.panel.admin-theme')) localStorage.setItem('vaiinilla.panel.admin-theme', 'claro'); });
   await page.setViewportSize({ width: viewport.width, height: viewport.height });
   await page.clock.install({ time: FROZEN_TIME });
   await login(page, surface.email(), surface.password());
@@ -100,7 +102,7 @@ async function stabilize(page: Page) {
 }
 
 // Horas, contadores y folios cambian con los datos: se tapan en la captura.
-const volatile = (page: Page) => [page.locator('[data-qa-volatil], time, [class*="timer"], [class*="folio"], .status-badge')];
+const volatile = (page: Page) => [page.locator('[data-qa-volatil], time, [class*="timer"], [class*="folio"]')];
 
 for (const surface of SURFACES) {
   for (const viewport of VIEWPORTS) {
@@ -117,7 +119,7 @@ for (const surface of SURFACES) {
 
       test('axe: sin violaciones serias ni críticas', async ({ page }, info) => {
         await open(page, info, surface, viewport);
-        const exceptions: { id: string; ticket: string }[] = JSON.parse(readFileSync(resolve(process.cwd(), 'e2e/axe-excepciones.json'), 'utf8'));
+        const exceptions = JSON.parse(readFileSync(resolve(process.cwd(), 'e2e/axe-excepciones.json'), 'utf8')) as { id: string; ticket: string }[];
         for (const entry of exceptions) expect(entry.ticket, `La excepción axe ${entry.id} necesita ticket`).toMatch(/\S/);
         const { violations } = await new AxeBuilder({ page }).disableRules(exceptions.map((entry) => entry.id)).analyze();
         const blocking = violations.filter((violation) => violation.impact === 'serious' || violation.impact === 'critical');
@@ -128,7 +130,7 @@ for (const surface of SURFACES) {
         await open(page, info, surface, viewport);
         const overflow = await page.evaluate<number>('document.documentElement.scrollWidth - window.innerWidth');
         expect(overflow).toBeLessThanOrEqual(0);
-        const small = await page.locator('main button:visible, main a:visible').evaluateAll((nodes) =>
+        const small = await page.locator('main button:visible, main a:visible, .app-mobile-nav a:visible, .app-mobile-nav button:visible, .app-sheet button:visible, .app-sheet a:visible').evaluateAll((nodes) =>
           nodes
             .map((node) => ({ text: (node.textContent ?? '').trim().slice(0, 30), box: node.getBoundingClientRect() }))
             .filter(({ box }) => box.height < 44 || box.width < 44)
@@ -189,3 +191,236 @@ test.describe('Reservas de hoy · teclado y estados', () => {
     await expect(page.getByText('Tu rol no tiene permiso para ver las reservas.')).toBeVisible({ timeout: 20_000 });
   });
 });
+
+test('Configurar reservas y horarios abre una hoja y restaura el foco', async ({ page }, info) => {
+  await open(page, info, SURFACES[0], VIEWPORTS[0]);
+  const trigger = page.getByRole('button', { name: 'Configurar reservas y horarios' });
+  test.skip((await trigger.count()) === 0, 'La tienda QA no tiene canchas configuradas.');
+  await trigger.click();
+  const sheet = page.getByRole('dialog', { name: 'Configurar reservas y horarios' });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByLabel('Días de anticipación')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
+
+// Slice 1: real shell, account sheet and theme persistence. No snapshot updates outside CI.
+for (const theme of ['claro', 'oscuro']) {
+  test(`Shell Admin y cuenta · ${theme}`, async ({ page }, info) => {
+    await open(page, info, SURFACES[0], VIEWPORTS[0]);
+    const account = page.getByRole('button', { name: 'Abrir opciones de cuenta' });
+    if (theme === 'oscuro') {
+      await account.click();
+      await page.getByRole('button', { name: 'Cambiar a tema oscuro' }).click();
+      await page.keyboard.press('Escape');
+    }
+    await page.reload();
+    await SURFACES[0].ready(page);
+    await expect(page.locator('html')).toHaveAttribute('data-admin-theme', theme);
+    for (const width of [320, 390, 768, 1024, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect(page.getByRole('navigation', { name: 'Navegación móvil' })).toBeVisible({ visible: width < 768 });
+      await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeVisible({ visible: width >= 768 });
+      expect(await page.evaluate<number>('document.documentElement.scrollWidth - innerWidth')).toBeLessThanOrEqual(0);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobile = page.getByRole('navigation', { name: 'Navegación móvil' });
+    await expect(mobile.getByRole('link')).toHaveCount(4);
+    const more = mobile.getByRole('button', { name: 'Más' });
+    await expect(more).not.toHaveAttribute('aria-current');
+    await more.click();
+    const destinations = page.getByRole('navigation', { name: 'Más destinos' });
+    await expect(destinations.getByRole('link')).toHaveCount(4);
+    await destinations.getByRole('link', { name: 'Mesas y espacios' }).click();
+    await expect(page.locator('#contenido')).toBeFocused();
+    await account.focus();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Opciones de cuenta' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('heading')).toBeFocused();
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Tab');
+      expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    }
+    const { violations } = await new AxeBuilder({ page }).analyze();
+    expect(violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
+    await stabilize(page);
+    await expect(page).toHaveScreenshot(`cuenta-shell-${theme}-390x844.png`, { fullPage: true, mask: volatile(page) });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(account).toBeFocused();
+  });
+}
+
+// Mesero uses deterministic local fixtures and requires Vite, independently of preview/API cases above.
+for (const theme of ['claro', 'oscuro']) {
+  for (const viewport of VIEWPORTS) {
+    test(`Mesero · cuenta y pasos · ${theme} · ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await installStaffR2Mocks(page, 'mesero', theme);
+      await page.goto('/app/pos');
+      await expect(page.getByRole('heading', { level: 1, name: 'Mesas', exact: true })).toBeVisible();
+      await expect(page.locator('.staff-tile--skeleton')).toHaveCount(0);
+      await stabilize(page);
+      const capture = async (state: string) => {
+        await expect(page).toHaveScreenshot(`mesero-${state}-${theme}-${viewport.name}.png`, { fullPage: true, animations: 'disabled' });
+      };
+      const accessible = async () => {
+        const { violations } = await new AxeBuilder({ page }).analyze();
+        expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+      };
+      await capture('tablero');
+      await page.getByRole('button', { name: 'Mesa 3. Pedido listo', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Cobrar cuenta' })).toBeVisible();
+      await capture('mesa-diferida');
+      await accessible();
+      await page.getByRole('button', { name: 'Cobrar cuenta' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await page.getByRole('radio', { name: 'Por monto', exact: true }).click();
+      await page.getByRole('textbox', { name: 'Monto de este pago', exact: true }).fill('20.25');
+      await page.getByRole('textbox', { name: 'Efectivo recibido', exact: true }).fill('10');
+      await expect(page.getByRole('button', { name: 'Confirmar pago' })).toBeDisabled();
+      await expect(page.getByText('El efectivo no alcanza.', { exact: true })).toBeVisible();
+      await capture('monto-faltante');
+      await accessible();
+      await page.getByRole('radio', { name: 'Partes iguales', exact: true }).click();
+      await page.getByRole('button', { name: 'Una persona más', exact: true }).click();
+      await page.getByRole('radio', { name: 'Terminal', exact: true }).click();
+      await capture('partes-terminal');
+      await accessible();
+      await page.getByRole('radio', { name: 'Por monto', exact: true }).click();
+      await expect(page.getByRole('textbox', { name: 'Monto de este pago', exact: true })).toHaveValue('20.25');
+      await page.getByRole('button', { name: 'Volver a la cuenta', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Cobrar cuenta' })).toBeFocused();
+      await page.getByRole('button', { name: 'Nuevo pedido en esta mesa', exact: true }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await expect(page.getByRole('heading', { name: 'Pedido para Mesa 3', exact: true })).toBeVisible();
+      await capture('tomar-pedido');
+      await accessible();
+    });
+  }
+}
+
+// Slice 3: snapshots are generated only by the fixed QA container.
+for (const theme of ['claro', 'oscuro'] as const) {
+  for (const viewport of VIEWPORTS) {
+    test(`Caja · hojas · ${theme} · ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await installStaffR2Mocks(page, 'cajero', theme);
+      await page.goto('/app/pos');
+      await expect(page.locator('.cashier-queue__ticket')).toHaveCount(1);
+      await stabilize(page);
+      await expect(page).toHaveScreenshot(`caja-ticket-${theme}-${viewport.name}.png`, { fullPage: true, mask: [page.locator('time')] });
+      await page.getByRole('button', { name: /^Cobrar(?: \$.*)?$/ }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await page.getByRole('button', { name: '10%', exact: true }).click();
+      await expect(page).toHaveScreenshot(`caja-cobro-${theme}-${viewport.name}.png`, { fullPage: true });
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      expect(violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: 'Cerrar caja', exact: true }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await expect(page).toHaveScreenshot(`caja-sesion-${theme}-${viewport.name}.png`, { fullPage: true });
+    });
+  }
+}
+
+// Slice 4: deterministic Vite fixtures; baselines only in the fixed QA container.
+for (const theme of ['claro', 'oscuro']) {
+  for (const viewport of VIEWPORTS) {
+    test(`Cocina · protagonista, cola y rechazo · ${theme} · ${viewport.name}`, async ({ page }) => {
+      const { installKitchenSliceMocks } = await import('./fixtures/kitchen-slice');
+      await page.setViewportSize(viewport);
+      await installKitchenSliceMocks(page, theme);
+      await page.goto('/app/cocina');
+      const ticket = page.locator('.kitchen-work__ticket--selected');
+      await expect(ticket.getByRole('heading', { name: '#72', exact: true })).toBeVisible();
+      await stabilize(page);
+      const capture = async (state: string) => {
+        await expect(page).toHaveScreenshot(`cocina-${state}-${theme}-${viewport.name}.png`, { fullPage: true, animations: 'disabled' });
+        const { violations } = await new AxeBuilder({ page }).analyze();
+        expect(violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+      };
+      await capture('preparando-cola');
+      await ticket.getByRole('button', { name: 'No se puede preparar' }).click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toHaveAccessibleName('Rechazar pedido');
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: 'Cocina saturada', exact: true }).click();
+      await capture('rechazo-total');
+      await dialog.getByRole('radio', { name: /Tacos/ }).click();
+      await expect(page.getByRole('dialog', { name: 'Quitar Tacos', exact: true })).toBeVisible();
+      await capture('rechazo-parcial');
+      await page.route('**/mock-kitchen/item', route => route.fulfill({ status: 503, json: {} }));
+      await dialog.getByRole('button', { name: 'Quitar artículo', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toBeVisible();
+      await capture('rechazo-error');
+      await page.keyboard.press('Escape');
+      await expect(ticket.getByRole('button', { name: 'No se puede preparar' })).toBeFocused();
+      await ticket.getByRole('button', { name: 'Marcar como listo' }).click();
+      await expect(ticket.getByRole('heading', { name: '#71', exact: true })).toBeVisible();
+      await capture('nueva');
+      await ticket.getByRole('button', { name: 'Comenzar preparación' }).click();
+      await expect(ticket.getByRole('button', { name: 'Marcar como listo' })).toBeVisible();
+      await ticket.getByRole('button', { name: 'Marcar como listo' }).click();
+      await expect(ticket.getByText('Esperando entrega', { exact: true })).toBeVisible();
+      await capture('listo');
+    });
+    for (const state of ['empty', 'error'] as const) {
+      test(`Cocina · ${state} · ${theme} · ${viewport.name}`, async ({ page }) => {
+        const { installKitchenSliceMocks } = await import('./fixtures/kitchen-slice');
+        await page.setViewportSize(viewport);
+        await installKitchenSliceMocks(page, theme, state);
+        await page.goto('/app/cocina');
+        if (state === 'empty') await expect(page.getByRole('heading', { name: 'Sin comandas activas' })).toBeVisible();
+        else await expect(page.getByRole('alert').filter({ hasText: 'No se pudieron actualizar' })).toBeVisible();
+        await stabilize(page);
+        await expect(page).toHaveScreenshot(`cocina-${state}-${theme}-${viewport.name}.png`, { fullPage: true });
+      });
+    }
+  }
+}
+
+// Slice 5: Vite fixtures, both themes; generate baselines only in fixed QA CI.
+for (const theme of ['claro', 'oscuro']) {
+  for (const viewport of VIEWPORTS) {
+    test(`Admin · Inicio y Pedidos · ${theme} · ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await installStaffR2Mocks(page, 'admin', theme);
+      const capture = async (surface: string) => {
+        await stabilize(page);
+        const { violations } = await new AxeBuilder({ page }).analyze();
+        expect(violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+        await expect(page).toHaveScreenshot(`admin-${surface}-${theme}-${viewport.name}.png`, { fullPage: true, animations: 'disabled' });
+      };
+      await page.goto('/app');
+      await expect(page.getByText('Ventas confirmadas', { exact: true })).toBeVisible();
+      await expect(page.getByText('Preparando las métricas del negocio…')).toHaveCount(0);
+      await page.getByRole('button', { name: '7 días', exact: true }).click();
+      await expect(page.getByRole('button', { name: '7 días', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('complementary', { name: 'Ahora' })).toBeVisible();
+      await capture('inicio-periodo');
+      await page.goto('/app/pedidos');
+      const opener = page.getByRole('button', { name: /^Ver pedido / }).first();
+      await expect(opener).toBeVisible();
+      await capture('pedidos-lista');
+      await opener.focus();
+      await page.keyboard.press('Enter');
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByText('Pago', { exact: true })).toBeVisible();
+      await expect(dialog.getByText('Destino', { exact: true })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: /Cobrar|Entregar|Devolver/ })).toHaveCount(0);
+      await capture('pedidos-detalle');
+      await page.keyboard.press('Escape');
+      await expect(opener).toBeFocused();
+      for (const label of ['Todos', 'Entregados', 'Incidencias', 'Activos']) {
+        await page.getByRole('button', { name: label, exact: true }).click();
+        await expect(page.getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-pressed', 'true');
+      }
+    });
+  }
+}
