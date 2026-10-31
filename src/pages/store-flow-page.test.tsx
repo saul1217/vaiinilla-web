@@ -22,6 +22,12 @@ const cafeteria = {
   tipos_disponibles: ['cafeteria'],
 };
 
+function renderFlow() {
+  const result = render(<StoreFlowPage />, { wrapper: Wrapper });
+  fireEvent.click(screen.getByRole('button', { name: 'Configurar cómo funciona tu tienda' }));
+  return result;
+}
+
 function Wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return (
@@ -38,7 +44,7 @@ describe('Flujo de mi tienda', () => {
   });
 
   it('muestra el flujo actual y no hay nada que guardar sin cambios', async () => {
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     expect(await screen.findByText('Paga con saldo, tarjeta o efectivo al pedir')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Cafetería escolar/ })).toHaveAttribute('aria-pressed', 'true');
@@ -46,7 +52,7 @@ describe('Flujo de mi tienda', () => {
 
   it('una plantilla cambia el flujo de abajo y se guarda al pulsar Guardar flujo', async () => {
     const user = userEvent.setup();
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
     expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
     expect(screen.getByText('Prepara en cuanto llega el pedido, sin esperar el cobro')).toBeInTheDocument();
@@ -69,7 +75,7 @@ describe('Flujo de mi tienda', () => {
     apiMock.saveBusinessSettings.mockResolvedValue(padel);
     // La recarga posterior tarda: mientras, la pantalla debe mostrar ya lo guardado.
     apiMock.businessSettings.mockResolvedValueOnce(cafeteria).mockReturnValue(new Promise(() => {}));
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
     await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
     expect(await screen.findByText(/Flujo guardado/)).toBeInTheDocument();
@@ -79,16 +85,28 @@ describe('Flujo de mi tienda', () => {
 
   it('personalizar: pagar al final y entregar sin QR da un flujo personalizado', async () => {
     const user = userEvent.setup();
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     await user.click(await screen.findByRole('radio', { name: /Al final, con cuenta abierta/ }));
     await user.click(screen.getByRole('radio', { name: /Entregar sin QR/ }));
     expect(screen.getByText(/es un flujo personalizado/)).toBeInTheDocument();
     expect(screen.getByText('Entrega sin QR en mesa y para llevar')).toBeInTheDocument();
   });
 
+  it('conserva el borrador al cerrar y volver a abrir la hoja', async () => {
+    const user = userEvent.setup();
+    renderFlow();
+    const grace = await screen.findByLabelText('Gracia al terminar un turno (minutos)');
+    await user.clear(grace);
+    await user.type(grace, '12');
+    await user.click(screen.getByRole('button', { name: 'Cerrar ventana' }));
+    await user.click(screen.getByRole('button', { name: 'Configurar cómo funciona tu tienda' }));
+    expect(await screen.findByLabelText('Gracia al terminar un turno (minutos)')).toHaveValue(12);
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
+  });
+
   it('lo que aún no existe sale como Próximamente', async () => {
     const user = userEvent.setup();
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     await user.click(await screen.findByRole('button', { name: /Comedor de empresa/ }));
     expect(screen.getByText('Descuenta de la nómina')).toBeInTheDocument();
     expect(screen.getAllByText('Próximamente').length).toBeGreaterThan(0);
@@ -96,7 +114,7 @@ describe('Flujo de mi tienda', () => {
 
   it('elegir solo ciertas horas muestra las franjas, las valida y las guarda ordenadas', async () => {
     const user = userEvent.setup();
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     await user.click(await screen.findByRole('radio', { name: /Solo en ciertas horas/ }));
     expect(screen.getByText('Recibe pedidos solo de 12:00 a 15:00')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Agregar otra franja' }));
@@ -124,7 +142,7 @@ describe('Flujo de mi tienda', () => {
   it('volver a "a cualquier hora" quita las franjas', async () => {
     const user = userEvent.setup();
     apiMock.businessSettings.mockResolvedValue({ ...cafeteria, franjas_pedido: [{ desde: '12:00', hasta: '15:00' }] });
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     await screen.findByLabelText('Franja 1: desde');
     await user.click(screen.getByRole('radio', { name: /A cualquier hora/ }));
     expect(screen.queryByLabelText('Franja 1: desde')).not.toBeInTheDocument();
@@ -139,7 +157,7 @@ describe('Flujo de mi tienda', () => {
 
   it('una gracia fuera de 0 a 60 no se puede guardar', async () => {
     const user = userEvent.setup();
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     const grace = await screen.findByLabelText('Gracia al terminar un turno (minutos)');
     await user.clear(grace);
     await user.type(grace, '90');
@@ -148,14 +166,14 @@ describe('Flujo de mi tienda', () => {
   });
 
   it('no ofrece hoteles', async () => {
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     await screen.findByText('Cine, estadio o evento');
     expect(screen.queryByText(/hotel/i)).not.toBeInTheDocument();
   });
 
   it('muestra el error si el negocio tiene un tipo desconocido', async () => {
     apiMock.businessSettings.mockResolvedValue({ ...cafeteria, tipo: 'otro' });
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     expect(await screen.findByText(/tipo que esta pantalla no conoce/)).toBeInTheDocument();
   });
 
@@ -171,7 +189,9 @@ describe('Flujo de mi tienda', () => {
       tienda_url: 'https://vaiinilla.app/e/cafeteria-centro',
     });
     const user = userEvent.setup();
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar ventana' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Editar dónde te encuentran' }));
 
     const hidden = await screen.findByRole('radio', { name: /Solo con QR o código/ });
     expect(hidden).toHaveAttribute('aria-checked', 'true');
@@ -188,7 +208,7 @@ describe('Flujo de mi tienda', () => {
 
   it('un error de franjas no borra lo que ya se capturó en el formulario', async () => {
     const user = userEvent.setup();
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     await user.click(await screen.findByRole('radio', { name: /Solo en ciertas horas/ }));
     const grace = screen.getByLabelText('Gracia al terminar un turno (minutos)');
     await user.clear(grace);
@@ -204,7 +224,7 @@ describe('Flujo de mi tienda', () => {
   it('si el servidor rechaza el guardado, el formulario conserva lo capturado', async () => {
     const user = userEvent.setup();
     apiMock.saveBusinessSettings.mockRejectedValueOnce(new Error('Las franjas no pueden empalmarse.'));
-    render(<StoreFlowPage />, { wrapper: Wrapper });
+    renderFlow();
     await user.click(await screen.findByRole('radio', { name: /Solo en ciertas horas/ }));
     const grace = screen.getByLabelText('Gracia al terminar un turno (minutos)');
     await user.clear(grace);

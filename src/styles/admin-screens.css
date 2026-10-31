@@ -235,3 +235,11 @@ html[data-admin-theme="oscuro"] .space-qr-sheet > img { border-color: #fff; }
   html[data-admin-theme] .admin-spaces .app-page-header__actions { justify-content: stretch; }
   html[data-admin-theme] .admin-spaces .app-page-header__actions > .button { flex: 1 1 auto; }
 }
+html[data-admin-theme] .admin-flow .store-flow-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+html[data-admin-theme] .admin-flow .store-flow-summary { display:flex; align-items:center; gap:14px; min-width:0; padding:18px; }
+html[data-admin-theme] .admin-flow .store-flow-summary > svg { width:22px; height:22px; flex:none; color:var(--color-ink); }
+html[data-admin-theme] .admin-flow .store-flow-summary > div { flex:1; min-width:0; }
+html[data-admin-theme] .admin-flow .store-flow-summary h2 { margin:0; color:var(--color-ink); font-size:1rem; font-weight:800; }
+html[data-admin-theme] .admin-flow .store-flow-summary p { margin:3px 0 0; color:var(--color-muted); font-size:.85rem; }
+html[data-admin-theme] .admin-flow .store-flow-summary .button { min-height:48px; flex:none; }
+@media (max-width: 639px) { html[data-admin-theme] .admin-flow .store-flow-cards { grid-template-columns:minmax(0,1fr); } html[data-admin-theme] .admin-flow .store-flow-summary { padding:14px; } }

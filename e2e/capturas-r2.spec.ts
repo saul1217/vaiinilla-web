@@ -57,7 +57,13 @@ for (const scenario of scenarios) {
         await healthy(page, errors);
       };
       await capture();
-      if (scenario.path === '/app/espacios') {
+      if (scenario.path === '/app/flujo') {
+        await page.getByRole('button', { name: 'Configurar cómo funciona tu tienda' }).click();
+        const sheet = page.getByRole('dialog', { name: 'Cómo funciona tu tienda' });
+        await expect(sheet).toBeVisible();
+        await expect(sheet.getByText('Al final, con cuenta abierta')).toBeVisible();
+        await capture('-editor');
+      } else if (scenario.path === '/app/espacios') {
         await page.getByRole('button', { name: 'Editar Mesa 1' }).click();
         await expect(page.getByRole('dialog', { name: 'Mesa 1' })).toBeVisible();
         await capture('-ficha');
