@@ -1,6 +1,7 @@
 import { Clock3, MapPin, ReceiptText, UserRound } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { formatMoney } from '../lib/money';
+import { CASHBACK_ENABLED } from '../lib/features';
 import type { OrderDetail } from '../types/api';
 import { OrderStatusBadge } from './status-badge';
 
@@ -73,7 +74,9 @@ export function OrderDetailContent({ order }: { order: OrderDetail }) {
       <dl className="order-totals">
         <div><dt>Subtotal</dt><dd>{formatMoney(order.subtotal)}</dd></div>
         <div><dt>Ahorro combinado</dt><dd>− {formatMoney(order.ahorro_combinado)}</dd></div>
-        {order.cashback_otorgado !== '0.00' && <div><dt>Cashback</dt><dd>{formatMoney(order.cashback_otorgado)}</dd></div>}
+        {CASHBACK_ENABLED && order.cashback_otorgado !== '0.00' && (
+          <div><dt>Cashback</dt><dd>{formatMoney(order.cashback_otorgado)}</dd></div>
+        )}
         <div className="order-totals__total"><dt>Total</dt><dd>{formatMoney(order.total)}</dd></div>
       </dl>
     </div>

@@ -23,6 +23,7 @@ import {
 import { useState, type ReactNode } from 'react';
 import { NavLink, useHistory } from 'react-router-dom';
 import { useAdminTheme } from '../lib/admin-theme';
+import { CASHBACK_ENABLED } from '../lib/features';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { Logo } from './brand-mark';
@@ -39,7 +40,9 @@ const adminNavigation: NavItem[] = [
   { to: '/app', label: 'Resumen', icon: LayoutDashboard, end: true },
   { to: '/app/menu', label: 'Menú', icon: NotebookTabs },
   { to: '/app/pedidos', label: 'Pedidos e historial', icon: ClipboardList },
-  { to: '/app/cashback', label: 'Cashback y wallet', icon: BadgePercent },
+  ...(CASHBACK_ENABLED
+    ? [{ to: '/app/cashback', label: 'Cashback y wallet', icon: BadgePercent } satisfies NavItem]
+    : []),
   { to: '/app/flujo', label: 'Flujo de mi tienda', icon: Workflow },
   { to: '/app/espacios', label: 'Mesas y espacios', icon: Table2 },
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },

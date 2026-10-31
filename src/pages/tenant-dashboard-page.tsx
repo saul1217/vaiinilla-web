@@ -23,6 +23,7 @@ import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
+import { CASHBACK_ENABLED } from '../lib/features';
 
 const paymentLabels = {
   efectivo: 'Efectivo',
@@ -306,6 +307,7 @@ export function TenantDashboardPage() {
           <h2>Personal e invitaciones</h2>
           <p>Invita por correo, revisa estados y controla reenvíos o revocaciones.</p>
         </Link>
+        {CASHBACK_ENABLED && (
         <Link to="/app/cashback" className="dashboard-card">
           <div className="dashboard-card__top">
             <span className="dashboard-card__icon">
@@ -316,6 +318,7 @@ export function TenantDashboardPage() {
           <h2>Cashback y wallet</h2>
           <p>Configura el beneficio y consulta recargas, compras, devoluciones y conciliación.</p>
         </Link>
+        )}
         <Link to="/app/pos" className="dashboard-card dashboard-card--dark">
           <div className="dashboard-card__top">
             <span className="dashboard-card__icon">

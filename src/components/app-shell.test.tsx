@@ -2,6 +2,7 @@ import { fireEvent, render, screen, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAdminTheme } from '../lib/admin-theme';
+import { CASHBACK_ENABLED } from '../lib/features';
 import { TenantShell } from './app-shell';
 
 const session = vi.hoisted(() => ({ role: 'mesero' }));
@@ -20,6 +21,18 @@ afterEach(() => {
 });
 
 describe('tema compartido en la navegación', () => {
+  it('admin no muestra cashback cuando el feature flag está apagado', () => {
+    session.role = 'admin';
+    render(
+      <MemoryRouter>
+        <TenantShell>Contenido</TenantShell>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir navegación' }));
+    expect(screen.queryByRole('link', { name: 'Cashback y wallet' })).not.toBeInTheDocument();
+    expect(CASHBACK_ENABLED).toBe(false);
+  });
+
   it.each(['mesero', 'cajero', 'cocina', 'admin'])('%s puede cambiar y recordar ambos temas desde el menú móvil', (role) => {
     session.role = role;
     localStorage.setItem('vaiinilla.panel.admin-theme', 'claro');
