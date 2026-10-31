@@ -2,6 +2,8 @@
 // Qué existe y qué falta está en Obsidian → "Flujos por tipo de negocio" (verificado en dev
 // el 30 sep 2026). No hay plantilla de hotel: decisión de David.
 
+import { CASHBACK_ENABLED } from './features';
+
 export type BusinessType = 'cafeteria' | 'restaurante' | 'padel' | 'bar' | 'food_truck' | 'drive_thru' | 'comedor' | 'evento';
 
 export interface Franja {
@@ -277,7 +279,9 @@ export function buildFlow(settings: FlowSettings): FlowStep[] {
   } else {
     steps.push(pickup);
   }
-  steps.push({ role: 'Sistema', text: 'Acredita el cashback', status: 'works' });
+  if (CASHBACK_ENABLED) {
+    steps.push({ role: 'Sistema', text: 'Acredita el cashback', status: 'works' });
+  }
   return steps;
 }
 

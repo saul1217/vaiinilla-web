@@ -31,6 +31,7 @@ import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { VaiinillaApiError, errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
+import { CASHBACK_ENABLED } from '../lib/features';
 import type { EstablishmentType, PlatformEstablishment, PlatformStripeSummary } from '../types/api';
 
 const MEXICO_TIME_ZONES = [
@@ -853,7 +854,11 @@ function EstablishmentFormModal({
         />
         <CustomSelect
           label="Zona horaria"
-          hint="Selecciona la ciudad más cercana; se usa para cierres, reportes y cashback."
+          hint={
+            CASHBACK_ENABLED
+              ? 'Selecciona la ciudad más cercana; se usa para cierres, reportes y cashback.'
+              : 'Selecciona la ciudad más cercana; se usa para cierres y reportes.'
+          }
           error={form.formState.errors.zona_horaria?.message}
           value={useWatch({ control: form.control, name: 'zona_horaria' })}
           onChange={(next) => form.setValue('zona_horaria', next, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
