@@ -427,11 +427,14 @@ export function WaiterBoard({
                   {order.estado === 'listo' && canDeliver ? (
                     mustCollectBeforeDelivery(order) ? (
                       <div className="mesero-orders__blocked">
-                        <span className="mesero-orders__blocked-tag" role="status">
+                        <span
+                          className="mesero-orders__blocked-tag"
+                          aria-describedby={`mesero-order-${order.id}-pay-first`}
+                        >
                           <CheckCircle2 aria-hidden="true" className="size-5" />
                           Entregar
                         </span>
-                        <p id={`mesero-order-${order.id}-pay-first`}>
+                        <p id={`mesero-order-${order.id}-pay-first`} role="status">
                           {mensajeCobroAntesDeEntregar(order.saldo_pendiente)}
                         </p>
                       </div>
