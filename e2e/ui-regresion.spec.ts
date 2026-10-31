@@ -192,6 +192,19 @@ test.describe('Reservas de hoy · teclado y estados', () => {
   });
 });
 
+test('Configurar reservas y horarios abre una hoja y restaura el foco', async ({ page }, info) => {
+  await open(page, info, SURFACES[0], VIEWPORTS[0]);
+  const trigger = page.getByRole('button', { name: 'Configurar reservas y horarios' });
+  test.skip((await trigger.count()) === 0, 'La tienda QA no tiene canchas configuradas.');
+  await trigger.click();
+  const sheet = page.getByRole('dialog', { name: 'Configurar reservas y horarios' });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByLabel('Días de anticipación')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 
 // Slice 1: real shell, account sheet and theme persistence. No snapshot updates outside CI.
 for (const theme of ['claro', 'oscuro']) {

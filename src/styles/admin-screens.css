@@ -205,3 +205,33 @@ html[data-admin-theme] .admin-orders .app-order-row { padding: 16px; border: 1px
 }
 
 .admin-order-skeleton { height: 104px; margin-block: 12px; border-radius: 24px; background: var(--color-cream-2); border: 1px solid var(--line); }
+
+/* Slice 6.2: compact space inventory with task sheets for editing and QR. */
+html[data-admin-theme] .admin-spaces { gap: 24px; }
+html[data-admin-theme] .admin-spaces .app-page-header__actions { flex-wrap: wrap; justify-content: flex-end; }
+html[data-admin-theme] .admin-spaces .spaces-grid { grid-template-columns: minmax(0, 1fr); }
+html[data-admin-theme] .space-list-item { display: flex; min-width: 0; flex-direction: column; justify-content: space-between; gap: 12px; padding: 16px; background: var(--color-cream-2); border-radius: 24px; }
+.space-list-item__summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 4px 10px; min-width: 0; }
+.space-list-item__summary h2 { min-width: 0; overflow-wrap: anywhere; font-size: 1.125rem; font-weight: 800; letter-spacing: -.03em; color: var(--color-ink); }
+.space-list-item__summary p { grid-column: 1 / -1; color: var(--color-muted); font-size: .875rem; overflow-wrap: anywhere; }
+.space-list-item__summary .status-badge { grid-column: 2; grid-row: 1; min-height: 28px; }
+.space-list-item__actions { display: flex; gap: 4px; }
+.space-list-item__actions > .button { min-height: 44px; flex: 1 1 0; padding-inline: 8px; }
+.space-qr-sheet { display: grid; justify-items: center; gap: 20px; text-align: center; }
+.space-qr-sheet > img { width: min(240px, 72vw); height: auto; border: 12px solid #fff; border-radius: 16px; background: #fff; }
+.space-qr-sheet > div { width: 100%; overflow-wrap: anywhere; }
+.space-qr-sheet__actions { display: flex; width: 100%; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.space-editor-sheet { display: grid; gap: 20px; }
+html[data-admin-theme] .space-editor-sheet :is(.bg-cream, .field__control) { background: var(--color-white-warm); }
+html[data-admin-theme="oscuro"] .space-qr-sheet > img { border-color: #fff; }
+@media (min-width: 768px) {
+  html[data-admin-theme] .admin-spaces .spaces-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-admin-theme] .space-list-item { padding: 20px; }
+}
+@media (min-width: 1200px) {
+  html[data-admin-theme] .admin-spaces .spaces-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  html[data-admin-theme] .admin-spaces .app-page-header__actions { justify-content: stretch; }
+  html[data-admin-theme] .admin-spaces .app-page-header__actions > .button { flex: 1 1 auto; }
+}

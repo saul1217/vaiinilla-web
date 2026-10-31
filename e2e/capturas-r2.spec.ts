@@ -20,9 +20,9 @@ const scenarios = [
   { role: 'mesero', path: '/app/pos', ready: '.staff-tile', seed: 'Mesas' },
   { role: 'cajero', path: '/app/pos', ready: '.cashier-queue__ticket', seed: 'Mariana López' },
   { role: 'cocina', path: '/app/cocina', ready: '.kitchen-work__ticket--selected .kitchen-ticket', seed: 'Chilaquiles verdes' },
-  ...['/app', '/app/pedidos', '/app/menu', '/app/espacios', '/app/cashback', '/app/flujo'].map((path) => ({
+  ...['/app', '/app/pedidos', '/app/menu', '/app/espacios', '/app/flujo'].map((path) => ({
     role: 'admin', path, ready: '.admin-screen', seed: ({ '/app': 'Café del Jardín', '/app/pedidos': 'Mariana López',
-      '/app/menu': 'Chilaquiles verdes', '/app/espacios': 'Mesa 1', '/app/cashback': 'Cashback y wallet', '/app/flujo': 'Flujo de mi tienda' } as Record<string, string>)[path],
+      '/app/menu': 'Chilaquiles verdes', '/app/espacios': 'Mesa 1', '/app/flujo': 'Flujo de mi tienda' } as Record<string, string>)[path],
   })),
 ] as const;
 
@@ -39,7 +39,7 @@ for (const scenario of scenarios) {
       await expect(page.locator(scenario.ready).first()).toBeVisible();
       if (scenario.path === '/app') {
         await expect(page.getByRole('heading', { name: 'Café del Jardín', exact: true })).toBeVisible();
-      } else if (scenario.role === 'mesero' || scenario.path === '/app/cashback' || scenario.path === '/app/flujo') {
+      } else if (scenario.role === 'mesero' || scenario.path === '/app/flujo') {
         await expect(page.getByRole('heading', { level: 1, name: scenario.seed, exact: true })).toBeVisible();
       } else if (scenario.role === 'cocina') {
         await expect(page.locator('.kitchen-work__ticket--selected').getByText(scenario.seed, { exact: false })).toBeVisible();
@@ -57,7 +57,16 @@ for (const scenario of scenarios) {
         await healthy(page, errors);
       };
       await capture();
-      if (scenario.role === 'mesero') {
+      if (scenario.path === '/app/espacios') {
+        await page.getByRole('button', { name: 'Editar Mesa 1' }).click();
+        await expect(page.getByRole('dialog', { name: 'Mesa 1' })).toBeVisible();
+        await capture('-ficha');
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: 'QR y código de Mesa 1' }).click();
+        await expect(page.getByRole('dialog', { name: /QR y código · Mesa 1/ })).toBeVisible();
+        await expect(page.getByRole('img', { name: 'Código QR de Mesa 1' })).toBeVisible();
+        await capture('-qr');
+      } else if (scenario.role === 'mesero') {
         await page.getByRole('button', { name: 'Mesa 1. Llamando', exact: true }).click();
         await expect(page.getByRole('dialog', { name: 'Mesa 1', exact: true })).toBeVisible();
         await expect(page.locator('.space-account')).toBeVisible();
