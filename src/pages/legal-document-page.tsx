@@ -18,14 +18,15 @@ export function LegalDocumentPage({ kind }: { kind: LegalDocumentKind }) {
         <Link to="/acceso" aria-label="Vaiinilla, inicio">
           <Logo />
         </Link>
-        <Link className="legal-back" to="/invitaciones/aceptar">
-          <ArrowLeft aria-hidden="true" /> Volver a la invitación
+        <Link className="legal-back" to="/legal">
+          <ArrowLeft aria-hidden="true" /> Documentos legales
         </Link>
       </header>
 
       <article className="legal-document">
         <p className="eyebrow">Documento legal · versión {version}</p>
         <h1>{document.title}</h1>
+        {isCurrentPublishedDocument && document.validity && <p><em>{document.validity}</em></p>}
 
         {!isCurrentPublishedDocument ? (
           <div className="legal-pending">
@@ -42,9 +43,17 @@ export function LegalDocumentPage({ kind }: { kind: LegalDocumentKind }) {
           document.sections.map((section) => (
             <section key={section.heading}>
               <h2>{section.heading}</h2>
-              {section.paragraphs.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
+              {section.blocks.map((block, index) =>
+                block.type === 'list' ? (
+                  <ul key={index}>
+                    {block.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p key={index}>{block.text}</p>
+                ),
+              )}
             </section>
           ))
         )}

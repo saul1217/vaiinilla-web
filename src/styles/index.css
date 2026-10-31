@@ -7916,6 +7916,17 @@ html[data-admin-theme] .kitchen-page .live-indicator--online { background: var(-
 html[data-admin-theme] .kitchen-ticket .item-rejection { color: var(--status-danger-text); }
 html[data-admin-theme] .kitchen-ticket li.is-rejected :is(.kitchen-ticket__product > strong, .kitchen-ticket__quantity) { color: var(--color-muted); }
 
+.legal-document section ul {
+  margin: 0.5rem 0 0.75rem 1.25rem;
+  padding: 0;
+  list-style: disc;
+}
+
+.legal-document section li {
+  margin: 0.25rem 0;
+  line-height: 1.6;
+}
+
 /* Slice 4: one operational tree; mobile selects a ticket, desktop shows each stage. */
 .kitchen-work { min-width: 0; }
 .kitchen-work__heading { margin: 0 0 16px; font-size: 1.5rem; }
