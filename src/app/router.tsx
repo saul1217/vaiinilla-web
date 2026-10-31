@@ -25,6 +25,7 @@ const NotFoundPage = lazy(() => import('../pages/not-found-page').then((module) 
 const InvitationAcceptancePage = lazy(() => import('../pages/invitation-acceptance-page').then((module) => ({ default: module.InvitationAcceptancePage })));
 const EmailVerificationPage = lazy(() => import('../pages/email-verification-page').then((module) => ({ default: module.EmailVerificationPage })));
 const PasswordRecoveryPage = lazy(() => import('../pages/password-recovery-page').then((module) => ({ default: module.PasswordRecoveryPage })));
+const LegalIndexPage = lazy(() => import('../pages/legal-index-page').then((module) => ({ default: module.LegalIndexPage })));
 const LegalDocumentPage = lazy(() => import('../pages/legal-document-page').then((module) => ({ default: module.LegalDocumentPage })));
 const AccountDeletionPage = lazy(() => import('../pages/account-deletion-page').then((module) => ({ default: module.AccountDeletionPage })));
 const StripeOnboardingReturnPage = lazy(() => import('../pages/stripe-onboarding-return-page').then((module) => ({ default: module.StripeOnboardingReturnPage })));
@@ -128,6 +129,7 @@ export function AppRouter() {
           <Route exact path="/invitaciones/aceptar"><InvitationAcceptancePage /></Route>
           <Route exact path="/acceso/verificar"><EmailVerificationPage /></Route>
           <Route exact path="/acceso/recuperar"><PasswordRecoveryPage /></Route>
+          <Route exact path="/legal"><LegalIndexPage /></Route>
           <Route exact path="/legal/terminos/:version"><LegalDocumentPage kind="terminos" /></Route>
           <Route exact path="/legal/privacidad/:version"><LegalDocumentPage kind="privacidad" /></Route>
           <Route exact path="/eliminar-cuenta"><AccountDeletionPage /></Route>
