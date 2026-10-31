@@ -8,6 +8,7 @@ import {
   isCashierDeliveryOrder,
   isCashierPaidDeliveryOrder,
   mustCollectBeforeDelivery,
+  mensajeCobroAntesDeEntregar,
 } from './cashier-queue';
 
 function order(overrides: Partial<OrderDetail>): OrderDetail {
@@ -100,5 +101,10 @@ describe('cashier-queue', () => {
       mustCollectBeforeDelivery({ pago_diferido: true, saldo_pendiente: '20.00' }),
     ).toBe(false);
     expect(mustCollectBeforeDelivery({ pago_diferido: false, saldo_pendiente: '0.00' })).toBe(false);
+  });
+
+  it('describe cuánto falta cobrar antes de entregar', () => {
+    expect(mensajeCobroAntesDeEntregar('45.00')).toBe('Falta cobrar $45.00 en Caja antes de entregar.');
+    expect(mensajeCobroAntesDeEntregar(undefined)).toBe('Falta cobrar en Caja antes de entregar.');
   });
 });

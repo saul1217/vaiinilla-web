@@ -6321,6 +6321,33 @@ tbody tr:last-child td {
   justify-content: center;
 }
 
+.mesero-orders__blocked {
+  display: grid;
+  gap: 6px;
+  max-width: 14rem;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--status-warning-text) 35%, var(--line));
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+}
+
+.mesero-orders__blocked-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  opacity: 0.72;
+}
+
+.mesero-orders__blocked p {
+  margin: 0;
+  color: inherit;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -7702,6 +7729,12 @@ html[data-admin-theme] .mesero-orders .button { flex-shrink: 0; }
 html[data-admin-theme] .mesero-call { background: var(--status-danger-bg); color: var(--status-danger-text); border-color: var(--status-danger-text); border-radius: var(--radius-card); flex-wrap: wrap; }
 html[data-admin-theme] .mesero-call p { color: inherit; }
 html[data-admin-theme] .mesero-call--en_camino { background: var(--status-info-bg); color: var(--status-info-text); border-color: var(--status-info-text); }
+html[data-admin-theme] .mesero-orders__blocked {
+  border-color: color-mix(in srgb, var(--status-warning-text) 45%, var(--line));
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+}
+html[data-admin-theme] .mesero-orders__blocked p { color: inherit; }
 
 /* I02: real catalog photography, two columns where usable, selected items expand. */
 html[data-admin-theme] .staff-order { gap: 24px; }

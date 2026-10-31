@@ -149,6 +149,43 @@ describe('StaffOrderForm', () => {
     expect(screen.getByLabelText(/Pagar al final/)).not.toBeChecked();
   });
 
+  it('aplica pagar al final cuando llegan los settings si ya eligió mesa', async () => {
+    let resolveSettings!: (value: unknown) => void;
+    apiMock.businessSettings.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSettings = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderForm('mesero');
+
+    await user.click(await screen.findByRole('button', { name: 'En mesa' }));
+    await user.click(screen.getByRole('button', { name: /Mesa 2/ }));
+    expect(screen.getByLabelText(/Pagar al final/)).not.toBeChecked();
+
+    resolveSettings({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
+    await waitFor(() => expect(screen.getByLabelText(/Pagar al final/)).toBeChecked());
+  });
+
+  it('no vuelve a marcar pagar al final si el mesero lo desmarcó', async () => {
+    let resolveSettings!: (value: unknown) => void;
+    apiMock.businessSettings.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSettings = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderForm('mesero');
+
+    await user.click(await screen.findByRole('button', { name: 'En mesa' }));
+    const checkbox = screen.getByLabelText(/Pagar al final/);
+    await user.click(checkbox);
+    await user.click(checkbox);
+    resolveSettings({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
+    await waitFor(() => expect(apiMock.businessSettings).toHaveBeenCalled());
+    expect(checkbox).not.toBeChecked();
+  });
+
   it('iniciado desde una mesa precarga destino y mesa en el pedido', async () => {
     const user = userEvent.setup();
     apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });

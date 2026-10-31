@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Minus, Plus } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
@@ -67,6 +67,15 @@ function StaffOrderFormBody({
   );
   const [errores, setErrores] = useState<string[]>([]);
   const [llave, setLlave] = useState<LlaveDeEnvio | null>(null);
+  const pagoAlFinalTocado = useRef(false);
+
+  useEffect(() => {
+    if (!permitePagoAlFinal || pagoAlFinalTocado.current) return;
+    setDraft((previo) => {
+      if (previo.destino !== 'en_espacio' || previo.pagoAlFinal) return previo;
+      return { ...previo, pagoAlFinal: true };
+    });
+  }, [permitePagoAlFinal]);
 
   const catalogo = useQuery({
     queryKey: ['staff-order', 'catalog'],
@@ -288,9 +297,10 @@ function StaffOrderFormBody({
             <input
               type="checkbox"
               checked={draft.pagoAlFinal}
-              onChange={(event) =>
-                actualizar({ pagoAlFinal: event.target.checked, cobrarAhora: false, montoRecibido: '' })
-              }
+              onChange={(event) => {
+                pagoAlFinalTocado.current = true;
+                actualizar({ pagoAlFinal: event.target.checked, cobrarAhora: false, montoRecibido: '' });
+              }}
             />
             Pagar al final, con la cuenta de la mesa
           </label>

@@ -174,8 +174,9 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
 
     await user.click(await screen.findByRole('button', { name: /Mesa 67\. Pedido listo/ }));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('button', { name: 'Entregar' })).toBeDisabled();
-    expect(within(dialog).getByText(/Primero hay que cobrarlo en Caja/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Entregar' })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('status')).toHaveTextContent('Entregar');
+    expect(within(dialog).getByText('Falta cobrar $45.00 en Caja antes de entregar.')).toBeInTheDocument();
     expect(apiMock.deliverOrder).not.toHaveBeenCalled();
   });
 

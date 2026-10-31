@@ -16,6 +16,13 @@ export function mustCollectBeforeDelivery(order: Pick<OrderDetail, 'pago_diferid
   return cents !== null && cents > 0n;
 }
 
+export function mensajeCobroAntesDeEntregar(saldoPendiente?: string): string {
+  if (saldoPendiente && moneyToCents(saldoPendiente) !== null) {
+    return `Falta cobrar $${saldoPendiente} en Caja antes de entregar.`;
+  }
+  return 'Falta cobrar en Caja antes de entregar.';
+}
+
 function isIndividuallyPaid(order: OrderDetail): boolean {
   if (order.saldo_pendiente === undefined) return false;
   const cents = moneyToCents(order.saldo_pendiente);
