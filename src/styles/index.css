@@ -7925,6 +7925,8 @@ html[data-admin-theme] .kitchen-ticket li.is-rejected :is(.kitchen-ticket__produ
 .legal-document section li {
   margin: 0.25rem 0;
   line-height: 1.6;
+}
+
 /* Slice 4: one operational tree; mobile selects a ticket, desktop shows each stage. */
 .kitchen-work { min-width: 0; }
 .kitchen-work__heading { margin: 0 0 16px; font-size: 1.5rem; }
