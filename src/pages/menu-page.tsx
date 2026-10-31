@@ -1,8 +1,7 @@
+import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Eye,
-  EyeOff,
   Image as ImageIcon,
   Layers3,
   NotebookTabs,
@@ -16,7 +15,9 @@ import {
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useFieldArray, useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
-import { Button, CustomSelect, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
+import { AppSheet } from '../components/app-sheet';
+import { AdminProductTile } from '../components/admin-product-tile';
+import { Button, CustomSelect, EmptyState, Feedback, Field } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { looksLikeRental, rentsSpaces } from '../lib/rental-product';
 import { api } from '../lib/api';
@@ -123,12 +124,17 @@ export function MenuPage() {
     setNotice(message);
   }
 
+  const totalProducts = catalog.data?.productos.length ?? 0;
+  const hiddenProducts = catalog.data?.productos.filter((product) => !product.disponible).length ?? 0;
+  const visibleCategories = categories.filter((category) => categoryFilter === 'todos' || category.id === categoryFilter);
+  const matchingProducts = (categoryId: number) => products.filter((product) => product.categoria_id === categoryId);
+
   return (
     <div className="page-stack admin-screen admin-catalog">
-      <PageHeader
+      <AppPageHeader
         eyebrow="Administración"
         title="Menú"
-        description="Organiza lo que vende la tienda, sus precios, preparación y opciones. El precio que ve el cliente lo confirma el sistema al cobrar."
+        description={catalog.isPending ? 'Cargando catálogo…' : `${totalProducts} ${totalProducts === 1 ? 'producto' : 'productos'} · ${hiddenProducts} ${hiddenProducts === 1 ? 'oculto' : 'ocultos'}`}
         action={
           <Button
             disabled={categories.length === 0}
@@ -184,129 +190,46 @@ export function MenuPage() {
         </div>
       </div>
 
-      <div className="menu-layout">
-        <aside className="category-panel" aria-label="Categorías del menú">
-          <div className="category-panel__header">
-            <div>
-              <p className="eyebrow">Organización</p>
-              <h2>Categorías</h2>
-            </div>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Crear categoría"
-              title="Crear categoría"
-              onClick={() => setCategoryEditor('new')}
-            >
-              <Plus aria-hidden="true" />
-            </button>
-          </div>
+      <nav className="menu-categories" aria-label="Categorías del menú">
+        <div className="category-panel__header">
+          <button type="button" className="icon-button" aria-label="Crear categoría" title="Crear categoría" onClick={() => setCategoryEditor('new')}><Plus aria-hidden="true" /></button>
+        </div>
+        <button type="button" className={`category-row ${categoryFilter === 'todos' ? 'category-row--active' : ''}`} aria-pressed={categoryFilter === 'todos'} onClick={() => setCategoryFilter('todos')}><span>Todo el menú</span><strong>{totalProducts}</strong></button>
+        <div className="category-list">
+          {categories.map((category) => {
+            const count = catalog.data?.productos.filter((product) => product.categoria_id === category.id).length ?? 0;
+            return <div key={category.id} className={`category-row category-row--split ${categoryFilter === category.id ? 'category-row--active' : ''}`}>
+              <button type="button" aria-pressed={categoryFilter === category.id} onClick={() => setCategoryFilter(category.id)}><span title={category.nombre}>{category.nombre}</span><strong>{count}</strong></button>
+              <button type="button" className="category-row__edit" aria-label={`Editar categoría ${category.nombre}`} title="Editar categoría" onClick={() => setCategoryEditor(category)}><Pencil aria-hidden="true" /></button>
+            </div>;
+          })}
+        </div>
+      </nav>
 
-          <button
-            type="button"
-            className={`category-row ${categoryFilter === 'todos' ? 'category-row--active' : ''}`}
-            aria-pressed={categoryFilter === 'todos'}
-            onClick={() => setCategoryFilter('todos')}
-          >
-            <span>Todo el menú</span>
-            <strong>{catalog.data?.productos.length ?? 0}</strong>
-          </button>
-
-          <div className="category-list">
-            {categories.map((category) => {
-              const count =
-                catalog.data?.productos.filter((product) => product.categoria_id === category.id)
-                  .length ?? 0;
-              return (
-                <div
-                  key={category.id}
-                  className={`category-row category-row--split ${
-                    categoryFilter === category.id ? 'category-row--active' : ''
-                  }`}
-                >
-                  <button
-                    type="button"
-                    aria-pressed={categoryFilter === category.id}
-                    onClick={() => setCategoryFilter(category.id)}
-                  >
-                    <span title={category.nombre}>{category.nombre}</span>
-                    <strong>{count}</strong>
-                  </button>
-                  <button
-                    type="button"
-                    className="category-row__edit"
-                    aria-label={`Editar categoría ${category.nombre}`}
-                    title="Editar categoría"
-                    onClick={() => setCategoryEditor(category)}
-                  >
-                    <Pencil aria-hidden="true" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {!catalog.isPending && categories.length === 0 && (
-            <div className="category-panel__empty">
-              <p>Crea la primera categoría para poder agregar productos.</p>
-              <Button variant="secondary" onClick={() => setCategoryEditor('new')}>
-                Crear categoría
+      {catalog.isPending ? <div className="product-grid" aria-label="Cargando productos" aria-busy="true" role="status">
+        {[0, 1, 2, 3].map((item) => <div key={item} className="admin-product-tile admin-product-tile--skeleton" />)}
+      </div> : !catalog.isError && categories.length === 0 ? <EmptyState icon={<NotebookTabs aria-hidden="true" />} title="Aún no hay categorías" description="Crea una categoría para organizar el menú y agregar productos." action={<Button onClick={() => setCategoryEditor('new')}>Crear categoría</Button>} />
+      : !catalog.isError && totalProducts === 0 ? <EmptyState icon={<NotebookTabs aria-hidden="true" />} title="Tu menú está vacío" description="Crea el primer producto y decide si se publica de inmediato." action={<Button onClick={() => setProductEditor('new')}>Crear producto</Button>} />
+      : !catalog.isError && products.length === 0 ? <EmptyState icon={<Search aria-hidden="true" />} title="No hay coincidencias" description="Cambia la búsqueda o los filtros para volver a ver productos." action={<Button variant="secondary" onClick={() => { setSearch(''); setAvailability('todos'); setCategoryFilter('todos'); }}>Limpiar búsqueda y filtros</Button>} />
+      : !catalog.isError && <div className="menu-category-sections">
+        {visibleCategories.map((category) => {
+          const categoryProducts = matchingProducts(category.id);
+          return <section className="menu-products" key={category.id} aria-labelledby={`menu-category-${category.id}`}>
+            <div className="section-heading menu-section-heading">
+              <div>
+                <h2 id={`menu-category-${category.id}`}>{category.nombre}</h2>
+                <span className="section-count">
+                  {categoryProducts.length} {categoryProducts.length === 1 ? 'producto' : 'productos'}
+                </span>
+              </div>
+              <Button variant="ghost" aria-label={`Editar categoría ${category.nombre}`} onClick={() => setCategoryEditor(category)}>
+                <Pencil aria-hidden="true" className="size-4" /> Editar
               </Button>
             </div>
-          )}
-        </aside>
-
-        <section className="menu-products" aria-labelledby="menu-products-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Catálogo de la tienda</p>
-              <h2 id="menu-products-title">Productos</h2>
-            </div>
-            <span className="section-count" aria-live="polite">
-              {products.length} {products.length === 1 ? 'producto' : 'productos'}
-            </span>
-          </div>
-
-          {catalog.isPending ? (
-            <div className="product-grid" aria-label="Cargando productos">
-              {[0, 1, 2, 3].map((item) => (
-                <div key={item} className="product-card product-card--skeleton" />
-              ))}
-            </div>
-          ) : products.length ? (
-            <div className="product-grid">
-              {products.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  category={categories.find((category) => category.id === product.categoria_id)}
-                  onEdit={() => setProductEditor(product)}
-                  onAvailability={() => setAvailabilityProduct(product)}
-                />
-              ))}
-            </div>
-          ) : !catalog.isError ? (
-            <EmptyState
-              icon={<NotebookTabs aria-hidden="true" />}
-              title={catalog.data?.productos.length ? 'No hay coincidencias' : 'Tu menú está vacío'}
-              description={
-                catalog.data?.productos.length
-                  ? 'Cambia la búsqueda o los filtros para volver a ver productos.'
-                  : categories.length
-                    ? 'Crea el primer producto y decide si se publica de inmediato.'
-                    : 'Primero crea una categoría; después podrás agregar productos.'
-              }
-              action={
-                categories.length ? (
-                  <Button onClick={() => setProductEditor('new')}>Crear producto</Button>
-                ) : (
-                  <Button onClick={() => setCategoryEditor('new')}>Crear categoría</Button>
-                )
-              }
-            />
-          ) : null}
-        </section>
-      </div>
+            {categoryProducts.length > 0 ? <div className="product-grid">{categoryProducts.map((product) => <AdminProductTile key={product.id} product={product} onEdit={() => setProductEditor(product)} onAvailability={() => setAvailabilityProduct(product)} />)}</div> : <p className="menu-category-empty">Sin productos que coincidan.</p>}
+          </section>;
+        })}
+      </div>}
 
       <CategoryFormModal
         key={`category-${categoryEditor === 'new' ? 'new' : (categoryEditor?.id ?? 'closed')}`}
@@ -357,86 +280,6 @@ export function MenuPage() {
   );
 }
 
-function ProductCard({
-  product,
-  category,
-  onEdit,
-  onAvailability,
-}: {
-  product: CatalogProduct;
-  category?: CatalogCategory;
-  onEdit: () => void;
-  onAvailability: () => void;
-}) {
-  return (
-    <article className={`product-card ${!product.disponible ? 'product-card--hidden' : ''}`}>
-      <div className="product-card__media">
-        <ImageIcon aria-hidden="true" />
-        {product.imagen_url && (
-          <img
-            src={product.imagen_url}
-            alt={`Imagen de ${product.nombre}`}
-            loading="lazy"
-            onError={(event) => {
-              event.currentTarget.hidden = true;
-            }}
-          />
-        )}
-        <span
-          className={`availability-badge ${
-            product.disponible ? 'availability-badge--on' : 'availability-badge--off'
-          }`}
-        >
-          {product.disponible ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
-          {product.disponible ? 'Disponible' : 'Oculto'}
-        </span>
-      </div>
-      <div className="product-card__body">
-        <div className="product-card__meta">
-          <span>{category?.nombre ?? 'Sin categoría'}</span>
-          <span>{product.estacion_preparacion === 'cocina' ? 'Cocina' : 'Caja'}</span>
-        </div>
-        <h3>{product.nombre}</h3>
-        <p className="product-card__description">
-          {product.descripcion || 'Sin descripción para clientes.'}
-        </p>
-        <dl className="product-card__prices">
-          <div>
-            <dt>Mostrador</dt>
-            <dd>{formatMoney(product.precio_mostrador)}</dd>
-          </div>
-          {product.precio_digital !== product.precio_mostrador && (
-            <div>
-              <dt>Con tarjeta</dt>
-              <dd>{formatMoney(product.precio_digital)}</dd>
-            </div>
-          )}
-        </dl>
-        <div className="product-card__details">
-          <span>{product.tiempo_estimado_min} min</span>
-          <span>
-            {product.grupos_opcion.length}{' '}
-            {product.grupos_opcion.length === 1 ? 'grupo de opciones' : 'grupos de opciones'}
-          </span>
-        </div>
-      </div>
-      <div className="product-card__actions">
-        <Button variant="secondary" onClick={onEdit}>
-          <Pencil aria-hidden="true" className="size-4" /> Editar
-        </Button>
-        <Button variant="ghost" onClick={onAvailability}>
-          {product.disponible ? (
-            <EyeOff aria-hidden="true" className="size-4" />
-          ) : (
-            <Eye aria-hidden="true" className="size-4" />
-          )}
-          {product.disponible ? 'Ocultar' : 'Publicar'}
-        </Button>
-      </div>
-    </article>
-  );
-}
-
 function CategoryFormModal({
   open,
   category,
@@ -464,12 +307,13 @@ function CategoryFormModal({
   });
 
   return (
-    <Modal
+    <AppSheet
       open={open}
       onOpenChange={onOpenChange}
       title={editing ? 'Editar categoría' : 'Crear categoría'}
       description="El orden más bajo aparece primero en el menú. Una categoría con productos no se elimina desde esta pantalla."
     >
+      <AppSheet.Body>
       {mutation.isError && <Feedback tone="error">{errorMessage(mutation.error)}</Feedback>}
       <form
         className="space-y-5"
@@ -491,16 +335,17 @@ function CategoryFormModal({
           error={form.formState.errors.orden?.message}
           {...form.register('orden', { valueAsNumber: true })}
         />
-        <div className="form-actions">
+        <AppSheet.Footer>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button type="submit" loading={mutation.isPending}>
             {editing ? 'Guardar cambios' : 'Crear categoría'}
           </Button>
-        </div>
+        </AppSheet.Footer>
       </form>
-    </Modal>
+      </AppSheet.Body>
+    </AppSheet>
   );
 }
 
@@ -635,13 +480,15 @@ function ProductFormModal({
   });
 
   return (
-    <Modal
+    <AppSheet
       open={open}
       onOpenChange={onOpenChange}
       contentClassName="dialog-content--wide"
+      size="large"
       title={editing ? `Editar ${product.nombre}` : 'Crear producto'}
       description="Configura lo que verá el cliente. Los campos con * son obligatorios."
     >
+      <AppSheet.Body>
       {mutation.isError && (
         <Feedback tone="error">
           {saveStage === 'image' ? (
@@ -669,8 +516,8 @@ function ProductFormModal({
           <div className="form-section__heading">
             <span>1</span>
             <div>
-              <h3 id="product-basic-heading">Información básica</h3>
-              <p>Nombre, ubicación en el menú y área que lo prepara.</p>
+              <h3 id="product-basic-heading">Información</h3>
+              <p>Nombre, categoría y descripción del producto.</p>
             </div>
           </div>
           <div className="form-grid">
@@ -687,6 +534,25 @@ function ProductFormModal({
               error={form.formState.errors.categoria_id?.message}
               options={categories.map((category) => ({ value: String(category.id), label: category.nombre }))}
             />
+            <TextAreaField
+              className="form-grid__wide"
+              label="Descripción para clientes"
+              maxLength={1000}
+              error={form.formState.errors.descripcion?.message}
+              registration={form.register('descripcion')}
+            />
+          </div>
+        </section>
+
+        <section className="form-section" aria-labelledby="product-detail-heading">
+          <div className="form-section__heading">
+            <span>2</span>
+            <div>
+              <h3 id="product-detail-heading">Preparación</h3>
+              <p>Estación, tiempo, ingredientes y alérgenos.</p>
+            </div>
+          </div>
+          <div className="form-grid">
             <CustomSelect
               label="Estación de preparación *"
               value={useWatch({ control: form.control, name: 'estacion_preparacion' })}
@@ -707,20 +573,25 @@ function ProductFormModal({
               {...form.register('tiempo_estimado_min', { valueAsNumber: true })}
             />
             <TextAreaField
-              className="form-grid__wide"
-              label="Descripción para clientes"
+              label="Ingredientes"
               maxLength={1000}
-              error={form.formState.errors.descripcion?.message}
-              registration={form.register('descripcion')}
+              error={form.formState.errors.ingredientes?.message}
+              registration={form.register('ingredientes')}
+            />
+            <TextAreaField
+              label="Alérgenos"
+              maxLength={500}
+              error={form.formState.errors.alergenos?.message}
+              registration={form.register('alergenos')}
             />
           </div>
         </section>
 
         <section className="form-section" aria-labelledby="product-price-heading">
           <div className="form-section__heading">
-            <span>2</span>
+            <span>3</span>
             <div>
-              <h3 id="product-price-heading">Precio</h3>
+              <h3 id="product-price-heading">Precios</h3>
               <p>Captura el precio base; el precio al cliente se calcula automáticamente.</p>
             </div>
           </div>
@@ -736,6 +607,9 @@ function ProductFormModal({
             <div className="digital-price-preview" aria-live="polite">
               <span>Lo que paga el cliente</span>
               <strong>{customerPrice ? formatMoney(customerPrice) : '—'}</strong>
+              {product && product.precio_digital !== product.precio_mostrador && (
+                <small>Precio con tarjeta guardado: {formatMoney(product.precio_digital)}</small>
+              )}
               <small>
                 {cardCommissionPassed
                   ? 'Con efectivo o saldo, este precio. Con tarjeta se suma la comisión; el sistema calcula el cargo.'
@@ -745,28 +619,60 @@ function ProductFormModal({
           </div>
         </section>
 
-        <section className="form-section" aria-labelledby="product-detail-heading">
-          <div className="form-section__heading">
-            <span>3</span>
+        <section className="form-section" aria-labelledby="product-options-heading">
+          <div className="form-section__heading form-section__heading--action">
+            <span>4</span>
             <div>
-              <h3 id="product-detail-heading">Detalles e imagen</h3>
-              <p>Información útil para decidir y preparar el producto.</p>
+              <h3 id="product-options-heading">Opciones</h3>
+              <p>Ejemplos: tamaño, tipo de leche o toppings. Este paso es opcional.</p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                groups.append({
+                  nombre: '',
+                  min_selecciones: 0,
+                  max_selecciones: 1,
+                  opciones: [{ nombre: '', precio_extra: '0.00' }],
+                })
+              }
+            >
+              <Plus aria-hidden="true" className="size-4" /> Agregar grupo
+            </Button>
+          </div>
+
+          {groups.fields.length === 0 ? (
+            <div className="option-groups-empty">
+              <Layers3 aria-hidden="true" />
+              <div>
+                <strong>Este producto no tiene variantes.</strong>
+                <p>Puedes guardarlo así o agregar opciones si el cliente debe elegir algo.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="option-groups">
+              {groups.fields.map((group, index) => (
+                <OptionGroupFields
+                  key={group.fieldKey}
+                  index={index}
+                  form={form}
+                  onRemove={() => groups.remove(index)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="form-section" aria-labelledby="product-image-heading">
+          <div className="form-section__heading">
+            <span>5</span>
+            <div>
+              <h3 id="product-image-heading">Imagen</h3>
+              <p>Agrega una foto para reconocer y presentar el producto.</p>
             </div>
           </div>
-          <div className="form-grid">
-            <TextAreaField
-              label="Ingredientes"
-              maxLength={1000}
-              error={form.formState.errors.ingredientes?.message}
-              registration={form.register('ingredientes')}
-            />
-            <TextAreaField
-              label="Alérgenos"
-              maxLength={500}
-              error={form.formState.errors.alergenos?.message}
-              registration={form.register('alergenos')}
-            />
-            <div className="form-grid__wide product-image-uploader">
+            <div className="product-image-uploader">
               <div className="product-image-uploader__copy">
                 <span className="field__label">Imagen del producto</span>
                 <p id={`${imageInputId}-hint`}>
@@ -858,54 +764,7 @@ function ProductFormModal({
                 )}
               </div>
             </div>
-          </div>
         </section>
-
-        <section className="form-section" aria-labelledby="product-options-heading">
-          <div className="form-section__heading form-section__heading--action">
-            <span>4</span>
-            <div>
-              <h3 id="product-options-heading">Variantes y extras</h3>
-              <p>Ejemplos: tamaño, tipo de leche o toppings. Este paso es opcional.</p>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() =>
-                groups.append({
-                  nombre: '',
-                  min_selecciones: 0,
-                  max_selecciones: 1,
-                  opciones: [{ nombre: '', precio_extra: '0.00' }],
-                })
-              }
-            >
-              <Plus aria-hidden="true" className="size-4" /> Agregar grupo
-            </Button>
-          </div>
-
-          {groups.fields.length === 0 ? (
-            <div className="option-groups-empty">
-              <Layers3 aria-hidden="true" />
-              <div>
-                <strong>Este producto no tiene variantes.</strong>
-                <p>Puedes guardarlo así o agregar opciones si el cliente debe elegir algo.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="option-groups">
-              {groups.fields.map((group, index) => (
-                <OptionGroupFields
-                  key={group.fieldKey}
-                  index={index}
-                  form={form}
-                  onRemove={() => groups.remove(index)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
         <label className="checkbox-field product-availability-field">
           <input type="checkbox" {...form.register('disponible')} />
           <span>
@@ -914,7 +773,7 @@ function ProductFormModal({
           </span>
         </label>
 
-        <div className="form-actions product-form__actions">
+        <AppSheet.Footer>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
@@ -925,9 +784,10 @@ function ProductFormModal({
                 ? 'Guardar producto'
                 : 'Crear producto'}
           </Button>
-        </div>
+        </AppSheet.Footer>
       </form>
-    </Modal>
+      </AppSheet.Body>
+    </AppSheet>
   );
 }
 
@@ -1052,7 +912,7 @@ function AvailabilityModal({
   });
 
   return (
-    <Modal
+    <AppSheet
       open={product !== null}
       onOpenChange={onOpenChange}
       title={`${nextAvailability ? 'Publicar' : 'Ocultar'} ${product?.nombre ?? 'producto'}`}
@@ -1062,8 +922,9 @@ function AvailabilityModal({
           : 'El producto se conserva para el historial, pero deja de aparecer y no podrá pedirse.'
       }
     >
+      <AppSheet.Body>
       {mutation.isError && <Feedback tone="error">{errorMessage(mutation.error)}</Feedback>}
-      <div className="form-actions">
+      <AppSheet.Footer>
         <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
           Cancelar
         </Button>
@@ -1075,8 +936,9 @@ function AvailabilityModal({
         >
           {nextAvailability ? 'Publicar producto' : 'Ocultar producto'}
         </Button>
-      </div>
-    </Modal>
+      </AppSheet.Footer>
+      </AppSheet.Body>
+    </AppSheet>
   );
 }
 

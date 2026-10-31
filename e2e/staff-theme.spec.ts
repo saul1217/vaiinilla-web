@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import { expect, test } from '@playwright/test';
 import { staffContrastPairs } from '../src/test/staff-contrast';
 
@@ -10,23 +11,23 @@ for (const theme of ['claro', 'oscuro']) {
     // Navigate directly to static HTML: the app must not keep running after setContent.
     await page.route('**/staff-contrast-fixture', (route) => route.fulfill({
       contentType: 'text/html',
-      body: `<html data-admin-theme="${theme}"><head><link rel="stylesheet" href="/src/styles/index.css"></head>
+      body: `<html data-admin-theme="${theme}"><head><link rel="stylesheet" href="/src/styles/index.css"><link rel="stylesheet" href="/src/styles/app-primitives.css"><link rel="stylesheet" href="/src/styles/admin-screens.css"><link rel="stylesheet" href="/src/styles/mesero-slice.css"><link rel="stylesheet" href="/src/components/cashier.css"></head>
       <body><div class="app-frame app-frame--tenant">
-      <header class="mobile-header"><button class="icon-button">Menú</button></header>
+      <main class="admin-screen admin-overview"><article class="business-sales"><strong>$100.00</strong></article></main><section class="admin-screen admin-orders"><ul><li class="app-order-row"><p class="admin-order-row__summary">Producto</p></li></ul></section><section class="app-sheet admin-order-detail-sheet"><dl class="admin-order-facts"><div><dt>Pago</dt><dd>Efectivo</dd></div></dl></section><header class="app-identity"><button class="app-account-button">CA</button></header>
       <div class="queue-column"><header class="queue-column__header"><h2>Cola</h2><p>En espera</p></header>
-      <article class="kitchen-ticket"><div class="kitchen-ticket__product"><strong>Producto</strong></div>
+      <section class="kitchen-work"><h2 class="kitchen-work__heading">Comanda activa</h2><section class="kitchen-work__queue"><p>Seleccionada</p></section></section><article class="kitchen-ticket"><span class="kitchen-ticket__stamp">Nueva</span><div class="kitchen-ticket__product"><strong>Producto</strong></div>
       <span class="kitchen-ticket__quantity">2</span><ul class="kitchen-ticket__options"><li>Opción</li></ul></article></div>
-      <span class="staff-chip">Cocina</span><span class="space-account__chip">Pagado</span>
+      <section class="cashier-queue"><div class="app-receipt"><h3 class="cashier-receipt__folio">#241</h3><dl class="cashier-receipt__totals"><div><dt>Total</dt><dd>$85.00</dd></div></dl></div></section><span class="staff-chip">Cocina</span><span class="space-account__chip">Pagado</span>
       <span class="space-account__chip space-account__chip--due">Pendiente</span><span class="guest-tag">Invitado</span>
       <button class="staff-tile staff-tile--call">Llamando</button>
       <button class="staff-tile staff-tile--ready">Listo</button>
       <div class="staff-stat staff-stat--ready"><dt>Listas</dt></div>
-      <div class="staff-segment" data-value="all" role="radiogroup"><span class="staff-segment__indicator"></span><button role="radio" aria-checked="true">Todas</button><button role="radio" aria-checked="false">Por atender</button></div>
+      <fieldset class="app-segments"><legend>Mesas</legend><div class="app-segments__options"><label class="app-segments__option"><input type="radio" checked /><span>Todas</span></label><label class="app-segments__option"><input type="radio" /><span>Por atender</span></label></div></fieldset>
       <input class="field__control" value="Pedido" />
-      <aside class="sidebar"><a href="/app/pos" class="nav-item nav-item--active"><span>Caja</span></a></aside></div></body></html>`,
+      <nav class="app-mobile-nav"><a href="/app/pos" class="app-link--active">Caja</a><button>Más</button></nav></div><section class="app-sheet"><p class="space-payment-balance"><span>Pendiente</span><strong>$100.00 MXN</strong></p><div class="reject-order-form__suggestions"><button class="button button--secondary">Faltan ingredientes</button></div><p class="reject-order-form__folio">#72</p><div class="app-sheet__header"><h2>Cuenta</h2></div><button class="app-sheet__close">X</button></section></body></html>`,
     }));
     await page.goto('/staff-contrast-fixture');
-    await page.locator('link').evaluate((el: { sheet?: unknown; onload?: unknown }) => el.sheet ? undefined : new Promise((resolve) => el.onload = resolve));
+    await page.locator('link').evaluateAll((links) => Promise.all(links.map((el) => (el as HTMLLinkElement).sheet ? Promise.resolve() : new Promise((resolve) => el.onload = resolve))));
     const pairs = await page.evaluate(staffContrastPairs);
     console.log(theme, JSON.stringify(pairs));
     for (const pair of pairs) expect(pair.ratio, pair.selector).toBeGreaterThanOrEqual(4.5);

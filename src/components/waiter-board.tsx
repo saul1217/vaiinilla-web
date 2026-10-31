@@ -1,3 +1,8 @@
+import { AppSheet } from './app-sheet';
+import { SpacePaymentSheet } from './space-payment-sheet';
+import { SpaceDetailSheet } from './space-detail-sheet';
+import { WaiterSpaceGrid } from './waiter-space-grid';
+import { WaiterBoardHeader } from './waiter-board-header';
 // Tablero de Mesero y Caja: cada mesa a la vista, más urgente primero (llamando → pedido
 // listo → activa → libre). Sondea cada 5 s. Al tocar una mesa se abre su detalle con las
 // acciones Voy / Atendida / Entregar y su cuenta (cobrar, rentar, liberar).
@@ -5,11 +10,10 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Bell, BellOff, CheckCircle2, ScanLine, Table2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, EmptyState, Feedback, Modal } from './ui';
+import { Button, EmptyState, Feedback } from './ui';
 import { SpaceAccountPanel } from './space-account-panel';
 import { CourtBookingsCard } from './court-bookings-card';
 import { spaceStatusLine } from '../lib/space-status';
-import { splitSpaceName } from '../lib/staff-ui';
 import { OrderStatusBadge } from './status-badge';
 import { alertKeys, newAlerts, type WaiterAlert } from '../lib/waiter-alerts';
 import { playAlert, systemNotify, unlockAlertSound } from '../lib/alert-sound';
@@ -51,7 +55,11 @@ export function WaiterBoard({
   role,
   businessName,
   onAddOrder,
+  sheetOpen,
+  onSheetOpenChange,
 }: {
+  sheetOpen?: boolean;
+  onSheetOpenChange?: (open: boolean) => void;
   token: string;
   role: 'mesero' | 'cajero';
   businessName?: string;
@@ -59,6 +67,10 @@ export function WaiterBoard({
 }) {
   const client = useMemo(() => createWaiterClient(() => Promise.resolve(token)), [token]);
   const queryClient = useQueryClient();
+  const lastOpenedSpace = useRef<number | null>(null);
+  const tableHeading = useRef<HTMLHeadingElement>(null);
+  const boardRoot = useRef<HTMLElement>(null);
+  const closeAccount = useRef<(() => void) | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
   const [delivering, setDelivering] = useState<BoardOrder | null>(null);
   const [qrToken, setQrToken] = useState('');
@@ -209,6 +221,19 @@ export function WaiterBoard({
     ? tables.flatMap((table) => table.pedidos).find((order) => order.id === delivering.id) ?? delivering
     : null;
   const open = tables.find((table) => table.espacio.id === openId) ?? null;
+  useEffect(() => {
+    if (open) {
+      lastOpenedSpace.current = open.espacio.id;
+      return;
+    }
+    if (!onSheetOpenChange || !sheetOpen || lastOpenedSpace.current === null) return;
+    const spaceId = lastOpenedSpace.current;
+    const frame = requestAnimationFrame(() => {
+      const tile = boardRoot.current?.querySelector<HTMLButtonElement>(`[data-space-id="${spaceId}"]`);
+      (tile ?? boardRoot.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, onSheetOpenChange, sheetOpen]);
   const calling = tables.filter((table) => stateOf(table) === 'call').length;
   const ready = tables.reduce((sum, table) => sum + table.pedidos.filter((order) => order.estado === 'listo').length, 0);
   const active = tables.filter((table) => stateOf(table, spaces.get(table.espacio.id)) === 'active').length;
@@ -281,44 +306,11 @@ export function WaiterBoard({
     </>
   );
 
-  const summary = (
-    <>
-      <header className="staff-board-head">
-        <div>
-          <p className="staff-eyebrow">
-            {role === 'mesero' ? 'Mesero' : 'Caja'}{businessName ? ` · ${businessName}` : ''}
-          </p>
-          <h2 id="mesero-board-title" className="staff-title">Mesas</h2>
-        </div>
-        <span className={`staff-live ${board.isError ? 'staff-live--off' : ''}`} role="status">
-          <span /> {board.isError ? 'Sin conexión' : 'En vivo'}
-        </span>
-      </header>
-      <dl className="staff-stats" role="status">
-        <div className={calling ? 'staff-stat staff-stat--call' : 'staff-stat'}>
-          <dd>{calling}</dd>
-          <dt>llamando</dt>
-        </div>
-        <div className={ready ? 'staff-stat staff-stat--ready' : 'staff-stat'}>
-          <dd>{ready}</dd>
-          <dt>{ready === 1 ? 'listo' : 'listos'}</dt>
-        </div>
-        <div className="staff-stat">
-          <dd>{active}</dd>
-          <dt>activas</dt>
-        </div>
-      </dl>
-      <div className="staff-segment" role="radiogroup" aria-label="Qué mesas ver" data-value={onlyPending ? 'pending' : 'all'}>
-        <span className="staff-segment__indicator" aria-hidden="true" />
-        <button type="button" role="radio" aria-checked={!onlyPending} onClick={() => setOnlyPending(false)}>Todas</button>
-        <button type="button" role="radio" aria-checked={onlyPending} onClick={() => setOnlyPending(true)}>Por atender</button>
-      </div>
-    </>
-  );
 
-  return (
-    <section className="mesero-board staff-board" aria-labelledby="mesero-board-title">
-      {summary}
+  const boardView = (
+    <section ref={boardRoot} tabIndex={-1} className="mesero-board staff-board" aria-labelledby="mesero-board-title">
+      <WaiterBoardHeader role={role} businessName={businessName} error={board.isError} loading={board.isPending}
+        loaded={Boolean(board.data)} calling={calling} ready={ready} active={active} onlyPending={onlyPending} onFilter={setOnlyPending} />
       {alertsBlock}
 
       {board.data && !board.data.callsEnabled && (
@@ -330,12 +322,12 @@ export function WaiterBoard({
       {notice && <Feedback tone={notice.tone}>{notice.text}</Feedback>}
 
       {board.isPending ? (
-        <div className="staff-tiles" aria-hidden="true">
+        <div role="status" aria-label="Cargando mesas" aria-busy="true"><div className="staff-tiles" aria-hidden="true">
           {Array.from({ length: 6 }, (_, index) => (
             <span key={index} className="staff-tile staff-tile--skeleton" />
           ))}
-        </div>
-      ) : tables.length === 0 ? (
+        </div></div>
+      ) : board.isError && !board.data ? null : tables.length === 0 ? (
         <EmptyState
           icon={<Table2 aria-hidden="true" />}
           title="Sin mesas"
@@ -343,60 +335,35 @@ export function WaiterBoard({
         />
       ) : (
         shownTables.length === 0 ? (
-          <p className="staff-empty">Nadie está llamando y no hay pedidos listos.</p>
+          <EmptyState icon={<CheckCircle2 aria-hidden="true" />} title="Nada por atender" description="Todo en orden. Nadie está llamando y no hay pedidos listos." />
         ) : (
-          <div className="staff-tiles">
-            {shownTables.map((table, index) => {
-              const space = spaces.get(table.espacio.id);
-              const state = stateOf(table, space);
-              const { number, kind } = splitSpaceName(table.espacio.nombre);
-              return (
-                <button
-                  key={table.espacio.id}
-                  type="button"
-                  className={`staff-tile staff-tile--${state}`}
-                  style={{ ['--i' as string]: index }}
-                  onClick={() => setOpenId(table.espacio.id)}
-                  aria-label={`${table.espacio.nombre}. ${
-                    state === 'call' ? 'Llamando' : state === 'ready' ? 'Pedido listo' : state === 'active' ? 'Con pedidos' : 'Libre'
-                  }`}
-                >
-                  <span className="staff-tile__name">
-                    {number && <strong>{number}</strong>}
-                    <span title={table.espacio.nombre}>{kind || table.espacio.nombre}</span>
-                  </span>
-                  <small key={tileCaption(table, state, space)}>{tileCaption(table, state, space)}</small>
-                </button>
-              );
-            })}
-          </div>
+          <WaiterSpaceGrid tiles={shownTables.map((table) => {
+            const space = spaces.get(table.espacio.id);
+            const state = stateOf(table, space);
+            return { id: table.espacio.id, name: table.espacio.nombre, state, caption: tileCaption(table, state, space) };
+          })} onSelect={setOpenId} />
         )
 
       )}
 
       {(availability.data ?? []).some((space) => space.precio_hora !== null) && <CourtBookingsCard />}
 
-      <Modal
+    </section>
+  );
+
+  return (<>
+    {onSheetOpenChange ? <AppSheet open={Boolean(sheetOpen) && !open} onOpenChange={onSheetOpenChange} title="Mesas y canchas" size="large">{boardView}</AppSheet> : boardView}
+      <SpaceDetailSheet
+        headingRef={tableHeading}
+        fallbackFocusRef={boardRoot}
         open={Boolean(open)}
-        onOpenChange={(next) => { if (!next) setOpenId(null); }}
+        onOpenChange={(next) => { if (!next) { closeAccount.current?.(); setDelivering(null); setQrToken(''); setOpenId(null); } }}
         title={open?.espacio.nombre ?? 'Mesa'}
         contentClassName="staff-table-dialog"
         description={open ? (open.pedidos.length ? `${open.pedidos.length} ${open.pedidos.length === 1 ? 'pedido' : 'pedidos'} en curso` : 'Sin pedidos en curso') : undefined}
       >
         {open && (
-          <div className="mesero-sheet">
-            {role === 'mesero' && onAddOrder && (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  const spaceId = open.espacio.id;
-                  setOpenId(null);
-                  onAddOrder(spaceId);
-                }}
-              >
-                Nuevo pedido en esta mesa
-              </Button>
-            )}
+          <div className="mesero-sheet" data-delivering={Boolean(delivering)}>
             {open.llamada && (
               <div className={`mesero-call mesero-call--${open.llamada.estado}`}>
                 <div>
@@ -458,7 +425,22 @@ export function WaiterBoard({
                 </li>
               ))}
             </ul>)}
+            {role === 'mesero' && onAddOrder && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const spaceId = open.espacio.id;
+                  setOpenId(null);
+                  onAddOrder(spaceId);
+                }}
+              >
+                Nuevo pedido en esta mesa
+              </Button>
+            )}
             <SpaceAccountPanel
+              embedded
+              fallbackFocusRef={tableHeading}
+              closeRef={closeAccount}
               token={token}
               spaceId={open.espacio.id}
               availability={spaces.get(open.espacio.id)}
@@ -468,17 +450,8 @@ export function WaiterBoard({
             />
           </div>
         )}
-      </Modal>
-
-      <Modal
-        open={Boolean(delivering)}
-        onOpenChange={(next) => { if (!next) { setDelivering(null); setQrToken(''); } }}
-        title={delivering ? `Entregar pedido ${delivering.folio}` : 'Entregar pedido'}
-        contentClassName="staff-delivery-dialog"
-        description={delivering && deliveryRequiresQr(delivering)
-          ? 'Escanea el QR del cliente. El sistema verificará que corresponda exactamente a este pedido.'
-          : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
-      >
+      <SpacePaymentSheet embedded fallbackFocusRef={tableHeading} open={Boolean(delivering)} title={`Entregar pedido ${delivering?.folio ?? ''}`}
+        onOpenChange={(next) => { if (!next) { setDelivering(null); setQrToken(''); } }}>
         {delivering && (
           <div className="transaction-form">
             {deliverMutation.isError && <Feedback tone="error">{errorMessage(deliverMutation.error)}</Feedback>}
@@ -505,7 +478,8 @@ export function WaiterBoard({
             </div>
           </div>
         )}
-      </Modal>
-    </section>
+      </SpacePaymentSheet>
+      </SpaceDetailSheet>
+    </>
   );
 }

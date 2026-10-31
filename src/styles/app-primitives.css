@@ -1,0 +1,98 @@
+/* Slice 1 · I01/L01 identity and strong selection; user-approved app direction.
+   Independent tenant chrome and opt-in portal styles; platform keeps its shell. */
+.tenant-app { --app-nav-height: 72px; }
+.app-identity { display: flex; align-items: center; gap: 12px; padding: 20px 16px; }
+.app-identity__context { flex: 1; min-width: 0; }
+.app-identity__context p { font-weight: 800; overflow-wrap: anywhere; }
+.app-identity__context span { color: var(--color-muted); font-size: .8125rem; }
+.app-account-button { min-width: 48px; min-height: 48px; border-radius: 18px; background: var(--color-ink); color: var(--color-cream); font-weight: 800; }
+.app-rail { display: none; }
+.tenant-app .tenant-app__main { margin: 0; min-width: 0; padding: 12px 16px calc(var(--app-nav-height) + env(safe-area-inset-bottom) + 24px); }
+.app-mobile-nav { position: fixed; z-index: 40; bottom: calc(12px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(calc(100% - 24px), 480px); display: flex; gap: 4px; padding: 6px; border: 1px solid var(--line-strong); border-radius: 28px; background: var(--color-cream-2); box-shadow: 0 8px 24px #0002; }
+.app-mobile-nav--compact { width: auto; min-width: 120px; }
+.app-mobile-nav > :is(a, button) { flex: 1; min-width: 44px; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 22px; color: var(--color-muted); font-size: .6875rem; font-weight: 700; text-decoration: none; transition: background-color 140ms, color 140ms; }
+.app-mobile-nav svg { width: 20px; height: 20px; }
+.app-mobile-nav > .app-link--active, .app-rail .app-link--active, .app-menu-links .app-link--active { background: var(--color-ink); color: var(--color-cream); }
+:is(.app-mobile-nav, .app-rail, .app-menu-links, .app-account-actions) :is(a, button):focus-visible,
+.app-account-button:focus-visible, .app-sheet__close:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.app-account-actions { display: grid; gap: 8px; }
+.app-account-actions .button { justify-content: flex-start; min-height: 48px; }
+.app-account-actions p { margin-top: 12px; color: var(--color-muted); font-size: .8125rem; }
+.app-menu-links { display: grid; gap: 8px; }
+.app-menu-links a { display: flex; gap: 12px; align-items: center; padding: 12px; min-height: 48px; border-radius: 16px; overflow-wrap: anywhere; }
+.app-menu-links svg, .app-account-actions svg { width: 20px; height: 20px; flex-shrink: 0; }
+.app-page-header { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: end; min-width: 0; }
+.app-page-header__text { min-width: 0; flex: 1 1 220px; }
+.app-page-header :is(h1, h2, h3) { margin-top: 8px; font-size: clamp(2rem, 4vw, 2.5rem); line-height: 1.15; font-weight: 800; letter-spacing: -.045em; overflow-wrap: anywhere; text-wrap: balance; }
+.app-page-header h2 { font-size: 1.5rem; }
+.app-page-header h3 { font-size: 1.25rem; }
+.app-page-header__description { margin-top: 12px; max-width: 65ch; color: var(--color-muted); }
+.app-page-header__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; max-width: 100%; }
+.app-page-header__live { display: inline-flex; align-items: center; gap: 8px; background: var(--color-cream-2); border: 1px solid var(--line-strong); padding: 8px 12px; border-radius: 99px; font-weight: 700; }
+.app-page-header__live > span { width: 8px; height: 8px; border-radius: 50%; background: var(--color-ink); }
+/* Portal nodes are not descendants of .tenant-app. */
+.app-sheet-overlay { position: fixed; inset: 0; z-index: 100; background: #0008; animation: app-overlay-in 180ms ease-out; }
+.app-sheet { position: fixed; z-index: 101; bottom: 0; left: 0; width: 100%; max-height: calc(100dvh - env(safe-area-inset-top) - 12px); display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line-strong); border-bottom: 0; border-radius: 30px 30px 0 0; background: var(--color-cream); color: var(--color-ink); box-shadow: 0 20px 80px #0004; animation: app-sheet-in 200ms ease-out; }
+.app-sheet__handle { flex-shrink: 0; width: 36px; height: 4px; border-radius: 99px; background: var(--color-muted); margin: 10px auto 0; }
+.app-sheet__header { flex-shrink: 0; padding: 20px 76px 16px 20px; overflow-wrap: anywhere; }
+.app-sheet__close { position: absolute; right: 16px; top: 22px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--color-cream-2); }
+.app-sheet__scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 20px max(24px, env(safe-area-inset-bottom)); }
+.app-sheet__body { min-width: 0; }
+.app-sheet__intro { margin-top: 12px; }
+.app-sheet__footer { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+.app-sheet :is(input, select, textarea) { font-size: 16px; }
+.app-sheet .button { min-height: 48px; }
+.app-segments { margin: 0; padding: 4px; min-width: 0; border: 1px solid var(--line-strong); border-radius: 20px; background: var(--color-cream-2); }
+.app-segments__options { display: flex; gap: 4px; }
+.app-segments__option { position: relative; flex: 1; min-width: 0; cursor: pointer; }
+.app-segments input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.app-segments__option span { display: flex; justify-content: center; align-items: center; min-height: 48px; padding: 10px 12px; border-radius: 16px; color: var(--color-muted); font-size: .875rem; font-weight: 700; text-align: center; overflow-wrap: anywhere; transition: background-color 140ms, color 140ms; }
+.app-segments input:checked + span { background: var(--color-ink); color: var(--color-cream); }
+.app-segments input:focus-visible + span { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.app-segments:disabled, .app-segments input:disabled + span { opacity: .6; cursor: default; }
+.app-order-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px; min-height: 80px; border-bottom: 1px solid var(--line); }
+.app-order-row__content { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
+.app-order-row__heading, .app-order-row__action { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.app-order-row__meta { color: var(--color-muted); font-size: .8125rem; }
+.app-receipt { position: relative; padding: 24px; margin-bottom: 12px; border: 1px solid var(--line-strong); border-radius: 24px 24px 0 0; background: var(--color-cream-2); }
+.app-receipt::after { content: ''; pointer-events: none; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px; background: linear-gradient(135deg, var(--color-cream-2) 25%, transparent 25%) 0 0 / 16px 20px, linear-gradient(225deg, var(--color-cream-2) 25%, transparent 25%) 0 0 / 16px 20px; }
+.tenant-app .pos-toast { bottom: calc(var(--app-nav-height) + env(safe-area-inset-bottom) + 24px); }
+.app-feedback-toast { position: fixed; z-index: 60; bottom: calc(108px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(calc(100% - 32px), 440px); pointer-events: none; }
+@media (min-width: 768px) {
+  .app-identity, .app-mobile-nav { display: none; }
+  .app-rail { position: fixed; inset: 0 auto 0 0; z-index: 45; display: flex; flex-direction: column; gap: 20px; width: 88px; padding: 20px 6px; border-right: 1px solid var(--line); overflow-y: auto; overscroll-behavior: contain; background: var(--color-cream); }
+  .app-rail__brand { align-self: center; }
+  .app-rail__context { display: none; }
+  .app-rail__nav { display: grid; gap: 6px; }
+  .app-rail__link { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 64px; padding: 8px 4px; border-radius: 18px; font-size: .6875rem; text-align: center; overflow-wrap: anywhere; }
+  .app-rail__link svg { width: 20px; height: 20px; flex-shrink: 0; }
+  .app-rail__footer { margin-top: auto; display: grid; gap: 8px; }
+  .app-rail__footer .button { flex-direction: column; padding: 8px 2px; min-height: 60px; font-size: .6875rem; gap: 4px; }
+  .app-rail__footer svg { width: 20px; height: 20px; flex-shrink: 0; }
+  .tenant-app .tenant-app__main { margin-left: 88px; padding: 32px 24px; }
+  .app-sheet { top: 50%; bottom: auto; left: 50%; transform: translate(-50%, -50%); width: min(calc(100% - 48px), 640px); max-height: calc(100dvh - 48px); border: 1px solid var(--line-strong); border-radius: 30px; animation-name: app-dialog-in; }
+  .app-sheet--large { width: min(calc(100% - 48px), 1040px); }
+  .app-sheet--fullscreen { width: calc(100% - 48px); height: calc(100dvh - 48px); }
+  .app-sheet__handle { display: none; }
+  .app-sheet__header { padding: 28px 80px 20px 28px; }
+  .app-sheet__scroll { padding: 4px 28px 28px; }
+  .app-feedback-toast, .tenant-app .pos-toast { bottom: 24px; }
+}
+@media (min-width: 1024px) {
+  .app-rail { width: 232px; padding: 24px 16px; }
+  .app-rail__brand { align-self: start; }
+  .app-rail__context { display: grid; gap: 4px; overflow-wrap: anywhere; }
+  .app-rail__context span { color: var(--color-muted); font-size: .8125rem; }
+  .app-rail__link { flex-direction: row; justify-content: start; text-align: start; min-height: 48px; font-size: .875rem; padding: 12px; gap: 12px; }
+  .app-rail__footer .button { flex-direction: row; justify-content: start; font-size: .8125rem; padding: 12px; min-height: 48px; gap: 8px; }
+  .tenant-app .tenant-app__main { margin-left: 232px; padding: 40px 32px; }
+  .tenant-app__main > .page-stack { max-width: 1120px; }
+}
+@keyframes app-sheet-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes app-dialog-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@keyframes app-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .app-sheet, .app-sheet-overlay, .tenant-app *, .app-segments *, .app-feedback-toast { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .tenant-app .button:enabled:is(:hover, :active), .app-sheet .button:enabled:is(:hover, :active) { transform: none !important; }
+  .rolling-money__reel { transition: none !important; animation: none !important; }
+}

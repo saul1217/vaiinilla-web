@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Button, Feedback, Field, Modal } from './ui';
+import { AppSheet } from './app-sheet';
+import { Button, Feedback, Field } from './ui';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import type { ItemRejectionResult, OrderDetail } from '../types/api';
@@ -64,14 +65,15 @@ export function RejectOrderDialog({
     onClose();
   }
 
+  const Dialog = AppSheet;
   const isItem = chosen?.kind === 'item';
   return (
-    <Modal
+    <Dialog
       contentClassName="reject-order-dialog"
       open={Boolean(order)}
       onOpenChange={(open) => { if (!open) close(); }}
-      title={order ? `No se puede preparar · pedido ${order.folio}` : 'No se puede preparar'}
-      description="El cliente verá este motivo y se le devolverá lo que ya pagó."
+      title={isItem ? `Quitar ${chosen.name}` : 'Rechazar pedido'}
+      description="El cliente verá el motivo. Si ya pagó, el resultado del rechazo indicará la devolución correspondiente."
     >
       {order && (
         <form
@@ -82,6 +84,7 @@ export function RejectOrderDialog({
             if (chosen && motivo.length >= MIN_REJECTION_REASON) reject.mutate({ current: order, scope: chosen, motivo });
           }}
         >
+          <p className="reject-order-form__folio">#{order.folio}</p>
           {reject.isError && <Feedback tone="error">{errorMessage(reject.error)}</Feedback>}
           <fieldset className="reject-scope">
             <legend className="field__label">¿Qué no se puede preparar?</legend>
@@ -113,6 +116,10 @@ export function RejectOrderDialog({
               <p className="field__hint">Este pedido solo tiene un artículo: para quitarlo hay que cancelar el pedido completo.</p>
             )}
           </fieldset>
+          <div className="reject-order-form__suggestions" role="group" aria-label="Motivos sugeridos">
+            {['Se acabó el producto', 'Faltan ingredientes', 'Cocina saturada'].map(text => <Button
+              key={text} type="button" variant="secondary" onClick={() => setReason(text)}>{text}</Button>)}
+          </div>
           <Field
             name="rejection-reason"
             label="Motivo"
@@ -135,6 +142,6 @@ export function RejectOrderDialog({
           </div>
         </form>
       )}
-    </Modal>
+    </Dialog>
   );
 }

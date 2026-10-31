@@ -79,7 +79,7 @@ describe('administración del menú', () => {
     expect(await screen.findByRole('heading', { name: 'Chocolate frío' })).toBeVisible();
     // Sin pasar la comisión, mostrador y cliente son el mismo precio: no se repite como "digital".
     expect(screen.getByText('$20.00 MXN')).toBeVisible();
-    expect(screen.queryByText('Con tarjeta')).not.toBeInTheDocument();
+    expect(screen.queryByText('2 precios')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Nuevo producto' }));
     const dialog = screen.getByRole('dialog');
@@ -182,10 +182,54 @@ describe('administración del menú', () => {
     const user = userEvent.setup();
     render(<MenuPage />, { wrapper: TestProvider });
 
-    expect(await screen.findByText('Con tarjeta')).toBeVisible();
-    expect(screen.getByText('$25.30 MXN')).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Nuevo producto' }));
+    expect(await screen.findByText('2 precios')).toBeVisible();
+    expect(screen.queryByText('$25.30 MXN')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Editar Chocolate frío' }));
     const dialog = screen.getByRole('dialog');
+    expect(await within(dialog).findByText('Precio con tarjeta guardado: $25.30 MXN')).toBeVisible();
     expect(await within(dialog).findByText(/con tarjeta se suma la comisión/i)).toBeVisible();
+  });
+
+  it('filtra tarjetas por búsqueda y permite limpiar una búsqueda sin resultados', async () => {
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+    expect(await screen.findByRole('heading', { name: 'Chocolate frío' })).toBeVisible();
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar productos' }), 'café');
+    expect(await screen.findByRole('heading', { name: 'No hay coincidencias' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Limpiar búsqueda y filtros' }));
+    expect(await screen.findByRole('heading', { name: 'Chocolate frío' })).toBeVisible();
+  });
+
+  it('abre edición con los datos actuales y guarda el payload completo existente', async () => {
+    apiMock.updateProduct.mockResolvedValue(product);
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+    await screen.findByRole('heading', { name: 'Chocolate frío' });
+    await user.click(screen.getByRole('button', { name: 'Editar Chocolate frío' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Nombre *')).toHaveValue('Chocolate frío');
+    expect(within(dialog).getByLabelText('Alérgenos')).toHaveValue('Leche');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar producto' }));
+    await waitFor(() => expect(apiMock.updateProduct).toHaveBeenCalledWith('tenant-token', 101, {
+      categoria_id: 10,
+      estacion_preparacion: 'caja',
+      nombre: 'Chocolate frío',
+      descripcion: 'Bebida fría de chocolate.',
+      ingredientes: null,
+      alergenos: 'Leche',
+      tiempo_estimado_min: 5,
+      precio_mostrador: '20.00',
+      disponible: true,
+      grupos_opcion: [],
+    }));
+  });
+
+  it('abre la confirmación de disponibilidad con nombre específico y acciones accesibles', async () => {
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+    await screen.findByRole('heading', { name: 'Chocolate frío' });
+    expect(screen.getByRole('button', { name: 'Editar Chocolate frío' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Ocultar Chocolate frío' }));
+    expect(await screen.findByRole('dialog', { name: 'Ocultar Chocolate frío' })).toBeVisible();
   });
 });
