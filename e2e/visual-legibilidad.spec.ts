@@ -65,7 +65,7 @@ test('Caja (POS) con tema oscuro del personal', async ({ page }, info) => {
   await shot(page, 'pos-01-inicio', info.project.name);
   // «Quitar artículo» solo existe dentro del diálogo que abre «Rechazar o quitar» en un pedido en efectivo,
   // y «Cobrar» queda deshabilitado sin sesión de Caja abierta. Se fotografía lo que el estado de la tienda permita.
-  await expect(page.getByRole('heading', { name: 'Caja', exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^(Caja|Caja en control\.)$/ })).toBeVisible({ timeout: 20_000 });
   const rechazar = page.getByRole('button', { name: 'Rechazar o quitar' }).first();
   if (await rechazar.count()) {
     await rechazar.click();
