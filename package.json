@@ -62,6 +62,7 @@
   "overrides": {
     "@grpc/grpc-js": "^1.14.6",
     "basic-ftp": "^6.2.3",
+    "minimatch": "^11.0.3",
     "tmp": "^0.2.7",
     "uuid": "^11.1.1"
   }
