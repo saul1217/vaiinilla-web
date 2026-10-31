@@ -112,7 +112,7 @@ export function PosPage() {
     initialPageParam: undefined as string | undefined,
     enabled: Boolean(token) && isCashier,
     queryFn: ({ pageParam }) => api.listOrders(token, {
-      estado: ['por_cobrar', 'listo'],
+      estado: ['por_cobrar', 'preparando', 'listo'],
       cursor: pageParam,
       limit: 50,
     }),

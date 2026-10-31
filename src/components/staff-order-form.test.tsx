@@ -9,6 +9,7 @@ import { StaffOrderForm } from './staff-order-form';
 const apiMock = vi.hoisted(() => ({
   catalog: vi.fn(),
   spaceAvailability: vi.fn(),
+  businessSettings: vi.fn(),
   createStaffOrder: vi.fn(),
 }));
 
@@ -85,6 +86,7 @@ describe('StaffOrderForm', () => {
     vi.clearAllMocks();
     apiMock.catalog.mockResolvedValue(CATALOGO);
     apiMock.spaceAvailability.mockResolvedValue(ESPACIOS);
+    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: false, tipo: 'cafeteria', entrega_requiere_qr: true, gracia_liberacion_min: 5, franjas_pedido: [] });
     apiMock.createStaffOrder.mockResolvedValue(PEDIDO_CREADO);
   });
 
@@ -120,12 +122,13 @@ describe('StaffOrderForm', () => {
 
   it('en mesa a pagar al final: lleva el espacio y la bandera, sin cobro al instante', async () => {
     const user = userEvent.setup();
+    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
     renderForm('mesero');
 
     await user.click(screen.getByRole('button', { name: 'En mesa' }));
     await user.click(await screen.findByRole('button', { name: /Mesa 2/ }));
     await user.click(screen.getByRole('button', { name: 'Agregar' }));
-    await user.click(screen.getByLabelText(/Pagar al final/));
+    expect(screen.getByLabelText(/Pagar al final/)).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
 
     await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
@@ -137,11 +140,21 @@ describe('StaffOrderForm', () => {
     expect(llamadas()[0]?.[1]).not.toHaveProperty('cobrar_ahora');
   });
 
+  it('con pagar al final desactivado en el negocio, la mesa no lo marca sola', async () => {
+    const user = userEvent.setup();
+    renderForm('mesero');
+
+    await user.click(screen.getByRole('button', { name: 'En mesa' }));
+    await user.click(await screen.findByRole('button', { name: /Mesa 2/ }));
+    expect(screen.getByLabelText(/Pagar al final/)).not.toBeChecked();
+  });
+
   it('iniciado desde una mesa precarga destino y mesa en el pedido', async () => {
     const user = userEvent.setup();
+    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
     renderForm('mesero', vi.fn(), 2);
 
-    expect(screen.getByRole('button', { name: 'En mesa' })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByRole('button', { name: 'En mesa' })).toHaveAttribute('aria-pressed', 'true');
     expect(await screen.findByRole('button', { name: /Mesa 2/ })).toHaveAttribute('aria-pressed', 'true');
     await user.click(await screen.findByRole('button', { name: 'Agregar' }));
     await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));

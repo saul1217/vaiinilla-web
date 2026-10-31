@@ -73,6 +73,7 @@ function table() {
   pedidos: [{
     id: 'order-28', folio: 28, estado: 'listo', version: 1, destino: 'en_espacio',
     sesion_espacio_id: 'session-67', sesion_espacio_estado: 'abierta',
+    pago_diferido: true,
     cliente: { nombre: 'Kikin' }, items_resumen: '1× Quesadilla', actualizado_en: '2026-10-06T11:30:00.000Z',
   }],
   };
@@ -150,6 +151,32 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     expect(within(dialog).getByRole('button', { name: 'Entregar' })).toBeVisible();
     await user.click(within(dialog).getByRole('button', { name: 'Entregar' }));
     await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('staff-token', 'order-28', 1, ''));
+  });
+
+  it('bloquea entregar un pedido listo con saldo si no va a la cuenta de la mesa', async () => {
+    state.call = null;
+    waiterClient.board.mockImplementation(() =>
+      Promise.resolve({
+        tables: [{
+          ...table(),
+          pedidos: [{
+            id: 'order-99', folio: 99, estado: 'listo', version: 1, destino: 'en_espacio',
+            sesion_espacio_id: 'session-67', sesion_espacio_estado: 'abierta',
+            pago_diferido: false, saldo_pendiente: '45.00',
+            cliente: { nombre: 'Ana' }, items_resumen: '1× Taco', actualizado_en: '2026-10-06T11:30:00.000Z',
+          }],
+        }],
+        callsEnabled: true,
+      }),
+    );
+    const user = userEvent.setup();
+    render(<WaiterBoard token="staff-token" role="mesero" />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Mesa 67\. Pedido listo/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Entregar' })).toBeDisabled();
+    expect(within(dialog).getByText(/Primero hay que cobrarlo en Caja/)).toBeInTheDocument();
+    expect(apiMock.deliverOrder).not.toHaveBeenCalled();
   });
 
   it('permite iniciar un pedido desde el detalle y comunica la mesa seleccionada', async () => {

@@ -8,6 +8,14 @@ export function hasOutstandingCashBalance(order: OrderDetail): boolean {
   return cents === null || cents > 0n;
 }
 
+/** Mesero no entrega un pedido listo que no va a la cuenta y aún debe cobrarse en Caja. */
+export function mustCollectBeforeDelivery(order: Pick<OrderDetail, 'pago_diferido' | 'saldo_pendiente'>): boolean {
+  if (order.pago_diferido) return false;
+  if (order.saldo_pendiente === undefined) return false;
+  const cents = moneyToCents(order.saldo_pendiente);
+  return cents !== null && cents > 0n;
+}
+
 function isIndividuallyPaid(order: OrderDetail): boolean {
   if (order.saldo_pendiente === undefined) return false;
   const cents = moneyToCents(order.saldo_pendiente);
@@ -15,7 +23,8 @@ function isIndividuallyPaid(order: OrderDetail): boolean {
 }
 
 export function isCashierCashOrder(order: OrderDetail): boolean {
-  return order.estado === 'por_cobrar';
+  if (order.estado === 'por_cobrar') return true;
+  return order.estado === 'preparando' && hasOutstandingCashBalance(order);
 }
 
 /** Caja entrega con QR tanto para llevar como en mesa/espacio. */
