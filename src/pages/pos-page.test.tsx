@@ -10,6 +10,7 @@ const apiMock = vi.hoisted(() => ({
   activeCashSession: vi.fn(), operationalStatus: vi.fn(), listOrders: vi.fn(),
   collectCash: vi.fn(), deliverOrder: vi.fn(), closeCashSession: vi.fn(),
   catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
+  businessSettings: vi.fn(),
 }));
 
 const sesion = vi.hoisted(() => ({ rol: 'cajero' }));
@@ -92,6 +93,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: false });
     apiMock.listOrders.mockResolvedValue({ orders: [baseOrder], cursor: null });
     apiMock.collectCash.mockResolvedValue({ cambio: '0.00' });
+    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: false, tipo: 'cafeteria', entrega_requiere_qr: true, gracia_liberacion_min: 5, franjas_pedido: [] });
   });
 
   it.each(['cajero', 'mesero', 'admin'])('respeta el tema claro elegido por %s al entrar y salir', (role) => {
@@ -182,6 +184,27 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(screen.getByRole('button', { name: 'Abrir Caja' })).toBeEnabled();
   });
 
+  it('pide preparando, por_cobrar y listo al backend y muestra preparando sin pagar en Por cobrar', async () => {
+    const preparing = {
+      ...baseOrder,
+      id: 'order-prep',
+      folio: 15,
+      estado: 'preparando' as const,
+      monto_pagado: '0.00',
+      saldo_pendiente: '125.00',
+    };
+    apiMock.listOrders.mockResolvedValue({ orders: [preparing], cursor: null });
+    render(<PosPage />, { wrapper: Wrapper });
+    await waitFor(() =>
+      expect(apiMock.listOrders).toHaveBeenCalledWith(
+        'token',
+        expect.objectContaining({ estado: ['por_cobrar', 'preparando', 'listo'] }),
+      ),
+    );
+    expect(await screen.findByRole('button', { name: 'Cobrar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Entregar' })).not.toBeInTheDocument();
+  });
+
   it('solo permite cobrar cuando está listo pero pendiente, y después ofrece imprimir y entregar', async () => {
     const user = userEvent.setup();
     const paidOrder = { ...baseOrder, monto_pagado: '125.00', saldo_pendiente: '0.00', version: 5 };
@@ -245,6 +268,7 @@ describe('POS: Nuevo pedido del staff', () => {
     apiMock.catalog.mockResolvedValue(CATALOGO);
     apiMock.spaceAvailability.mockResolvedValue([]);
     apiMock.createStaffOrder.mockResolvedValue(PEDIDO_CREADO);
+    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: false, tipo: 'cafeteria', entrega_requiere_qr: true, gracia_liberacion_min: 5, franjas_pedido: [] });
   });
 
   it('el mesero abre el formulario de Nuevo pedido desde el POS', async () => {

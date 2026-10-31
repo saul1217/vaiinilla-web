@@ -7,6 +7,8 @@ import {
   isCashierCashOrder,
   isCashierDeliveryOrder,
   isCashierPaidDeliveryOrder,
+  mustCollectBeforeDelivery,
+  mensajeCobroAntesDeEntregar,
 } from './cashier-queue';
 
 function order(overrides: Partial<OrderDetail>): OrderDetail {
@@ -35,8 +37,14 @@ function order(overrides: Partial<OrderDetail>): OrderDetail {
 }
 
 describe('cashier-queue', () => {
-  it('cobra solo por_cobrar y entrega cualquier listo, incluida mesa', () => {
+  it('cobra por_cobrar y preparando sin pagar; entrega cualquier listo, incluida mesa', () => {
     expect(isCashierCashOrder(order({ estado: 'por_cobrar' }))).toBe(true);
+    expect(
+      isCashierCashOrder(
+        order({ estado: 'preparando', metodo_pago: 'efectivo', saldo_pendiente: '46.00', monto_pagado: '0.00' }),
+      ),
+    ).toBe(true);
+    expect(isCashierCashOrder(order({ estado: 'preparando', saldo_pendiente: '0.00' }))).toBe(false);
     expect(isCashierDeliveryOrder(order({ estado: 'listo', destino: 'para_llevar' }))).toBe(true);
     expect(
       isCashierDeliveryOrder(
@@ -83,5 +91,20 @@ describe('cashier-queue', () => {
 
   it('no autoriza la entrega si el backend todavía no informó el saldo', () => {
     expect(isCashierPaidDeliveryOrder(order({ estado: 'listo', saldo_pendiente: undefined }))).toBe(false);
+  });
+
+  it('bloquea entrega en mesa cuando no es cuenta diferida y aún hay saldo', () => {
+    expect(
+      mustCollectBeforeDelivery({ pago_diferido: false, saldo_pendiente: '20.00' }),
+    ).toBe(true);
+    expect(
+      mustCollectBeforeDelivery({ pago_diferido: true, saldo_pendiente: '20.00' }),
+    ).toBe(false);
+    expect(mustCollectBeforeDelivery({ pago_diferido: false, saldo_pendiente: '0.00' })).toBe(false);
+  });
+
+  it('describe cuánto falta cobrar antes de entregar', () => {
+    expect(mensajeCobroAntesDeEntregar('45.00')).toBe('Falta cobrar $45.00 en Caja antes de entregar.');
+    expect(mensajeCobroAntesDeEntregar(undefined)).toBe('Falta cobrar en Caja antes de entregar.');
   });
 });

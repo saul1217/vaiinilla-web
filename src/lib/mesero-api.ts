@@ -144,6 +144,7 @@ export function createWaiterClient(getToken: () => Promise<string>): WaiterClien
           saldo_pendiente: order.saldo_pendiente,
           total: order.total,
           pago_pendiente: order.pago_pendiente,
+          pago_diferido: order.pago_diferido,
           version: order.version,
           cliente: order.usuario ? { nombre: order.usuario.nombre } : null,
           items_resumen: summarize(order),
