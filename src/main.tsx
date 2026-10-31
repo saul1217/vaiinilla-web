@@ -7,7 +7,9 @@ import { AuthProvider } from './context/auth-context';
 import { SessionProvider } from './context/session-context';
 import { clearLegacyStaffUi } from './lib/staff-ui';
 import './styles/index.css';
+import './styles/app-primitives.css';
 import './styles/admin-screens.css';
+import './styles/mesero-slice.css';
 
 clearLegacyStaffUi();
 installPreloadErrorReload();

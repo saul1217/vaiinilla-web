@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { SpaceDetailSheet } from './space-detail-sheet';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpaceAvailability, SpaceSessionDetail } from '../types/api';
 import { SpaceAccountPanel } from './space-account-panel';
@@ -55,6 +56,24 @@ describe('cuenta del espacio', () => {
     apiMock.getOrder.mockRejectedValue(new Error('No hay detalle disponible'));
   });
 
+  it('conserva el borrador y medio al navegar entre monto, pedidos y partes', async () => {
+    const user = userEvent.setup();
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: /Cobrar cuenta/ }));
+    await user.click(screen.getByRole('radio', { name: 'Por monto' }));
+    const amount = screen.getByRole('textbox', { name: 'Monto de este pago' });
+    await user.clear(amount);
+    await user.type(amount, '75.25');
+    await user.click(screen.getByRole('radio', { name: 'Terminal' }));
+    await user.click(screen.getByRole('radio', { name: 'Por pedidos' }));
+    await user.click(screen.getByRole('radio', { name: 'Partes iguales' }));
+    expect(screen.getByRole('radio', { name: 'Terminal' })).toBeChecked();
+    await user.click(screen.getByRole('radio', { name: 'Por monto' }));
+    expect(screen.getByRole('textbox', { name: 'Monto de este pago' })).toHaveValue('75.25');
+    expect(apiMock.abonarSpaceAccount).not.toHaveBeenCalled();
+    expect(apiMock.collectSpaceAccount).not.toHaveBeenCalled();
+  });
+
   it('divide la cuenta: cobra solo el pedido marcado con la terminal', async () => {
     const user = userEvent.setup();
     apiMock.collectSpaceAccount.mockResolvedValue({ pedidos_cobrados: 1, total: '120.00', metodo_pago: 'terminal', monto_recibido: null, cambio: '0.00', restante: '80.50' });
@@ -97,10 +116,10 @@ describe('cuenta del espacio', () => {
 
     await user.click(await screen.findByRole('button', { name: /Cobrar cuenta/ }));
     const confirm = screen.getByRole('button', { name: 'Confirmar cobro' });
-    await user.type(screen.getByLabelText('Efectivo recibido'), '100.00');
+    await user.type(screen.getByRole('textbox', { name: 'Efectivo recibido' }), '100.00');
     expect(confirm).toBeDisabled();
-    await user.clear(screen.getByLabelText('Efectivo recibido'));
-    await user.type(screen.getByLabelText('Efectivo recibido'), '300.00');
+    await user.clear(screen.getByRole('textbox', { name: 'Efectivo recibido' }));
+    await user.type(screen.getByRole('textbox', { name: 'Efectivo recibido' }), '300.00');
     await user.click(confirm);
 
     await waitFor(() => expect(apiMock.collectSpaceAccount).toHaveBeenCalledWith('t', 7, {
@@ -126,6 +145,21 @@ describe('cuenta del espacio', () => {
     await user.click(await screen.findByRole('button', { name: 'Cancelar renta' }));
 
     expect(apiMock.cancelCounterRental).toHaveBeenCalledWith('t', 'r1');
+  });
+
+  it('cerrar la hoja contenedora cancela una sola vez el apartado de renta sin cobrar', async () => {
+    const user = userEvent.setup();
+    apiMock.spaceSession.mockResolvedValue({ ...openAccount, espacio: court, estado: 'libre', sesion: null, cuenta: null });
+    apiMock.startCounterRental.mockResolvedValue({ id: 'r-outer', espacio: court, inicio: '2026-10-01T18:00:00Z', fin: '2026-10-01T19:30:00Z', duracion_min: 90, monto: '300.00', estado: 'pendiente_pago', version: 1 });
+    apiMock.cancelCounterRental.mockResolvedValue(undefined);
+    render(<RentalTableSheet />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: '1 h 30 min' }));
+    await screen.findByRole('button', { name: 'Cobrar y rentar' });
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(apiMock.cancelCounterRental).toHaveBeenCalledExactlyOnceWith('t', 'r-outer');
+    expect(apiMock.payCounterRental).not.toHaveBeenCalled();
   });
 
   it('partes iguales: cobra la primera de tres con la terminal', async () => {
@@ -200,7 +234,7 @@ describe('cuenta del espacio', () => {
     await user.click(screen.getByRole('button', { name: /Cobrar cuenta/ }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('radio', { name: 'Por pedidos' })).toBeDisabled();
-    expect(within(dialog).getByRole('radio', { name: 'Por monto' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(dialog).getByRole('radio', { name: 'Por monto' })).toBeChecked();
     expect(within(dialog).getByRole('textbox', { name: 'Monto de este pago' })).toHaveValue('100.50');
   });
 
@@ -467,3 +501,13 @@ describe('cuenta del espacio', () => {
     );
   });
 });
+
+function RentalTableSheet() {
+  const [open, setOpen] = useState(true);
+  const close = useRef<(() => void) | null>(null);
+  const availability: SpaceAvailability = { espacio: court, estado: 'libre', saldada: true, inicio: null, fin_previsto: null, precio_hora: '300.00', proxima_reserva: null };
+  return <SpaceDetailSheet open={open} title="Cancha 1" onOpenChange={(next) => {
+    if (!next) close.current?.();
+    setOpen(next);
+  }}><SpaceAccountPanel embedded closeRef={close} token="t" spaceId={3} availability={availability} /></SpaceDetailSheet>;
+}

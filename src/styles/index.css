@@ -7663,11 +7663,6 @@ html[data-admin-theme] .feedback--info { background: var(--status-info-bg); colo
 html[data-admin-theme] .pos-toast .feedback { background: var(--toast-bg); color: var(--toast-text); border-color: #626257; border-radius: var(--radius-control); }
 html[data-admin-theme] .dialog-content { border-color: var(--line); border-radius: var(--radius-sheet); background: var(--color-cream); overscroll-behavior: contain; }
 html[data-admin-theme] .dialog-close { background: var(--color-cream-2); border-color: var(--line-strong); }
-.app-frame--tenant .sidebar { background: var(--color-cream); }
-.app-frame--tenant .sidebar__context { background: var(--color-cream-2); border-radius: var(--radius-card); }
-.app-frame--tenant .nav-item { min-height: 44px; }
-html[data-admin-theme] .app-frame--tenant .nav-item--active { background: var(--color-ink); color: var(--color-cream); }
-html[data-admin-theme] .app-frame--tenant .nav-item--active:hover { background: var(--color-ink-soft); }
 .mobile-header__context { flex: 1; min-width: 0; margin-inline: 12px; }
 .mobile-header__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.875rem; font-weight: 800; }
 .mobile-header__role { color: var(--color-muted); font-size: var(--type-caption); }
@@ -7930,4 +7925,84 @@ html[data-admin-theme] .kitchen-ticket li.is-rejected :is(.kitchen-ticket__produ
 .legal-document section li {
   margin: 0.25rem 0;
   line-height: 1.6;
+/* Slice 4: one operational tree; mobile selects a ticket, desktop shows each stage. */
+.kitchen-work { min-width: 0; }
+.kitchen-work__heading { margin: 0 0 16px; font-size: 1.5rem; }
+.kitchen-work__columns { display: grid; gap: 24px; }
+.kitchen-work__column { display: contents; }
+.kitchen-work__stage-title, .kitchen-work__stage-empty,
+.kitchen-work__ticket:not(.kitchen-work__ticket--selected) { display: none; }
+.kitchen-work__ticket { min-width: 0; margin-bottom: 20px; }
+.kitchen-work__queue { margin-top: 24px; }
+.kitchen-work__queue > section { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.kitchen-work__queue h3 { font-size: 1rem; }
+.kitchen-work__queue ul { list-style: none; margin: 0; padding: 0; }
+.kitchen-work__queue .app-order-row { min-height: 80px; overflow-wrap: anywhere; }
+.kitchen-work__queue p { color: var(--color-muted); font-size: .875rem; }
+.kitchen-work__batch { margin-top: 20px; }
+.kitchen-page .kitchen-overview > summary { cursor: pointer; min-height: 48px; padding: 12px 0; font-weight: 700; }
+.kitchen-page .kitchen-overview__controls { justify-content: space-between; }
+.kitchen-page .kitchen-overview__header h2 { font-size: 1rem; }
+.reject-order-form__folio { margin: 0; font-size: 3rem; font-weight: 800; overflow-wrap: anywhere; }
+.reject-order-form__suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+.reject-order-form__suggestions .button { min-height: 48px; white-space: normal; }
+@media (min-width: 1024px) {
+  .kitchen-work__columns { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+  .kitchen-work__column { display: grid; gap: 20px; min-width: 0; }
+  .kitchen-work__stage-title, .kitchen-work__stage-empty,
+  .kitchen-work__ticket:not(.kitchen-work__ticket--selected) { display: block; }
+  .kitchen-work__stage-title { font-size: 1.125rem; margin: 0; }
+  .kitchen-work__queue { display: none; }
+}
+@media (max-width: 374px) {
+  .kitchen-work__queue .app-order-row { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kitchen-page .kitchen-ticket--leaving { animation: none; transform: none; opacity: 1; }
+  .kitchen-page .kitchen-refresh__icon--active { animation: none; }
+  .kitchen-page .kitchen-ticket__stamp { transform: none; }
+}
+/* Keep the rejection response visible and focusable during the existing async delay. */
+.kitchen-work .kitchen-ticket--leaving { pointer-events: auto; overflow: visible; animation: kitchen-rejection-response 180ms ease-out both; }
+@keyframes kitchen-rejection-response { from { opacity: 1; } to { opacity: .7; } }
+@media (prefers-reduced-motion: reduce) {
+  .kitchen-work .kitchen-ticket--leaving { animation: none; }
+}
+.kitchen-page .kitchen-overview > summary:focus-visible { outline: 3px solid var(--color-ink); outline-offset: -3px; }
+
+/* H01: the selected comanda has its own paper surface and reading hierarchy. */
+html[data-admin-theme] .kitchen-ticket--protagonist {
+  --ticket-paper: #f5ecd8;
+  background: var(--ticket-paper);
+  border-radius: 28px 28px 0 0;
+  padding: 28px 24px 32px;
+  box-shadow: 0 12px 28px rgb(40 36 25 / 10%);
+}
+html[data-admin-theme='oscuro'] .kitchen-ticket--protagonist { --ticket-paper: #302d24; }
+html[data-admin-theme] .kitchen-ticket--protagonist::after {
+  height: 12px;
+  bottom: -11px;
+  background: var(--ticket-paper);
+  mask: linear-gradient(135deg, #000 25%, transparent 25%) -10px 0 / 20px 20px repeat-x,
+    linear-gradient(225deg, #000 25%, transparent 25%) -10px 0 / 20px 20px repeat-x;
+  pointer-events: none;
+}
+html[data-admin-theme] .kitchen-ticket--protagonist .kitchen-ticket__folio h3 {
+  font-size: clamp(3.5rem, 6vw, 5rem);
+  line-height: 1.05;
+  letter-spacing: -.05em;
+}
+html[data-admin-theme] .kitchen-ticket--protagonist .kitchen-ticket__timer strong { font-size: 1.5rem; }
+html[data-admin-theme] .kitchen-ticket--protagonist .kitchen-ticket__route {
+  border-top: 2px dashed currentColor;
+  border-bottom: 1px dashed currentColor;
+}
+html[data-admin-theme] .kitchen-ticket__note-empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: .75rem;
+  line-height: 1.5;
+}
+@media (max-width: 389px) {
+  html[data-admin-theme] .kitchen-ticket--protagonist { padding-inline: 18px; }
 }

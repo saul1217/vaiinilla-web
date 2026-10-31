@@ -22,6 +22,8 @@ import {
 } from '../lib/staff-order';
 import type { CatalogProduct, StaffOrderInput, StaffOrderResult } from '../types/api';
 import { Button, Feedback, Field } from './ui';
+import { StaffProductTile } from './staff-product-tile';
+import { StaffOrderSummary } from './staff-order-summary';
 
 const ESTADO_ESPACIO: Record<string, string> = {
   libre: 'Libre',
@@ -61,6 +63,7 @@ function StaffOrderFormBody({
   initialSpaceId,
   permitePagoAlFinal,
 }: StaffOrderFormProps & { permitePagoAlFinal: boolean }) {
+  const [search, setSearch] = useState('');
   const puedeCobrarAhora = rol === 'cajero';
   const [draft, setDraft] = useState<StaffOrderDraft>(() =>
     borradorInicialStaff({ espacioId: initialSpaceId, permitePagoAlFinal }),
@@ -140,6 +143,7 @@ function StaffOrderFormBody({
 
   return (
     <form className="staff-order" onSubmit={enviar}>
+      {initialSpaceId !== undefined && <h3 className="staff-order__context">Pedido para {espacios.find((fila) => fila.espacio.id === draft.espacioId)?.espacio.nombre ?? 'mesa seleccionada'}</h3>}
       {errores.length > 0 && (
         <Feedback tone="error">
           <ul className="staff-order__errores">
@@ -150,6 +154,15 @@ function StaffOrderFormBody({
         </Feedback>
       )}
       {crear.isError && <Feedback tone="error">{errorMessage(crear.error)}</Feedback>}
+
+        <Field
+          id="staff-order-nombre"
+          label="Nombre del cliente (opcional)"
+          maxLength={120}
+          value={draft.nombreCliente}
+          onChange={(event) => actualizar({ nombreCliente: event.target.value })}
+          hint='Si lo dejas vacío, el pedido se llama "Mostrador".'
+        />
 
       <fieldset className="staff-order__bloque staff-order__destination">
         <legend>¿Dónde se sirve?</legend>
@@ -194,9 +207,15 @@ function StaffOrderFormBody({
 
       <fieldset className="staff-order__bloque staff-order__catalog">
         <legend>Productos</legend>
+        <Field id="staff-product-search" label="Buscar en el menú" type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
+        {catalogo.isPending && <p role="status">Cargando productos…</p>}
+        {catalogo.isSuccess && productos.length === 0 && <p>No hay productos disponibles.</p>}
+        {productos.length > 0 && !productos.some((producto) => producto.nombre.toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es'))) && (
+          <div role="status"><p>Sin coincidencias.</p><Button type="button" variant="ghost" onClick={() => setSearch('')}>Limpiar búsqueda</Button></div>
+        )}
         {catalogo.isError && <Feedback tone="error">{errorMessage(catalogo.error)}</Feedback>}
         {categorias.map((categoria) => {
-          const delaCategoria = productos.filter((producto) => producto.categoria_id === categoria.id);
+          const delaCategoria = productos.filter((producto) => producto.categoria_id === categoria.id && producto.nombre.toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es')));
           if (delaCategoria.length === 0) return null;
           return (
             <section key={categoria.id} className="staff-order__categoria">
@@ -204,14 +223,7 @@ function StaffOrderFormBody({
               {delaCategoria.map((producto) => {
                 const linea = cantidadPorProducto.get(producto.id);
                 return (
-                  <article key={producto.id} className="staff-order__producto" data-agregado={Boolean(linea)}>
-                    {producto.imagen_url && (
-                      <img className="staff-order__photo" src={producto.imagen_url} alt="" loading="lazy" />
-                    )}
-                    <div>
-                      <strong>{producto.nombre}</strong>
-                      <span>{formatMoney(producto.precio_mostrador)}</span>
-                    </div>
+                  <StaffProductTile key={producto.id} product={producto} selected={Boolean(linea)}>
                     {linea ? (
                       <button type="button" className="staff-order__quitar" onClick={() => quitar(producto.id)}>
                         Quitar
@@ -272,7 +284,7 @@ function StaffOrderFormBody({
                         ))}
                       </div>
                     )}
-                  </article>
+                  </StaffProductTile>
                 );
               })}
             </section>
@@ -282,14 +294,6 @@ function StaffOrderFormBody({
 
       <fieldset className="staff-order__bloque staff-order__customer">
         <legend>Cliente y pago</legend>
-        <Field
-          id="staff-order-nombre"
-          label="Nombre del cliente (opcional)"
-          maxLength={120}
-          value={draft.nombreCliente}
-          onChange={(event) => actualizar({ nombreCliente: event.target.value })}
-          hint='Si lo dejas vacío, el pedido se llama "Mostrador".'
-        />
         <p className="staff-order__metodo">Efectivo <span>Otros métodos los paga el cliente en la app.</span></p>
 
         {draft.destino === 'en_espacio' && (
@@ -328,7 +332,11 @@ function StaffOrderFormBody({
         )}
       </fieldset>
 
-      <div className="staff-order__pie">
+      <StaffOrderSummary>
+        {draft.lineas.length > 0 && <details className="staff-order__selected">
+          <summary>Ver pedido ({draft.lineas.length})</summary>
+          <ul>{draft.lineas.map((linea) => <li key={linea.producto.id}>{linea.cantidad} × {linea.producto.nombre}</li>)}</ul>
+        </details>}
         <p>
           Total <strong>{formatMoney(totalPedidoTexto(draft.lineas))}</strong>
           <small>El servidor calcula el total final.</small>
@@ -336,7 +344,7 @@ function StaffOrderFormBody({
         <Button type="submit" loading={crear.isPending}>
           {draft.cobrarAhora ? 'Enviar y cobrar' : 'Enviar pedido'}
         </Button>
-      </div>
+      </StaffOrderSummary>
     </form>
   );
 }

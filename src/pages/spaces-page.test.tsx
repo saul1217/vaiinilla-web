@@ -57,7 +57,8 @@ describe('eliminar un espacio desde el panel', () => {
   it('pide confirmación y elimina solo al confirmar', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
-    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
+    await user.click(await screen.findByRole('button', { name: 'Eliminar espacio' }));
     expect(screen.getByText(/¿Eliminar «Mesa 1»\?/)).toBeInTheDocument();
     expect(apiMock.deleteSpace).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Sí, eliminar' }));
@@ -68,7 +69,8 @@ describe('eliminar un espacio desde el panel', () => {
   it('cancelar no elimina nada', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
-    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
+    await user.click(await screen.findByRole('button', { name: 'Eliminar espacio' }));
     await user.click(screen.getByRole('button', { name: 'Cancelar' }));
     expect(screen.queryByText(/¿Eliminar «Mesa 1»\?/)).not.toBeInTheDocument();
     expect(apiMock.deleteSpace).not.toHaveBeenCalled();
@@ -80,7 +82,8 @@ describe('eliminar un espacio desde el panel', () => {
     );
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
-    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
+    await user.click(await screen.findByRole('button', { name: 'Eliminar espacio' }));
     await user.click(screen.getByRole('button', { name: 'Sí, eliminar' }));
     expect(await screen.findByText(/Ciérrala antes de eliminarlo/)).toBeInTheDocument();
   });
@@ -96,6 +99,7 @@ describe('desactivar y activar un espacio', () => {
   it('pide confirmación y desactiva solo al confirmar', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
     await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
     expect(screen.getByText(/¿Desactivar «Mesa 1»\?/)).toBeInTheDocument();
     expect(apiMock.updateSpace).not.toHaveBeenCalled();
@@ -106,6 +110,7 @@ describe('desactivar y activar un espacio', () => {
   it('cancelar deja el espacio activo', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
     await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
     await user.click(screen.getByRole('button', { name: 'Cancelar' }));
     expect(screen.queryByText(/¿Desactivar «Mesa 1»\?/)).not.toBeInTheDocument();
@@ -116,6 +121,7 @@ describe('desactivar y activar un espacio', () => {
     apiMock.listManagedSpaces.mockResolvedValue([{ ...table, activo: false }]);
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
     await user.click(await screen.findByRole('button', { name: 'Activar' }));
     await waitFor(() => expect(apiMock.updateSpace).toHaveBeenCalledWith('tenant-token', 3, { activo: true }));
   });
@@ -124,6 +130,7 @@ describe('desactivar y activar un espacio', () => {
     apiMock.updateSpace.mockRejectedValue(new Error('Este espacio tiene reservas vigentes.'));
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
     await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
     await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }));
     expect(await screen.findByText(/reservas vigentes/)).toBeInTheDocument();
@@ -132,8 +139,9 @@ describe('desactivar y activar un espacio', () => {
   it('solo hay una confirmación abierta: Eliminar cierra la de Desactivar', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
     await user.click(await screen.findByRole('button', { name: 'Desactivar' }));
-    await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+    await user.click(screen.getByRole('button', { name: 'Eliminar espacio' }));
     expect(screen.getByText(/¿Eliminar «Mesa 1»\?/)).toBeInTheDocument();
     expect(screen.queryByText(/¿Desactivar «Mesa 1»\?/)).not.toBeInTheDocument();
   });
@@ -141,7 +149,8 @@ describe('desactivar y activar un espacio', () => {
   it('solo hay una confirmación abierta: Desactivar cierra la de Eliminar', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
-    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
+    await user.click(await screen.findByRole('button', { name: 'Eliminar espacio' }));
     await user.click(screen.getByRole('button', { name: 'Desactivar' }));
     expect(screen.getByText(/¿Desactivar «Mesa 1»\?/)).toBeInTheDocument();
     expect(screen.queryByText(/¿Eliminar «Mesa 1»\?/)).not.toBeInTheDocument();
@@ -155,15 +164,56 @@ describe('rotar QR no está disponible en el panel', () => {
     apiMock.bookingSettings.mockReset().mockResolvedValue(settings);
   });
 
-  it('ninguna tarjeta muestra "Rotar QR" ni su aviso, pero siguen Editar nombre, Desactivar y Eliminar', async () => {
+  it('la lista usa acciones compactas y nunca ofrece rotar QR', async () => {
     render(<SpacesPage />, { wrapper: TestProvider });
     await screen.findByText('Mesa 1');
     expect(screen.queryByRole('button', { name: /Rotar/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/Rotar un QR/)).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Editar nombre' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Desactivar' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Eliminar' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Editar Cancha 1' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'QR y código de Cancha 1' })).toHaveLength(1);
+    expect(screen.queryByRole('img', { name: 'Código QR de Cancha 1' })).not.toBeInTheDocument();
     expect(apiMock.rotateSpaceQr).not.toHaveBeenCalled();
+  });
+});
+
+describe('ficha y QR de espacios', () => {
+  beforeEach(() => {
+    apiMock.listManagedSpaces.mockReset().mockResolvedValue([table]);
+    apiMock.updateSpace.mockReset().mockResolvedValue(table);
+    apiMock.bookingSettings.mockReset().mockResolvedValue(settings);
+  });
+
+  it('no genera el QR hasta abrir QR y código', async () => {
+    const user = userEvent.setup();
+    const QRCode = await import('qrcode');
+    vi.mocked(QRCode.default.toDataURL).mockClear();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await screen.findByText('Mesa 1');
+    expect(QRCode.default.toDataURL).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'QR y código de Mesa 1' }));
+    expect(await screen.findByRole('img', { name: 'Código QR de Mesa 1' })).toBeInTheDocument();
+    expect(QRCode.default.toDataURL).toHaveBeenCalledTimes(1);
+  });
+
+  it('crear espacio conserva el tipo inicial y payload de la API', async () => {
+    const user = userEvent.setup();
+    apiMock.createSpace.mockReset().mockResolvedValue(table);
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(screen.getByRole('button', { name: 'Nuevo espacio' }));
+    await user.type(await screen.findByLabelText('Nombre'), 'Mesa nueva');
+    await user.click(screen.getByRole('button', { name: 'Crear espacio' }));
+    await waitFor(() => expect(apiMock.createSpace).toHaveBeenCalledWith('tenant-token', { nombre: 'Mesa nueva', tipo: 'mesa' }));
+  });
+
+  it('editar nombre conserva la llamada y el payload actuales', async () => {
+    const user = userEvent.setup();
+    render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Mesa 1' }));
+    const name = screen.getByLabelText('Nombre');
+    await user.clear(name);
+    await user.type(name, 'Mesa terraza');
+    await user.click(screen.getByRole('button', { name: 'Guardar nombre' }));
+    await waitFor(() => expect(apiMock.updateSpace).toHaveBeenCalledWith('tenant-token', 3, { nombre: 'Mesa terraza' }));
   });
 });
 
@@ -177,6 +227,7 @@ describe('reservas de canchas en el panel', () => {
 
   it('solo las canchas muestran el precio por hora', async () => {
     render(<SpacesPage />, { wrapper: TestProvider });
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Editar Cancha 1' }));
     expect(await screen.findByLabelText('Precio por hora (MXN)')).toHaveValue('300.00');
     expect(screen.getAllByLabelText('Precio por hora (MXN)')).toHaveLength(1);
   });
@@ -184,6 +235,7 @@ describe('reservas de canchas en el panel', () => {
   it('guarda el precio normalizado y vaciarlo quita la renta', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Cancha 1' }));
     const input = await screen.findByLabelText('Precio por hora (MXN)');
     await user.clear(input);
     await user.type(input, '350.5');
@@ -197,6 +249,7 @@ describe('reservas de canchas en el panel', () => {
   it('un precio inválido no se envía', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Cancha 1' }));
     const input = await screen.findByLabelText('Precio por hora (MXN)');
     await user.clear(input);
     await user.type(input, '0');
@@ -207,6 +260,7 @@ describe('reservas de canchas en el panel', () => {
   it('guarda el horario de reservas', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Configurar reservas y horarios' }));
     const close = await screen.findByLabelText('Cierra');
     expect(close).toHaveValue('23:00');
     await user.clear(screen.getByLabelText('Días de anticipación'));
@@ -225,6 +279,7 @@ describe('reservas de canchas en el panel', () => {
   it('permite horario que cruza la medianoche y muestra indicación', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Configurar reservas y horarios' }));
     const open = await screen.findByLabelText('Abre');
     const close = screen.getByLabelText('Cierra');
     await user.clear(open);
@@ -246,6 +301,7 @@ describe('reservas de canchas en el panel', () => {
   it('rechaza horario si apertura y cierre son idénticos', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Configurar reservas y horarios' }));
     const close = await screen.findByLabelText('Cierra');
     await user.clear(close);
     await user.type(close, '07:00');
@@ -257,6 +313,7 @@ describe('reservas de canchas en el panel', () => {
     const user = userEvent.setup();
     apiMock.createSpaceBatch.mockReset().mockResolvedValue({ tipo: 'asiento', solicitados: 3, creados: 2, omitidos: ['Asiento 2'] });
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Crear varios' }));
     const from = await screen.findByLabelText('Desde');
     await user.clear(from);
     await user.type(from, '1');
@@ -279,6 +336,7 @@ describe('reservas de canchas en el panel', () => {
   it('no deja crear un rango al revés ni más de 500', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Crear varios' }));
     const to = await screen.findByLabelText('Hasta');
     await user.clear(to);
     await user.type(to, '0');
@@ -300,6 +358,7 @@ describe('reservas de canchas en el panel', () => {
   it('guarda la ficha de la cancha: descripción y características', async () => {
     const user = userEvent.setup();
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Cancha 1' }));
     await user.type(await screen.findByLabelText('Descripción'), 'Cancha de vidrio');
     await user.type(screen.getByLabelText('Nueva característica'), 'con luz{Enter}');
     await user.type(screen.getByLabelText('Nueva característica'), 'techada{Enter}');
@@ -318,6 +377,7 @@ describe('reservas de canchas en el panel', () => {
     const user = userEvent.setup({ applyAccept: false });
     apiMock.uploadSpaceImage.mockReset().mockResolvedValue({ ...court, imagen_url: 'https://x/foto.jpg' });
     render(<SpacesPage />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: 'Editar Cancha 1' }));
     const input = await screen.findByLabelText('Elegir foto de Cancha 1');
     await user.upload(input, new File(['gif'], 'foto.gif', { type: 'image/gif' }));
     expect(await screen.findByText('La foto debe ser JPG, PNG o WebP.')).toBeInTheDocument();

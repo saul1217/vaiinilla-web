@@ -31,3 +31,10 @@ describe('SelectField', () => {
     expect(onChange).toHaveBeenCalledOnce();
   });
 });
+
+it('Modal convencional conserva el autofocus del primer control y no inventa descripción', async () => {
+  const { Modal } = await import('./ui');
+  render(<Modal open onOpenChange={() => {}} title="Convencional"><label>Buscar<input /></label></Modal>);
+  expect(screen.getByRole('button', { name: 'Cerrar ventana' })).toHaveFocus();
+  expect(screen.getByRole('dialog')).not.toHaveAttribute('aria-describedby');
+});

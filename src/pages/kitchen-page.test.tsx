@@ -92,7 +92,7 @@ describe('tablero de Cocina', () => {
     window.localStorage.setItem('vaiinilla.panel.admin-theme', 'claro');
     const { unmount } = render(<KitchenPage />, { wrapper: TestProvider });
     try {
-      expect(screen.getByRole('heading', { name: 'Cocina' })).toHaveClass('staff-title');
+      expect(screen.getByRole('heading', { name: 'Cocina', level: 1 })).toBeInTheDocument();
       expect(document.documentElement.dataset.adminTheme).toBe('claro');
       expect(window.localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
       unmount();
@@ -131,9 +131,9 @@ describe('tablero de Cocina', () => {
     expect(screen.getByText('A01234')).toBeVisible();
     expect(screen.getByText('2 piezas')).toBeVisible();
     expect(screen.getByText('1 producto')).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Pendientes' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'En preparación' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Listos' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: /^Pendientes ·/, level: 2 })).toBeVisible();
+    expect(screen.getByRole('heading', { name: /^En preparación ·/, level: 2 })).toBeVisible();
+    expect(screen.getByRole('heading', { name: /^Listos ·/, level: 2 })).toBeVisible();
     expect(apiMock.listOrders).toHaveBeenCalledWith('tenant-token', {
       estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'],
       cursor: undefined,
@@ -255,4 +255,19 @@ describe('tablero de Cocina', () => {
     ));
     expect(await screen.findByText('Pedido 42 rechazado. El cliente verá el motivo.')).toBeVisible();
   });
+});
+
+it('un error de transición conserva la comanda y reintenta con la misma versión', async () => {
+  const user = userEvent.setup();
+  apiMock.listOrders.mockResolvedValue({ orders: [pendingOrder], cursor: null });
+  apiMock.transitionOrder.mockReset().mockRejectedValueOnce(new Error('Error de transición')).mockResolvedValueOnce({ ...pendingOrder, estado: 'preparando', version: 3 });
+  render(<KitchenPage />, { wrapper: TestProvider });
+  await user.click(await screen.findByRole('button', { name: 'Comenzar preparación' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Error de transición');
+  expect(screen.getByRole('article', { name: 'Pedido 42, Nueva' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Comenzar preparación' }));
+  await waitFor(() => expect(apiMock.transitionOrder).toHaveBeenCalledTimes(2));
+  expect(apiMock.transitionOrder.mock.calls).toEqual([
+    ['tenant-token', pendingOrder.id, 'preparando', 2], ['tenant-token', pendingOrder.id, 'preparando', 2],
+  ]);
 });

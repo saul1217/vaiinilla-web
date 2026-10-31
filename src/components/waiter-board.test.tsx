@@ -99,14 +99,92 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     apiMock.deliverOrder.mockResolvedValue({ folio: 28 });
   });
 
+  it('mantiene propietario, consulta y filtro al cerrar y reabrir la hoja de Caja', async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<WaiterBoard token="token" role="cajero" sheetOpen={false} onSheetOpenChange={onChange} />, { wrapper: TestProvider });
+    await waitFor(() => expect(waiterClient.board).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    rerender(<WaiterBoard token="token" role="cajero" sheetOpen onSheetOpenChange={onChange} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('radio', { name: 'Por atender' }));
+    rerender(<WaiterBoard token="token" role="cajero" sheetOpen={false} onSheetOpenChange={onChange} />);
+    rerender(<WaiterBoard token="token" role="cajero" sheetOpen onSheetOpenChange={onChange} />);
+    expect(await screen.findByRole('radio', { name: 'Por atender' })).toBeChecked();
+    expect(waiterClient.board).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  });
+
+  it('vuelve del detalle al mosaico de Caja con un solo diálogo y foco', async () => {
+    const user = userEvent.setup();
+    render(<WaiterBoard token="token" role="cajero" sheetOpen onSheetOpenChange={vi.fn()} />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: /Mesa 67\. Llamando/ }));
+    const detail = await screen.findByRole('dialog', { name: 'Mesa 67' });
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    await waitFor(() => expect(detail).toContainElement(document.activeElement as HTMLElement));
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: 'Mesas y canchas' });
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Mesa 67\. Llamando/ })).toHaveFocus());
+    expect(waiterClient.board).toHaveBeenCalledTimes(1);
+  });
+
+  it('abre cobro y QR dentro de la misma hoja de mesa y devuelve el foco al mosaico', async () => {
+    const user = userEvent.setup();
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    waiterClient.board.mockImplementation(() => { const row = table(); row.pedidos[0]!.sesion_espacio_estado = 'cerrada'; return Promise.resolve({ tables: [row], callsEnabled: true }); });
+    render(<WaiterBoard token="staff-token" role="mesero" />, { wrapper: TestProvider });
+    const tile = await screen.findByRole('button', { name: /Mesa 67\. Llamando/ });
+    await user.click(tile);
+    await user.click(await screen.findByRole('button', { name: /Cobrar cuenta/ }));
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Cobrar Mesa 67' })).toHaveFocus();
+    await user.click(screen.getByRole('radio', { name: 'Por monto' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Monto de este pago' }));
+    await user.type(screen.getByRole('textbox', { name: 'Monto de este pago' }), '25.75');
+    await user.click(screen.getByRole('button', { name: 'Volver a la cuenta' }));
+    await user.click(screen.getByRole('button', { name: 'Cobrar cuenta' }));
+    expect(screen.getByRole('textbox', { name: 'Monto de este pago' })).toHaveValue('25.75');
+    await user.click(screen.getByRole('button', { name: 'Volver a la cuenta' }));
+    await user.click(screen.getByRole('button', { name: 'Entregar' }));
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Entregar pedido 28' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Cerrar ventana' }));
+    await waitFor(() => expect(tile).toHaveFocus());
+    expect(apiMock.deliverOrder).not.toHaveBeenCalled();
+  });
+
+  it('devuelve el foco a la cabecera tras entregar y desaparecer el disparador', async () => {
+    const user = userEvent.setup();
+    let delivered = false;
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    waiterClient.board.mockImplementation(() => {
+      const row = table();
+      row.pedidos[0]!.sesion_espacio_estado = 'cerrada';
+      if (delivered) row.pedidos = [];
+      return Promise.resolve({ tables: [row], callsEnabled: true });
+    });
+    apiMock.deliverOrder.mockImplementation(() => { delivered = true; return Promise.resolve({ folio: 28 }); });
+    render(<WaiterBoard token="staff-token" role="mesero" />, { wrapper: TestProvider });
+    await user.click(await screen.findByRole('button', { name: /Mesa 67\. Llamando/ }));
+    await user.click(screen.getByRole('button', { name: 'Entregar' }));
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.getByRole('button', { name: 'Entregar' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Entregar' }));
+    await user.type(screen.getByRole('textbox', { name: /token/i }), 'qr-28');
+    await user.click(screen.getByRole('button', { name: 'Confirmar entrega' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Entregar' })).not.toBeInTheDocument());
+    expect(apiMock.deliverOrder).toHaveBeenCalledExactlyOnceWith('staff-token', 'order-28', 1, 'qr-28');
+    expect(screen.getByRole('heading', { name: 'Mesa 67' })).toHaveFocus();
+  });
+
   it('usa siempre los mosaicos nuevos y permite filtrar mesas por atender', async () => {
     const { container } = render(<WaiterBoard token="staff-token" role="mesero" />, { wrapper: TestProvider });
     const tile = await screen.findByRole('button', { name: /Mesa 67\./ });
     expect(tile).toHaveClass('staff-tile');
     expect(container.querySelector('.staff-board')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Todas' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Todas' })).toBeChecked();
     await userEvent.setup().click(screen.getByRole('radio', { name: 'Por atender' }));
-    expect(screen.getByRole('radio', { name: 'Por atender' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Por atender' })).toBeChecked();
     expect(tile).toBeInTheDocument();
   });
 
