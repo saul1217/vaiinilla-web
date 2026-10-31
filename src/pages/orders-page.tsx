@@ -1,9 +1,10 @@
 import { AppPageHeader } from '../components/app-page-header';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Eye, ReceiptText } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { OrderCard, OrderDetailContent } from '../components/order-card';
-import { Button, EmptyState, Feedback, Modal } from '../components/ui';
+import { ReceiptText } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { AdminOrderRow } from '../components/admin-order-row';
+import { AdminOrderDetailSheet } from '../components/admin-order-detail-sheet';
+import { Button, EmptyState, Feedback } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -30,6 +31,7 @@ export function OrdersPage() {
   const { tenant } = useSessions();
   const token = tenant?.token ?? '';
   const scopeId = tenant?.context.establecimiento_id ?? '';
+  const fallbackFocusRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState<OrderFilter>('activos');
   const [selected, setSelected] = useState<OrderDetail | null>(null);
   const selectedFilter = filters.find((item) => item.value === filter);
@@ -54,17 +56,17 @@ export function OrdersPage() {
   );
 
   return (
-    <div className="page-stack admin-screen admin-orders">
+    <div className="page-stack admin-screen admin-orders" ref={fallbackFocusRef} tabIndex={-1}>
       <AppPageHeader
         eyebrow="Administración"
         title="Pedidos e historial"
-        description="Consulta el detalle y el estado real de cada pedido. Cobros y entregas se realizan únicamente desde una cuenta de Caja."
       />
 
       {orders.isError && (
         <Feedback tone="error">No se pudieron consultar los pedidos. {errorMessage(orders.error)}</Feedback>
       )}
 
+      <p role="status">{orders.isPending ? 'Consultando…' : orders.isError && !rows.length ? 'Consulta no disponible' : `${rows.length}${orders.hasNextPage ? '+' : ''} cargados`}</p>
       <div className="filter-bar" role="group" aria-label="Filtrar pedidos por estado">
         {filters.map((item) => (
           <button
@@ -79,24 +81,14 @@ export function OrdersPage() {
         ))}
       </div>
 
-      <section className="orders-section" aria-label="Pedidos">
+      <section className="orders-section" aria-label="Pedidos" aria-busy={orders.isFetching}>
         {orders.isPending ? (
-          <div className="orders-loading" role="status">Consultando pedidos…</div>
+          <div className="orders-loading" role="status">Consultando pedidos…<div className="admin-order-skeleton" aria-hidden="true" /><div className="admin-order-skeleton" aria-hidden="true" /><div className="admin-order-skeleton" aria-hidden="true" /></div>
         ) : rows.length ? (
           <>
-            <div className="order-grid">
-              {rows.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  actions={
-                    <Button variant="secondary" onClick={() => setSelected(order)}>
-                      <Eye aria-hidden="true" className="size-4" /> Ver detalle
-                    </Button>
-                  }
-                />
-              ))}
-            </div>
+            <ul className="admin-order-list" aria-label="Pedidos cargados">
+              {rows.map((order) => <AdminOrderRow key={order.id} order={order} onSelect={setSelected} />)}
+            </ul>
             {orders.hasNextPage && (
               <div className="orders-footer">
                 <Button
@@ -109,23 +101,16 @@ export function OrdersPage() {
               </div>
             )}
           </>
-        ) : (
+        ) : !orders.isError ? (
           <EmptyState
             icon={<ReceiptText aria-hidden="true" />}
             title="No hay pedidos en este grupo"
             description="Los pedidos aparecerán aquí en cuanto se registre actividad para este establecimiento."
           />
-        )}
+        ) : null}
       </section>
 
-      <Modal
-        open={Boolean(selected)}
-        onOpenChange={(open) => { if (!open) setSelected(null); }}
-        title={selected ? `Pedido ${selected.folio}` : 'Detalle del pedido'}
-        description="Información operativa registrada en el sistema."
-      >
-        {selected && <OrderDetailContent order={selected} />}
-      </Modal>
+      <AdminOrderDetailSheet order={selected} onClose={() => setSelected(null)} fallbackFocusRef={fallbackFocusRef} />
     </div>
   );
 }

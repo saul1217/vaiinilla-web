@@ -13,7 +13,7 @@ for (const theme of ['claro', 'oscuro']) {
       contentType: 'text/html',
       body: `<html data-admin-theme="${theme}"><head><link rel="stylesheet" href="/src/styles/index.css"><link rel="stylesheet" href="/src/styles/app-primitives.css"><link rel="stylesheet" href="/src/styles/admin-screens.css"><link rel="stylesheet" href="/src/styles/mesero-slice.css"><link rel="stylesheet" href="/src/components/cashier.css"></head>
       <body><div class="app-frame app-frame--tenant">
-      <header class="app-identity"><button class="app-account-button">CA</button></header>
+      <main class="admin-screen admin-overview"><article class="business-sales"><strong>$100.00</strong></article></main><section class="admin-screen admin-orders"><ul><li class="app-order-row"><p class="admin-order-row__summary">Producto</p></li></ul></section><section class="app-sheet admin-order-detail-sheet"><dl class="admin-order-facts"><div><dt>Pago</dt><dd>Efectivo</dd></div></dl></section><header class="app-identity"><button class="app-account-button">CA</button></header>
       <div class="queue-column"><header class="queue-column__header"><h2>Cola</h2><p>En espera</p></header>
       <section class="kitchen-work"><h2 class="kitchen-work__heading">Comanda activa</h2><section class="kitchen-work__queue"><p>Seleccionada</p></section></section><article class="kitchen-ticket"><span class="kitchen-ticket__stamp">Nueva</span><div class="kitchen-ticket__product"><strong>Producto</strong></div>
       <span class="kitchen-ticket__quantity">2</span><ul class="kitchen-ticket__options"><li>Opción</li></ul></article></div>
