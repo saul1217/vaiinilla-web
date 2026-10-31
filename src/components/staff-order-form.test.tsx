@@ -104,6 +104,7 @@ describe('StaffOrderForm', () => {
       metodo_pago: 'efectivo',
       destino: 'para_llevar',
       espacio_id: null,
+      pago_diferido: false,
       items: [{ producto_id: 1, cantidad: 1, opcion_ids: [101] }],
     });
     expect(typeof key).toBe('string');
@@ -184,6 +185,25 @@ describe('StaffOrderForm', () => {
     resolveSettings({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
     await waitFor(() => expect(apiMock.businessSettings).toHaveBeenCalled());
     expect(checkbox).not.toBeChecked();
+  });
+
+  it('en mesa sin pagar al final envía pago_diferido false explícito', async () => {
+    const user = userEvent.setup();
+    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
+    renderForm('mesero');
+
+    await user.click(screen.getByRole('button', { name: 'En mesa' }));
+    await user.click(await screen.findByRole('button', { name: /Mesa 2/ }));
+    await user.click(screen.getByRole('button', { name: 'Agregar' }));
+    await user.click(screen.getByLabelText(/Pagar al final/));
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
+    expect(llamadas()[0]?.[1]).toMatchObject({
+      destino: 'en_espacio',
+      espacio_id: 2,
+      pago_diferido: false,
+    });
   });
 
   it('iniciado desde una mesa precarga destino y mesa en el pedido', async () => {

@@ -165,7 +165,7 @@ export function construirPedidoStaff(draft: StaffOrderDraft): StaffOrderInput {
       opcion_ids: [...linea.opcionIds].sort((a, b) => a - b),
     })),
     ...(nombre ? { nombre_cliente: nombre } : {}),
-    ...(draft.pagoAlFinal && draft.destino === 'en_espacio' ? { pago_diferido: true } : {}),
+    pago_diferido: draft.destino === 'en_espacio' && draft.pagoAlFinal,
     ...(draft.cobrarAhora ? { cobrar_ahora: true } : {}),
     ...(montoRecibido ? { monto_recibido: montoRecibido } : {}),
   };

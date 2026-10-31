@@ -178,19 +178,19 @@ describe('payload del pedido de staff', () => {
       metodo_pago: 'efectivo',
       destino: 'para_llevar',
       espacio_id: null,
+      pago_diferido: false,
       items: [{ producto_id: 1, cantidad: 1, opcion_ids: [101] }],
     });
   });
 
-  it('mostrador o barra (para llevar) nunca envía pago_diferido aunque el borrador lo tuviera', () => {
+  it('mostrador o barra (para llevar) manda pago_diferido false aunque el borrador lo tuviera', () => {
     const body = construirPedidoStaff(borrador({ destino: 'para_llevar', pagoAlFinal: true }));
-    expect(body).not.toHaveProperty('pago_diferido');
+    expect(body.pago_diferido).toBe(false);
   });
 
-  it('en mesa sin pagar al final no manda pago_diferido', () => {
+  it('en mesa con pagar al final desmarcado manda pago_diferido false explícito', () => {
     const body = construirPedidoStaff(borrador({ destino: 'en_espacio', espacioId: 5, pagoAlFinal: false }));
-    expect(body).toMatchObject({ destino: 'en_espacio', espacio_id: 5 });
-    expect(body).not.toHaveProperty('pago_diferido');
+    expect(body).toMatchObject({ destino: 'en_espacio', espacio_id: 5, pago_diferido: false });
   });
 
   it('en una mesa a pagar al final lleva el espacio y la bandera', () => {
