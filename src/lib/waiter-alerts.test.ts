@@ -13,9 +13,18 @@ describe('avisos del mesero', () => {
     const before = [table(2, 'Mesa 2', { pedidos: [order('a', 9, 'preparando')] })];
     const after = [table(2, 'Mesa 2', { pedidos: [order('a', 9, 'listo')] })];
 
-    expect(newAlerts(before, new Set())).toEqual([]);
+    expect(newAlerts(before, new Set())).toEqual([
+      expect.objectContaining({ kind: 'preparing', title: 'Comanda #9 en cocina · Mesa 2' }),
+    ]);
     const [alert] = newAlerts(after, alertKeys(before));
     expect(alert).toMatchObject({ kind: 'ready', spaceId: 2, title: 'Pedido #9 listo · llévalo a Mesa 2', body: 'Ana · 2× Tacos' });
+  });
+
+  it('avisa una sola vez de la comanda que entró a cocina (para adelantar bebidas)', () => {
+    const tables = [table(2, 'Mesa 2', { pedidos: [order('b', 5, 'cobrado')] })];
+    const [alert] = newAlerts(tables, new Set());
+    expect(alert).toMatchObject({ kind: 'preparing', key: 'preparing:b', body: 'Ana · 2× Tacos' });
+    expect(newAlerts(tables, alertKeys(tables))).toEqual([]);
   });
 
   it('no repite un aviso ya dado', () => {
