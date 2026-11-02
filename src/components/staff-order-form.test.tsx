@@ -9,7 +9,7 @@ import { StaffOrderForm } from './staff-order-form';
 const apiMock = vi.hoisted(() => ({
   catalog: vi.fn(),
   spaceAvailability: vi.fn(),
-  businessSettings: vi.fn(),
+  operationalSettings: vi.fn(),
   createStaffOrder: vi.fn(),
 }));
 
@@ -86,7 +86,7 @@ describe('StaffOrderForm', () => {
     vi.clearAllMocks();
     apiMock.catalog.mockResolvedValue(CATALOGO);
     apiMock.spaceAvailability.mockResolvedValue(ESPACIOS);
-    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: false, tipo: 'cafeteria', entrega_requiere_qr: true, gracia_liberacion_min: 5, franjas_pedido: [] });
+    apiMock.operationalSettings.mockResolvedValue({ permite_pago_al_final: false, entrega_requiere_qr: true });
     apiMock.createStaffOrder.mockResolvedValue(PEDIDO_CREADO);
   });
 
@@ -121,7 +121,6 @@ describe('StaffOrderForm', () => {
       metodo_pago: 'efectivo',
       destino: 'para_llevar',
       espacio_id: null,
-      pago_diferido: false,
       items: [{ producto_id: 1, cantidad: 1, opcion_ids: [101] }],
     });
     expect(typeof key).toBe('string');
@@ -140,7 +139,7 @@ describe('StaffOrderForm', () => {
 
   it('en mesa a pagar al final: lleva el espacio y la bandera, sin cobro al instante', async () => {
     const user = userEvent.setup();
-    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
+    apiMock.operationalSettings.mockResolvedValue({ permite_pago_al_final: true, entrega_requiere_qr: false });
     renderForm('mesero');
 
     await user.click(screen.getByRole('button', { name: 'En mesa' }));
@@ -153,8 +152,8 @@ describe('StaffOrderForm', () => {
     expect(llamadas()[0]?.[1]).toMatchObject({
       destino: 'en_espacio',
       espacio_id: 2,
-      pago_diferido: true,
     });
+    expect(llamadas()[0]?.[1]).not.toHaveProperty('pago_diferido');
     expect(llamadas()[0]?.[1]).not.toHaveProperty('cobrar_ahora');
   });
 
@@ -169,7 +168,7 @@ describe('StaffOrderForm', () => {
 
   it('aplica pagar al final cuando llegan los settings si ya eligió mesa', async () => {
     let resolveSettings!: (value: unknown) => void;
-    apiMock.businessSettings.mockReturnValue(
+    apiMock.operationalSettings.mockReturnValue(
       new Promise((resolve) => {
         resolveSettings = resolve;
       }),
@@ -181,13 +180,13 @@ describe('StaffOrderForm', () => {
     await user.click(screen.getByRole('button', { name: /Mesa 2/ }));
     expect(screen.getByLabelText(/Pagar al final/)).not.toBeChecked();
 
-    resolveSettings({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
+    resolveSettings({ permite_pago_al_final: true, entrega_requiere_qr: false });
     await waitFor(() => expect(screen.getByLabelText(/Pagar al final/)).toBeChecked());
   });
 
   it('no vuelve a marcar pagar al final si el mesero lo desmarcó', async () => {
     let resolveSettings!: (value: unknown) => void;
-    apiMock.businessSettings.mockReturnValue(
+    apiMock.operationalSettings.mockReturnValue(
       new Promise((resolve) => {
         resolveSettings = resolve;
       }),
@@ -199,19 +198,20 @@ describe('StaffOrderForm', () => {
     const checkbox = screen.getByLabelText(/Pagar al final/);
     await user.click(checkbox);
     await user.click(checkbox);
-    resolveSettings({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
-    await waitFor(() => expect(apiMock.businessSettings).toHaveBeenCalled());
+    resolveSettings({ permite_pago_al_final: true, entrega_requiere_qr: false });
+    await waitFor(() => expect(apiMock.operationalSettings).toHaveBeenCalled());
     expect(checkbox).not.toBeChecked();
   });
 
-  it('en mesa sin pagar al final envía pago_diferido false explícito', async () => {
+  it('casilla intacta omite pago_diferido y al desmarcarla envía false explícito', async () => {
     const user = userEvent.setup();
-    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
+    apiMock.operationalSettings.mockResolvedValue({ permite_pago_al_final: true, entrega_requiere_qr: false });
     renderForm('mesero');
 
     await user.click(screen.getByRole('button', { name: 'En mesa' }));
     await user.click(await screen.findByRole('button', { name: /Mesa 2/ }));
     await user.click(screen.getByRole('button', { name: 'Agregar' }));
+    expect(screen.getByLabelText(/Pagar al final/)).toBeChecked();
     await user.click(screen.getByLabelText(/Pagar al final/));
     await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
 
@@ -225,7 +225,7 @@ describe('StaffOrderForm', () => {
 
   it('iniciado desde una mesa precarga destino y mesa en el pedido', async () => {
     const user = userEvent.setup();
-    apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: true, tipo: 'restaurante', entrega_requiere_qr: false, gracia_liberacion_min: 5, franjas_pedido: [] });
+    apiMock.operationalSettings.mockResolvedValue({ permite_pago_al_final: true, entrega_requiere_qr: false });
     renderForm('mesero', vi.fn(), 2);
 
     expect(await screen.findByRole('button', { name: 'En mesa' })).toHaveAttribute('aria-pressed', 'true');
@@ -258,6 +258,27 @@ describe('StaffOrderForm', () => {
 
     await screen.findByRole('button', { name: 'Agregar' });
     expect(screen.queryByLabelText('Cobrar ahora en efectivo')).not.toBeInTheDocument();
+  });
+
+  it.each([403, 500])('configuración %i muestra error, permite reintentar y omite pago_diferido', async (status) => {
+    const user = userEvent.setup();
+    apiMock.operationalSettings
+      .mockRejectedValueOnce(new Error(`HTTP ${status}`))
+      .mockResolvedValueOnce({ permite_pago_al_final: true, entrega_requiere_qr: false });
+    renderForm('mesero');
+
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    expect(await screen.findByText(/No se pudo cargar la configuración operativa/)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
+    expect(llamadas()[0]?.[1]).not.toHaveProperty('pago_diferido');
+    expect(JSON.stringify(llamadas()[0]?.[1])).not.toContain('"pago_diferido":false');
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(apiMock.operationalSettings).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/No se pudo cargar la configuración operativa/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'En mesa' }));
+    expect(screen.getByLabelText(/Pagar al final/)).toBeChecked();
   });
 
   it('reintenta con la misma llave si el pedido no cambió, y con otra si cambió', async () => {

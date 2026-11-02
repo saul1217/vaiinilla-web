@@ -41,17 +41,16 @@ interface StaffOrderFormProps {
 }
 
 export function StaffOrderForm(props: StaffOrderFormProps) {
-  const negocio = useQuery({
-    queryKey: ['business-settings', 'staff-order'],
-    queryFn: () => api.businessSettings(props.token),
+  const configuracion = useQuery({
+    queryKey: ['operational-settings', 'staff-order', props.token],
+    queryFn: () => api.operationalSettings(props.token),
   });
-  if (props.initialSpaceId !== undefined && negocio.isPending) {
-    return <Feedback tone="info">Cargando configuración del negocio…</Feedback>;
-  }
   return (
     <StaffOrderFormBody
       {...props}
-      permitePagoAlFinal={negocio.data?.permite_pago_al_final ?? false}
+      configuracion={configuracion.data}
+      errorConfiguracion={configuracion.isError}
+      reintentarConfiguracion={() => void configuracion.refetch()}
     />
   );
 }
@@ -61,24 +60,31 @@ function StaffOrderFormBody({
   rol,
   onCreated,
   initialSpaceId,
-  permitePagoAlFinal,
-}: StaffOrderFormProps & { permitePagoAlFinal: boolean }) {
+  configuracion,
+  errorConfiguracion,
+  reintentarConfiguracion,
+}: StaffOrderFormProps & {
+  configuracion?: { permite_pago_al_final: boolean; entrega_requiere_qr: boolean };
+  errorConfiguracion: boolean;
+  reintentarConfiguracion: () => void;
+}) {
   const [search, setSearch] = useState('');
   const puedeCobrarAhora = rol === 'cajero';
   const [draft, setDraft] = useState<StaffOrderDraft>(() =>
-    borradorInicialStaff({ espacioId: initialSpaceId, permitePagoAlFinal }),
+    borradorInicialStaff({ espacioId: initialSpaceId }),
   );
   const [errores, setErrores] = useState<string[]>([]);
   const [llave, setLlave] = useState<LlaveDeEnvio | null>(null);
   const pagoAlFinalTocado = useRef(false);
 
   useEffect(() => {
-    if (!permitePagoAlFinal || pagoAlFinalTocado.current) return;
+    if (!configuracion || pagoAlFinalTocado.current) return;
     setDraft((previo) => {
-      if (previo.destino !== 'en_espacio' || previo.pagoAlFinal) return previo;
-      return { ...previo, pagoAlFinal: true };
+      const pagoAlFinal = pagoAlFinalPorDefecto(previo.destino, configuracion.permite_pago_al_final);
+      if (previo.pagoAlFinal === pagoAlFinal) return previo;
+      return { ...previo, pagoAlFinal };
     });
-  }, [permitePagoAlFinal]);
+  }, [configuracion]);
 
   const catalogo = useQuery({
     queryKey: ['staff-order', 'catalog'],
@@ -129,7 +135,7 @@ function StaffOrderFormBody({
     setErrores(nuevosErrores);
     if (nuevosErrores.length > 0) return;
 
-    const body = construirPedidoStaff(draft);
+    const body = construirPedidoStaff(draft, Boolean(configuracion) && pagoAlFinalTocado.current);
     // La llave se reutiliza si el pedido no cambió; si cambió, una nueva (reusarla daría 409).
     const siguiente = llaveParaEnvio(llave, JSON.stringify(body), createIdempotencyKey);
     setLlave(siguiente);
@@ -154,6 +160,12 @@ function StaffOrderFormBody({
         </Feedback>
       )}
       {crear.isError && <Feedback tone="error">{errorMessage(crear.error)}</Feedback>}
+      {errorConfiguracion && (
+        <Feedback tone="error">
+          No se pudo cargar la configuración operativa. Revisa tu conexión e inténtalo de nuevo.
+          <Button type="button" variant="ghost" onClick={reintentarConfiguracion}>Reintentar</Button>
+        </Feedback>
+      )}
 
         <Field
           id="staff-order-nombre"
@@ -180,7 +192,7 @@ function StaffOrderFormBody({
             onClick={() =>
               actualizar({
                 destino: 'en_espacio',
-                pagoAlFinal: pagoAlFinalPorDefecto('en_espacio', permitePagoAlFinal),
+                pagoAlFinal: pagoAlFinalPorDefecto('en_espacio', configuracion?.permite_pago_al_final ?? false),
               })
             }
           >

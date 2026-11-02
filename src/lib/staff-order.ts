@@ -149,7 +149,7 @@ export function erroresDePedido(draft: StaffOrderDraft): string[] {
   return errores;
 }
 
-export function construirPedidoStaff(draft: StaffOrderDraft): StaffOrderInput {
+export function construirPedidoStaff(draft: StaffOrderDraft, pagoAlFinalTocado = false): StaffOrderInput {
   const nombre = draft.nombreCliente.trim();
   const montoRecibido =
     draft.cobrarAhora && draft.montoRecibido.trim() !== ''
@@ -165,7 +165,9 @@ export function construirPedidoStaff(draft: StaffOrderDraft): StaffOrderInput {
       opcion_ids: [...linea.opcionIds].sort((a, b) => a - b),
     })),
     ...(nombre ? { nombre_cliente: nombre } : {}),
-    pago_diferido: draft.destino === 'en_espacio' && draft.pagoAlFinal,
+    ...(pagoAlFinalTocado
+      ? { pago_diferido: draft.destino === 'en_espacio' && draft.pagoAlFinal }
+      : {}),
     ...(draft.cobrarAhora ? { cobrar_ahora: true } : {}),
     ...(montoRecibido ? { monto_recibido: montoRecibido } : {}),
   };
