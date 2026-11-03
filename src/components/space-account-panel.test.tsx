@@ -275,7 +275,7 @@ describe('cuenta del espacio', () => {
     const dialog = await screen.findByRole('dialog');
     const buttons = within(dialog).getAllByRole('button', { name: 'Parte de Alex' });
     expect(buttons).toHaveLength(2);
-    await user.click(buttons[0]);
+    await user.click(buttons[0]!);
     await user.click(within(dialog).getByRole('radio', { name: /Terminal/ }));
     await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
     await waitFor(() => expect(apiMock.collectSpaceAccount).toHaveBeenCalledWith('t', 7,
