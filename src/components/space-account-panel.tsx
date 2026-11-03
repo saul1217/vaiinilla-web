@@ -14,7 +14,7 @@ import { TipPicker } from './tip-picker';
 import { Button, Feedback, Field } from './ui';
 import { api } from '../lib/api';
 import { buildSpaceAccountPrintHtml } from '../lib/space-account-print';
-import { claimAliases } from '../lib/account-split';
+import { claimGroups } from '../lib/account-split';
 import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
 import { errorMessage } from '../lib/api-error';
 import { MONEY_PATTERN, calculateChange, centsToMoney, formatMoney, normalizeMoneyInput } from '../lib/money';
@@ -188,7 +188,7 @@ export function SpaceAccountPanel({
   const canConfirmCharge = selectedOrders.length > 0 && (method === 'terminal' || change !== null);
   const abonado = account?.abonado ?? 0;
   const restante = centsToMoney(toCents(account?.restante ?? account?.pendiente ?? 0));
-  const aliases = claimAliases(pending);
+  const claimants = claimGroups(pending);
 
   const collect = useMutation({
     mutationFn: () =>
@@ -415,14 +415,16 @@ export function SpaceAccountPanel({
         </div>)}
         <div className="transaction-form" hidden={chargeMode !== 'pedidos'}>
           {collect.isError && <Feedback tone="error">{errorMessage(collect.error)}</Feedback>}
-          {aliases.length > 0 && (
+          {claimants.length > 0 && (
             <div className="space-account__chips" role="group" aria-label="Cobrar la parte de">
-              {aliases.map((alias) => (
+              {claimants.map(({ key, alias, id }) => (
                 <Button
-                  key={alias}
+                  key={key}
                   type="button"
                   variant="secondary"
-                  onClick={() => setSelected(pending.filter((order) => order.pagara === alias).map((order) => order.id))}
+                  onClick={() => setSelected(pending.filter((order) => id
+                    ? typeof order.pagara === 'object' && order.pagara?.id === id
+                    : order.pagara === alias).map((order) => order.id))}
                 >
                   Parte de {alias}
                 </Button>
@@ -436,7 +438,7 @@ export function SpaceAccountPanel({
                   <input type="checkbox" checked={selected.includes(order.id)} onChange={() => toggle(order)} />
                   <span>
                     <strong>#{order.folio} · {order.cliente?.nombre ?? 'Cliente'}</strong>
-                    <small>{order.items_resumen}{order.pagara ? ` · Paga ${order.pagara}` : ''}</small>
+                    <small>{order.items_resumen}{order.pagara ? ` · Paga ${typeof order.pagara === 'string' ? order.pagara : order.pagara.alias ?? 'Participante'}` : ''}</small>
                   </span>
                   <span>{formatMoney(centsToMoney(toCents(order.total)))}</span>
                 </label>

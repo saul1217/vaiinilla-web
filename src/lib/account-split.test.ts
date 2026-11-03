@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claimAliases, partAmountCents } from './account-split';
+import { claimGroups, partAmountCents } from './account-split';
 
 describe('partes iguales', () => {
   it('redondea hacia abajo y la última parte paga el centavo que sobra', () => {
@@ -11,6 +11,19 @@ describe('partes iguales', () => {
 
 describe('quién dijo que paga', () => {
   it('alias sin repetir y sin vacíos', () => {
-    expect(claimAliases([{ pagara: 'Ana' }, { pagara: null }, { pagara: 'Luis' }, { pagara: 'Ana' }, {}])).toEqual(['Ana', 'Luis']);
+    expect(claimGroups([{ pagara: 'Ana' }, { pagara: null }, { pagara: 'Luis' }, { pagara: 'Ana' }, {}])).toEqual([
+      { key: 'legacy:Ana', alias: 'Ana' }, { key: 'legacy:Luis', alias: 'Luis' },
+    ]);
+  });
+
+  it('mantiene separados participantes con el mismo alias', () => {
+    expect(claimGroups([
+      { pagara: { id: 'p1', alias: 'Alex' } },
+      { pagara: { id: 'p2', alias: 'Alex' } },
+      { pagara: { id: 'p1', alias: 'Alex' } },
+    ])).toEqual([
+      { key: 'participant:p1', id: 'p1', alias: 'Alex' },
+      { key: 'participant:p2', id: 'p2', alias: 'Alex' },
+    ]);
   });
 });

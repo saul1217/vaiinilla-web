@@ -259,6 +259,29 @@ describe('cuenta del espacio', () => {
     );
   });
 
+  it('agrupa los pedidos por id aunque dos participantes compartan alias', async () => {
+    const user = userEvent.setup();
+    apiMock.spaceSession.mockResolvedValue({
+      ...openAccount,
+      cuenta: { ...openAccount.cuenta!, pedidos: [
+        { ...order('p1', 11, 120), pagara: { id: 'part-1', alias: 'Alex' } },
+        { ...order('p2', 12, 80.5), pagara: { id: 'part-2', alias: 'Alex' } },
+      ] },
+    });
+    apiMock.collectSpaceAccount.mockResolvedValue({ pedidos_cobrados: 1, total: '120.00', metodo_pago: 'terminal', monto_recibido: null, cambio: '0.00', restante: '80.50' });
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Cobrar cuenta/ }));
+    const dialog = await screen.findByRole('dialog');
+    const buttons = within(dialog).getAllByRole('button', { name: 'Parte de Alex' });
+    expect(buttons).toHaveLength(2);
+    await user.click(buttons[0]!);
+    await user.click(within(dialog).getByRole('radio', { name: /Terminal/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
+    await waitFor(() => expect(apiMock.collectSpaceAccount).toHaveBeenCalledWith('t', 7,
+      expect.objectContaining({ pedidoIds: ['p1'], totalEsperado: '120.00' })));
+  });
+
   it('agrupa la cuenta por persona con subtotales y el total de la mesa', async () => {
     apiMock.spaceSession.mockResolvedValue({
       ...openAccount,

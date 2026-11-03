@@ -524,8 +524,8 @@ export interface SpaceAccountOrder {
   cliente: { nombre: string } | null;
   items_resumen: string;
   creado_en: string;
-  /** "Esto lo pago yo": el alias de quien dijo que paga este pedido. */
-  pagara?: string | null;
+  /** "Esto lo pago yo": participante concreto, o string de un backend legacy. */
+  pagara?: { id: string; alias: string | null } | string | null;
 }
 
 /** Un abono (dividir por monto o partes) aún sin liquidar. */
@@ -624,7 +624,7 @@ export interface StaffBooking {
   inicio: string;
   fin: string;
   monto?: string | null;
-  estado: 'pendiente_pago' | 'confirmada' | 'en_curso' | 'terminada' | 'cancelada' | 'expirada' | 'conflicto' | string;
+  estado: string;
   /** Hora en que vence el apartado en efectivo; null si ya no aplica. */
   expira_en?: string | null;
   version?: number;
