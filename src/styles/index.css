@@ -485,6 +485,26 @@ select:enabled {
   background: var(--color-white-warm);
 }
 
+.auth-page:not(.auth-page--platform):not(.auth-page--deletion) .auth-visual {
+  background: #1e1e1c;
+  color: #f4f1e7;
+}
+
+.auth-page:not(.auth-page--platform):not(.auth-page--deletion) .auth-visual h1,
+.auth-page:not(.auth-page--platform):not(.auth-page--deletion) .auth-visual p {
+  color: inherit;
+}
+
+.auth-page:not(.auth-page--platform):not(.auth-page--deletion) .auth-visual .eyebrow,
+.auth-page:not(.auth-page--platform):not(.auth-page--deletion) .auth-visual__content > p:last-child {
+  color: #d5d0c4;
+}
+
+.auth-page:not(.auth-page--platform):not(.auth-page--deletion) .auth-visual::before,
+.auth-page:not(.auth-page--platform):not(.auth-page--deletion) .auth-visual::after {
+  opacity: 0.12;
+}
+
 .auth-visual {
   position: relative;
   display: flex;
@@ -4899,6 +4919,95 @@ tbody tr:last-child td {
     padding: 54px 24px 70px;
   }
 
+  .auth-page:not(.auth-page--deletion) {
+    min-height: 100dvh;
+    background: var(--color-white-warm);
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-visual {
+    min-height: 0;
+    height: 112px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 16px;
+    padding: 14px 22px;
+    border-radius: 0 0 24px 24px;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-visual > a .brand-logo--splash {
+    width: auto;
+    max-width: 120px;
+    height: 56px;
+    flex: 0 1 auto;
+    overflow: visible;
+    border-radius: 0;
+    background-color: transparent;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-visual > a .brand-logo--splash .brand-logo__image {
+    width: auto;
+    height: 56px;
+    max-width: none;
+    object-fit: contain;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-visual__content {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-visual__content .eyebrow,
+  .auth-page:not(.auth-page--deletion) .auth-visual__content > p:last-child {
+    display: none;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-visual__content h1 {
+    max-width: none;
+    margin: 0;
+    font-size: clamp(1.35rem, 5.5vw, 1.75rem);
+    letter-spacing: -0.045em;
+    line-height: 1.1;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-visual__content h1 span::after {
+    height: 0.28em;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-panel {
+    min-height: auto;
+    padding: 28px 24px 32px;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-card {
+    width: min(100%, 440px);
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-card__icon {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 14px;
+    border-radius: 14px;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-card h2 {
+    margin-top: 6px;
+    font-size: clamp(1.8rem, 8vw, 2.2rem);
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-card form.mt-6 {
+    margin-top: 18px;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-card form.space-y-5 > :not(:last-child) {
+    margin-bottom: 14px;
+  }
+
+  .auth-page:not(.auth-page--deletion) .auth-card__switch {
+    margin-top: 20px;
+    padding-top: 16px;
+  }
+
   .sidebar {
     width: min(310px, 86vw);
     transform: translateX(-110%);
@@ -8007,4 +8116,34 @@ html[data-admin-theme] .kitchen-ticket__note-empty {
 }
 @media (max-width: 389px) {
   html[data-admin-theme] .kitchen-ticket--protagonist { padding-inline: 18px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-admin-theme]) .auth-page {
+    --color-white-warm: #20201e;
+    --color-ink: #f4f1e7;
+    --color-muted: #c2bdae;
+    --line: rgba(244, 241, 231, 0.14);
+    --line-strong: rgba(244, 241, 231, 0.24);
+    background: #20201e;
+    color: #f4f1e7;
+  }
+
+  html:not([data-admin-theme]) .auth-page .auth-panel {
+    background: #20201e;
+  }
+
+  html:not([data-admin-theme]) .auth-page .auth-card__icon {
+    color: #171817;
+  }
+
+  html:not([data-admin-theme]) .auth-page .field__control {
+    border-color: rgba(244, 241, 231, 0.2);
+    background: #2b2b28;
+    color: #f4f1e7;
+  }
+
+  html:not([data-admin-theme]) .auth-page .field__control::placeholder {
+    color: #aaa596;
+  }
 }
