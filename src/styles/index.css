@@ -4942,7 +4942,7 @@ tbody tr:last-child td {
     flex: 0 1 auto;
     overflow: visible;
     border-radius: 0;
-    background: transparent;
+    background-color: transparent;
   }
 
   .auth-page:not(.auth-page--deletion) .auth-visual > a .brand-logo--splash .brand-logo__image {
