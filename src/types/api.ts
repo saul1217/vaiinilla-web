@@ -228,9 +228,14 @@ export interface StaffOrderInput {
   espacio_id: number | null;
   items: Array<{ producto_id: number; cantidad: number; opcion_ids: number[] }>;
   nombre_cliente?: string;
-  pago_diferido: boolean;
+  pago_diferido?: boolean;
   cobrar_ahora?: true;
   monto_recibido?: string;
+}
+
+export interface OperationalSettings {
+  permite_pago_al_final: boolean;
+  entrega_requiere_qr: boolean;
 }
 
 /** Qué pasó con el cobro al instante: cobrado (con su cambio) o pendiente, con el motivo. */

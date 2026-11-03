@@ -171,31 +171,32 @@ describe('validación del pedido', () => {
 });
 
 describe('payload del pedido de staff', () => {
-  it('para llevar en efectivo: sin espacio, sin nombre y sin campos de cobro', () => {
+  it('para llevar en efectivo: sin espacio, sin nombre y omite el pago diferido sin edición', () => {
     const body = construirPedidoStaff(borrador());
 
     expect(body).toEqual({
       metodo_pago: 'efectivo',
       destino: 'para_llevar',
       espacio_id: null,
-      pago_diferido: false,
       items: [{ producto_id: 1, cantidad: 1, opcion_ids: [101] }],
     });
+    expect(body).not.toHaveProperty('pago_diferido');
   });
 
-  it('mostrador o barra (para llevar) manda pago_diferido false aunque el borrador lo tuviera', () => {
-    const body = construirPedidoStaff(borrador({ destino: 'para_llevar', pagoAlFinal: true }));
+  it('mostrador o barra manda pago_diferido false si el usuario modificó la casilla', () => {
+    const body = construirPedidoStaff(borrador({ destino: 'para_llevar', pagoAlFinal: true }), true);
     expect(body.pago_diferido).toBe(false);
   });
 
   it('en mesa con pagar al final desmarcado manda pago_diferido false explícito', () => {
-    const body = construirPedidoStaff(borrador({ destino: 'en_espacio', espacioId: 5, pagoAlFinal: false }));
+    const body = construirPedidoStaff(borrador({ destino: 'en_espacio', espacioId: 5, pagoAlFinal: false }), true);
     expect(body).toMatchObject({ destino: 'en_espacio', espacio_id: 5, pago_diferido: false });
   });
 
   it('en una mesa a pagar al final lleva el espacio y la bandera', () => {
     const body = construirPedidoStaff(
       borrador({ destino: 'en_espacio', espacioId: 5, pagoAlFinal: true, nombreCliente: '  Juan ' }),
+      true,
     );
 
     expect(body).toMatchObject({

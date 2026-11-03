@@ -42,6 +42,7 @@ import type {
   ManagedSpace,
   BusinessSettings,
   BusinessSettingsInput,
+  OperationalSettings,
   SpaceUpdateInput,
   UnpaidAccounts,
   SpaceBatchResult,
@@ -896,6 +897,10 @@ export const api = {
 
   async businessSettings(token: string): Promise<BusinessSettings> {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { token })).data;
+  },
+
+  async operationalSettings(token: string): Promise<OperationalSettings> {
+    return (await request<OperationalSettings>('/establecimiento/configuracion/operativa', { token })).data;
   },
 
   async saveBusinessSettings(token: string, input: BusinessSettingsInput): Promise<BusinessSettings> {
