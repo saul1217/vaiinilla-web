@@ -223,6 +223,28 @@ describe('StaffOrderForm', () => {
     });
   });
 
+  it.each([true, false])('configuración 403: al tocar la casilla envía pago_diferido=%s', async (pagoDiferido) => {
+    const user = userEvent.setup();
+    apiMock.operationalSettings.mockRejectedValue(new Error('HTTP 403'));
+    renderForm('mesero');
+
+    await user.click(await screen.findByRole('button', { name: 'En mesa' }));
+    await user.click(await screen.findByRole('button', { name: /Mesa 2/ }));
+    const checkbox = screen.getByLabelText('Pagar al final, con la cuenta de la mesa');
+    await user.click(checkbox);
+    if (!pagoDiferido) await user.click(checkbox);
+    expect(checkbox).toBeEnabled();
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
+    expect(llamadas()[0]?.[1]).toMatchObject({
+      destino: 'en_espacio',
+      espacio_id: 2,
+      pago_diferido: pagoDiferido,
+    });
+  });
+
   it('iniciado desde una mesa precarga destino y mesa en el pedido', async () => {
     const user = userEvent.setup();
     apiMock.operationalSettings.mockResolvedValue({ permite_pago_al_final: true, entrega_requiere_qr: false });

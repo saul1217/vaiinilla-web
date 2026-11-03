@@ -135,7 +135,7 @@ function StaffOrderFormBody({
     setErrores(nuevosErrores);
     if (nuevosErrores.length > 0) return;
 
-    const body = construirPedidoStaff(draft, Boolean(configuracion) && pagoAlFinalTocado.current);
+    const body = construirPedidoStaff(draft, pagoAlFinalTocado.current);
     // La llave se reutiliza si el pedido no cambió; si cambió, una nueva (reusarla daría 409).
     const siguiente = llaveParaEnvio(llave, JSON.stringify(body), createIdempotencyKey);
     setLlave(siguiente);
