@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FirebaseError } from 'firebase/app';
-import { KeyRound, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, Redirect, useHistory, useLocation } from 'react-router-dom';
@@ -185,9 +184,6 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
             />
           ) : (
             <>
-          <div className="auth-card__icon">
-            {resolver ? <KeyRound aria-hidden="true" /> : <Mail aria-hidden="true" />}
-          </div>
           <p className="eyebrow">Acceso seguro</p>
           <h2>{resolver ? 'Confirma tu segundo factor' : isPlatform ? 'Super Admin' : 'Administración y POS'}</h2>
           <p className="auth-card__subtitle">
