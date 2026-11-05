@@ -137,6 +137,7 @@ export interface CashSession {
 
 export interface OperationalStatus {
   recibiendo_pedidos: boolean;
+  local_sin_conexion?: boolean;
   sesion_caja_abierta: boolean;
   caja_en_linea: boolean;
   cocina_en_linea: boolean;
@@ -231,6 +232,7 @@ export interface StaffOrderInput {
   pago_diferido?: boolean;
   cobrar_ahora?: true;
   monto_recibido?: string;
+  sin_conexion?: { id: string; capturado_en: string; folio_local: string };
 }
 
 export interface OperationalSettings {
@@ -459,6 +461,7 @@ export interface StoreVideo {
 /** Cómo funciona el negocio (guía "Flujo de mi tienda"). Solo la administración. */
 export interface BusinessSettings {
   tipo: string;
+  pausa_sin_conexion?: boolean;
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
   /** Si el negocio permite recargas y compras con saldo / wallet. */
