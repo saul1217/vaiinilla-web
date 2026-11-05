@@ -25,6 +25,7 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
 import { CASHBACK_ENABLED } from '../lib/features';
+import { IA_CONFIG_ENABLED } from '../lib/features';
 
 const paymentLabels = {
   efectivo: 'Efectivo',
@@ -322,6 +323,7 @@ export function TenantDashboardPage() {
               <ChevronRight aria-hidden="true" />
             </Link>
           </li>
+          {IA_CONFIG_ENABLED && <li><Link to="/app/asistente-configuracion"><ShieldCheck aria-hidden="true" /><span>Asistente de configuración</span><ChevronRight aria-hidden="true" /></Link></li>}
           <li>
             <Link to="/app/pedidos">
               <ClipboardList aria-hidden="true" />
