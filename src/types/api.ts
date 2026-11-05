@@ -634,7 +634,7 @@ export interface StaffBooking {
   inicio: string;
   fin: string;
   monto?: string | null;
-  estado: 'pendiente_pago' | 'confirmada' | 'en_curso' | 'terminada' | 'cancelada' | 'expirada' | 'conflicto' | string;
+  estado: string;
   /** Hora en que vence el apartado en efectivo; null si ya no aplica. */
   expira_en?: string | null;
   version?: number;
