@@ -5,10 +5,12 @@ import { PlatformGuard, RoleGuard, TenantGuard } from '../components/route-guard
 import { Spinner } from '../components/brand-mark';
 import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
+import { INVENTARIO_ENABLED } from '../lib/features';
 
 const AuthPage = lazy(() => import('../pages/auth-page').then((module) => ({ default: module.AuthPage })));
 const AccessSelectionPage = lazy(() => import('../pages/access-selection-page').then((module) => ({ default: module.AccessSelectionPage })));
 const TenantDashboardPage = lazy(() => import('../pages/tenant-dashboard-page').then((module) => ({ default: module.TenantDashboardPage })));
+const InventarioPage = lazy(() => import('../pages/inventario-page').then((module) => ({ default: module.InventarioPage })));
 const InvitationsPage = lazy(() => import('../pages/invitations-page').then((module) => ({ default: module.InvitationsPage })));
 const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({ default: module.OrdersPage })));
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
@@ -67,6 +69,7 @@ function TenantArea() {
               <MenuPage />
             </RoleGuard>
           </Route>
+          {INVENTARIO_ENABLED && <Route path="/app/inventario"><RoleGuard allowed={['admin']}><InventarioPage /></RoleGuard></Route>}
           {CASHBACK_ENABLED && CashbackPage ? (
             <Route path="/app/cashback">
               <RoleGuard allowed={['admin']}>
