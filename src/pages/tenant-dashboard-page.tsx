@@ -24,6 +24,7 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
 import { CASHBACK_ENABLED } from '../lib/features';
+import { CORTES_REPORTE_ENABLED } from '../lib/features';
 
 const paymentLabels = {
   efectivo: 'Efectivo',
@@ -349,6 +350,7 @@ export function TenantDashboardPage() {
               <ChevronRight aria-hidden="true" />
             </Link>
           </li>
+          {CORTES_REPORTE_ENABLED && <li><Link to="/app/cortes"><ReceiptText aria-hidden="true" /><span>Cortes y reporte</span><ChevronRight aria-hidden="true" /></Link></li>}
         </ul>
       </nav>
     </div>
