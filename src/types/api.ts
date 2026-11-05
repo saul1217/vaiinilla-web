@@ -232,7 +232,7 @@ export interface StaffOrderInput {
   pago_diferido?: boolean;
   cobrar_ahora?: true;
   monto_recibido?: string;
-  sin_conexion?: { id: string; capturado_en: string; folio_local: string };
+  sin_conexion?: { id: string; sesion_caja_id: string; capturado_en: string; folio_local: string };
 }
 
 export interface OperationalSettings {

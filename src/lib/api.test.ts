@@ -814,13 +814,34 @@ describe('Vaiinilla API client', () => {
     const input: StaffOrderInput = {
       metodo_pago: 'efectivo', destino: 'para_llevar', espacio_id: null,
       items: [{ producto_id: 101, cantidad: 1, opcion_ids: [] }],
-      sin_conexion: { id: 'local-uuid', capturado_en: '2026-11-04T12:00:00-06:00', folio_local: 'C-1' },
+      sin_conexion: { id: 'local-uuid', sesion_caja_id: 'sesion-1', capturado_en: '2026-11-04T12:00:00-06:00', folio_local: 'C-1' },
     };
     server.use(http.post(`${baseUrl}/pedidos`, async ({ request }) => {
-      expect(request.headers.get('Idempotency-Key')).toBe('offline-key');
+      expect(request.headers.get('Idempotency-Key')).toBe(window.localStorage.getItem('vaiinilla:offline-staff-order:local-uuid'));
       await expect(request.json()).resolves.toMatchObject({ sin_conexion: input.sin_conexion, metodo_pago: 'efectivo' });
       return HttpResponse.json({ data: { pedido: orderFixture, cobro: null }, meta: {}, error: null });
     }));
-    await api.syncOfflineStaffOrder('tenant-token', input, 'offline-key');
+    await api.syncOfflineStaffOrder('tenant-token', input);
+  });
+
+  it('genera y guarda en la biblioteca una llave estable para reintentos offline', async () => {
+    window.localStorage.clear();
+    const input: StaffOrderInput = {
+      metodo_pago: 'efectivo', destino: 'para_llevar', espacio_id: null,
+      items: [{ producto_id: 101, cantidad: 1, opcion_ids: [] }],
+      sin_conexion: { id: 'retry-local-order', sesion_caja_id: 'sesion-1', capturado_en: '2026-11-04T12:00:00-06:00', folio_local: 'C-2' },
+    };
+    const keys: Array<string | null> = [];
+    server.use(http.post(`${baseUrl}/pedidos`, ({ request }) => {
+      keys.push(request.headers.get('Idempotency-Key'));
+      return HttpResponse.json({ data: { pedido: orderFixture, cobro: null }, meta: {}, error: null });
+    }));
+
+    await api.syncOfflineStaffOrder('tenant-token', input);
+    await api.syncOfflineStaffOrder('tenant-token', input);
+
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
+    expect(window.localStorage.getItem('vaiinilla:offline-staff-order:retry-local-order')).toBe(keys[0]);
   });
 });
