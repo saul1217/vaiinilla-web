@@ -420,6 +420,11 @@ export const api = {
     ).data;
   },
 
+  async syncOfflineStaffOrder(token: string, input: StaffOrderInput, key: string): Promise<StaffOrderResult> {
+    if (!input.sin_conexion || input.metodo_pago !== 'efectivo') throw new Error('El pedido sin conexión requiere datos locales y pago en efectivo.');
+    return api.createStaffOrder(token, input, key);
+  },
+
   async deliverOrder(
     token: string,
     id: string,
@@ -905,6 +910,10 @@ export const api = {
 
   async saveBusinessSettings(token: string, input: BusinessSettingsInput): Promise<BusinessSettings> {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
+  },
+
+  async setOfflinePause(token: string, enabled: boolean): Promise<BusinessSettings> {
+    return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: { pausa_sin_conexion: enabled } })).data;
   },
 
   async uploadStoreImage(token: string, kind: StoreImageKind, file: File): Promise<BusinessSettings> {

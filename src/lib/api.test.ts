@@ -809,4 +809,18 @@ describe('Vaiinilla API client', () => {
       folio: 42,
     });
   });
+
+  it('sincroniza pedidos offline con metadatos de captura usando POST pedidos', async () => {
+    const input: StaffOrderInput = {
+      metodo_pago: 'efectivo', destino: 'para_llevar', espacio_id: null,
+      items: [{ producto_id: 101, cantidad: 1, opcion_ids: [] }],
+      sin_conexion: { id: 'local-uuid', capturado_en: '2026-11-04T12:00:00-06:00', folio_local: 'C-1' },
+    };
+    server.use(http.post(`${baseUrl}/pedidos`, async ({ request }) => {
+      expect(request.headers.get('Idempotency-Key')).toBe('offline-key');
+      await expect(request.json()).resolves.toMatchObject({ sin_conexion: input.sin_conexion, metodo_pago: 'efectivo' });
+      return HttpResponse.json({ data: { pedido: orderFixture, cobro: null }, meta: {}, error: null });
+    }));
+    await api.syncOfflineStaffOrder('tenant-token', input, 'offline-key');
+  });
 });
