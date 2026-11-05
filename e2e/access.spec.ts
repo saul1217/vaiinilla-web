@@ -11,6 +11,7 @@ test('protege el historial de pedidos con la sesión administrativa', async ({ p
   await page.goto('/app/pedidos');
   await expect(page).toHaveURL(/\/acceso$/);
   await expect(page.getByRole('heading', { name: 'Administración y POS' })).toBeVisible();
+  await expect(page.locator('.auth-card__icon')).toHaveCount(0);
 });
 
 test('protege la administración del menú con la sesión administrativa', async ({ page }) => {
