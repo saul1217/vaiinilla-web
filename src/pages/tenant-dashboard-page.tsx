@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PeriodSelector, RankedBarChart, SalesTrendChart } from '../components/analytics-dashboard';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
+import { CardErrorBoundary } from '../components/card-error-boundary';
 import { UnpaidAccountsCard } from '../components/unpaid-accounts-card';
 import { Feedback } from '../components/ui';
 import { useSessions } from '../context/session-context';
@@ -308,7 +309,9 @@ export function TenantDashboardPage() {
         </section>
       ) : null}
 
-      <UnpaidAccountsCard />
+      <CardErrorBoundary label="Cuentas sin cobrar">
+        <UnpaidAccountsCard />
+      </CardErrorBoundary>
 
       <nav className="dashboard-access" aria-label="Accesos">
         <ul>
