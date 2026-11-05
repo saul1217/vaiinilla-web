@@ -123,6 +123,32 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
   return payload;
 }
 
+const OFFLINE_ORDER_KEY_PREFIX = 'vaiinilla:offline-staff-order:';
+const offlineStaffOrderKeys = new Map<string, string>();
+
+function offlineStaffOrderKey(localOrderId: string): string {
+  const storageKey = `${OFFLINE_ORDER_KEY_PREFIX}${localOrderId}`;
+  const inMemory = offlineStaffOrderKeys.get(localOrderId);
+  if (inMemory) return inMemory;
+  try {
+    const saved = globalThis.localStorage?.getItem(storageKey);
+    if (saved) {
+      offlineStaffOrderKeys.set(localOrderId, saved);
+      return saved;
+    }
+  } catch {
+    // Keep the key in memory when persistent browser storage is unavailable.
+  }
+  const generated = createIdempotencyKey();
+  offlineStaffOrderKeys.set(localOrderId, generated);
+  try {
+    globalThis.localStorage?.setItem(storageKey, generated);
+  } catch {
+    // The in-memory copy still protects retries during this page session.
+  }
+  return generated;
+}
+
 function params(values: Record<string, string | number | undefined>): string {
   const search = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => {
@@ -420,9 +446,10 @@ export const api = {
     ).data;
   },
 
-  async syncOfflineStaffOrder(token: string, input: StaffOrderInput, key: string): Promise<StaffOrderResult> {
+  async syncOfflineStaffOrder(token: string, input: StaffOrderInput): Promise<StaffOrderResult> {
     if (!input.sin_conexion || input.metodo_pago !== 'efectivo') throw new Error('El pedido sin conexión requiere datos locales y pago en efectivo.');
-    return api.createStaffOrder(token, input, key);
+    const idempotencyKey = offlineStaffOrderKey(input.sin_conexion.id);
+    return api.createStaffOrder(token, input, idempotencyKey);
   },
 
   async deliverOrder(
