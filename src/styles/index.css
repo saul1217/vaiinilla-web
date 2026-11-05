@@ -137,6 +137,11 @@ select:enabled {
   background: var(--color-white-warm);
 }
 
+.tenant-app :is(.app-identity, .app-rail__brand) .brand-logo--compact {
+  background: transparent;
+  box-shadow: none;
+}
+
 .brand-logo--full {
   width: 112px;
 }
@@ -6899,6 +6904,7 @@ html[data-admin-theme='oscuro'] .stripe-panel__account { background: rgba(244, 2
 html[data-admin-theme='oscuro'] .brand-logo--full.brand-logo--light { background: url('/brand/vaiinilla-logo-dark.webp') center / contain no-repeat; }
 html[data-admin-theme='oscuro'] .brand-logo--full.brand-logo--light .brand-logo__image { opacity: 0; }
 html[data-admin-theme='oscuro'] .brand-logo--compact.brand-logo--dark { background: #f4f1e7; }
+html[data-admin-theme='oscuro'] .tenant-app :is(.app-identity, .app-rail__brand) .brand-logo--compact.brand-logo--dark { background: transparent; }
 .selection-header .brand-logo { width: 84px; }
 
 .staff-topbar {
