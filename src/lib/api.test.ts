@@ -809,4 +809,20 @@ describe('Vaiinilla API client', () => {
       folio: 42,
     });
   });
+
+  it('consulta existencias y productos, y guarda recetas mediante rutas de inventario', async () => {
+    server.use(
+      http.get(`${baseUrl}/inventario/insumos`, () => HttpResponse.json({ data: { insumos: [] }, meta: {}, error: null })),
+      http.get(`${baseUrl}/inventario/productos`, () => HttpResponse.json({ data: { productos: [] }, meta: {}, error: null })),
+      http.get(`${baseUrl}/inventario/productos/24/receta`, () => HttpResponse.json({ data: { lineas: [] }, meta: {}, error: null })),
+      http.put(`${baseUrl}/inventario/productos/24/receta`, async ({ request }) => {
+        await expect(request.json()).resolves.toEqual({ lineas: [{ insumo_id: 7, cantidad: 2 }] });
+        return HttpResponse.json({ data: { lineas: [{ insumo_id: 7, cantidad: 2 }] }, meta: {}, error: null });
+      }),
+    );
+    await expect(api.inventorySupplies('tenant-token')).resolves.toMatchObject({ insumos: [] });
+    await expect(api.inventoryProducts('tenant-token')).resolves.toMatchObject({ productos: [] });
+    await expect(api.inventoryRecipe('tenant-token', '24')).resolves.toMatchObject({ lineas: [] });
+    await expect(api.saveInventoryRecipe('tenant-token', '24', [{ insumo_id: 7, cantidad: 2 }])).resolves.toMatchObject({ lineas: [{ insumo_id: 7 }] });
+  });
 });
