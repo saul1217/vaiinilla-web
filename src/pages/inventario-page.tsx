@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { AppPageHeader } from '../components/app-page-header';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
-import { errorMessage } from '../lib/api-error';
 import { Feedback } from '../components/ui';
 
 type Line = { insumo_id: number; cantidad: number; opcion_id?: number | null };
@@ -26,7 +25,7 @@ export function InventarioPage() {
   const setLines = (update: (previous: Line[]) => Line[]) => setEditedLines(update(lines));
   const save = useMutation({ mutationFn: () => api.saveInventoryRecipe(token, selected, lines), onSuccess: () => client.invalidateQueries({ queryKey: ['inventory-recipe', selected] }) });
   // Unsupported installations hide the route when either required contract is absent.
-  if (suppliesQuery.isError || productsQuery.isError || (selected && recipeQuery.isError)) return null;
+  if (suppliesQuery.isError || productsQuery.isError || (selected && recipeQuery.isError) || save.isError) return null;
   return <main className="page-stack admin-screen admin-catalog">
     <AppPageHeader eyebrow="Administración · Operación" title="Inventario y recetas" description="Controla existencias y define qué insumos consume cada producto." />
     <section className="panel-card" aria-busy={suppliesQuery.isLoading || productsQuery.isLoading}>
@@ -39,7 +38,7 @@ export function InventarioPage() {
       {selected && (recipeQuery.isLoading ? <p role="status">Cargando receta…</p> : !recipeQuery.data ? <p>Este producto no tiene receta registrada.</p> : <form onSubmit={event => { event.preventDefault(); save.mutate(); }}>
         {lines.map((line, index) => <div className="flex flex-wrap gap-3" key={`${line.insumo_id}-${index}`}><label>Insumo<select aria-label={`Insumo ${index + 1}`} value={line.insumo_id} onChange={event => setLines(old => old.map((item, i) => i === index ? { ...item, insumo_id: Number(event.target.value) } : item))}>{supplies.map(item => <option key={label(item.id)} value={label(item.id)}>{label(item.nombre)}</option>)}</select></label><label>Cantidad<input aria-label={`Cantidad ${index + 1}`} type="number" min="0.001" step="0.001" value={line.cantidad} onChange={event => setLines(old => old.map((item, i) => i === index ? { ...item, cantidad: Number(event.target.value) } : item))} /></label><button className="button button--secondary" type="button" onClick={() => setLines(old => old.filter((_, i) => i !== index))}>Quitar</button></div>)}
         <div className="flex flex-wrap gap-3"><button className="button button--secondary" type="button" onClick={() => firstSupplyId && setLines(old => [...old, { insumo_id: Number(firstSupplyId), cantidad: 1 }])}>Agregar insumo</button><button className="button" type="submit" disabled={save.isPending}>Guardar receta</button></div>
-        {save.isError && <Feedback tone="error">{errorMessage(save.error)}</Feedback>}{save.isSuccess && <Feedback tone="success">Receta guardada.</Feedback>}
+        {save.isSuccess && <Feedback tone="success">Receta guardada.</Feedback>}
       </form>)}
     </section>
   </main>;
