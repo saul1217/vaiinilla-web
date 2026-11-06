@@ -37,7 +37,7 @@ export function CortesReportePage() {
       {current.isLoading ? <p role="status">Cargando información…</p> : !data ? <p>No hay información para este periodo.</p> : <>
         <h2>{tab === 'caja' ? 'Resumen del día' : 'Ventas del periodo'}</h2>
         <dl className="stats-grid">{Object.entries(summary ?? {}).filter(([, value]) => value === null || ['string', 'number', 'boolean'].includes(typeof value)).map(([key, value]) => <div className="stat-card" key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd><strong>{typeof value === 'number' && /venta|monto|efectivo|propina|diferencia/i.test(key) ? money(value) : textValue(value)}</strong></dd></div>)}</dl>
-        {Array.isArray(data.turnos) && <section><h2>Turnos</h2><ul>{data.turnos.map((item, index) => { const turn = item as Record<string, unknown>; const id = textValue(turn.id, ''); return <li key={id || String(index)}><button className="button button--secondary" type="button" onClick={() => setSelectedShift(id)}>{textValue(turn.fecha_operativa, 'Fecha sin especificar')} · {money(turn.efectivo)}</button></li>; })}</ul></section>}
+        {Array.isArray(data.turnos) && <section><h2>Turnos</h2><ul>{data.turnos.map((item, index) => { const turn = item as Record<string, unknown>; const efectivo = turn.efectivo as Record<string, unknown> | null; const id = textValue(turn.id, ''); return <li key={id || String(index)}><button className="button button--secondary" type="button" onClick={() => setSelectedShift(id)}>{textValue(turn.fecha_operativa, 'Fecha sin especificar')} · {money(efectivo?.efectivo_esperado)}</button></li>; })}</ul></section>}
         {tab === 'contador' && <p>Desglose por forma de pago, categoría, producto, personal y espacio.</p>}
       </>}
     </section>
