@@ -9,6 +9,8 @@ import { PosPage } from './pos-page';
 const apiMock = vi.hoisted(() => ({
   activeCashSession: vi.fn(), operationalStatus: vi.fn(), listOrders: vi.fn(),
   payOrderMixed: vi.fn(),
+  pendingMixedPayment: vi.fn(() => null),
+  recoverPendingMixedPayments: vi.fn().mockResolvedValue([]),
   abonarSpaceAccount: vi.fn(),
   collectCash: vi.fn(), deliverOrder: vi.fn(), closeCashSession: vi.fn(),
   rejectOrder: vi.fn(), rejectOrderItem: vi.fn(), catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
@@ -310,14 +312,14 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     await user.type(within(dialog).getByLabelText('Monto de este pago (MXN)'), '50');
     await user.type(within(dialog).getByLabelText('Efectivo recibido (MXN)'), '50');
     await user.click(within(dialog).getByRole('button', { name: 'Registrar pago' }));
-    await waitFor(() => expect(apiMock.payOrderMixed).toHaveBeenCalledWith('token', baseOrder.id, { metodoPago: 'efectivo', monto: '50.00', montoRecibido: '50.00' }));
+    await waitFor(() => expect(apiMock.payOrderMixed).toHaveBeenCalledWith('token', baseOrder.id, { metodoPago: 'efectivo', monto: '50.00', montoRecibido: '50.00' }, '125.00'));
     expect(await screen.findByText(/Restan/)).toHaveTextContent('$75.00 MXN');
     expect(within(dialog).getByText('Saldo restante').parentElement).toHaveTextContent('$75.00 MXN');
     await user.click(within(dialog).getByRole('radio', { name: 'Terminal' }));
     await user.clear(within(dialog).getByLabelText('Monto de este pago (MXN)'));
     await user.type(within(dialog).getByLabelText('Monto de este pago (MXN)'), '75');
     await user.click(within(dialog).getByRole('button', { name: 'Registrar pago' }));
-    await waitFor(() => expect(apiMock.payOrderMixed).toHaveBeenLastCalledWith('token', baseOrder.id, { metodoPago: 'terminal', monto: '75.00' }));
+    await waitFor(() => expect(apiMock.payOrderMixed).toHaveBeenLastCalledWith('token', baseOrder.id, { metodoPago: 'terminal', monto: '75.00' }, '75.00'));
     expect(await screen.findByText('Pago registrado. Pedido liquidado.')).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     vi.unstubAllEnvs();
@@ -334,10 +336,11 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText(/Falta por cobrar/)).toBeVisible();
     expect(within(dialog).getByRole('button', { name: 'Confirmar pago' })).toBeVisible();
-    expect(within(dialog).getByLabelText('Monto de este pago')).toBeVisible();
+    expect(within(dialog).getByRole('group', { name: 'Personas que faltan por pagar' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Una persona más' })).toBeVisible();
     await user.click(within(dialog).getByRole('radio', { name: 'Terminal' }));
     await user.click(within(dialog).getByRole('button', { name: 'Confirmar pago' }));
-    await waitFor(() => expect(apiMock.abonarSpaceAccount).toHaveBeenCalledWith('token', 67, expect.objectContaining({ metodo: 'terminal', modo: 'monto' })));
+    await waitFor(() => expect(apiMock.abonarSpaceAccount).toHaveBeenCalledWith('token', 67, expect.objectContaining({ metodo: 'terminal', modo: 'partes', partes: 2 })));
     expect(apiMock.payOrderMixed).not.toHaveBeenCalled();
   });
 
