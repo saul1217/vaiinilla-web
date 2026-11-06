@@ -25,6 +25,7 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
 import { CASHBACK_ENABLED } from '../lib/features';
+import { INVENTARIO_ENABLED } from '../lib/features';
 
 const paymentLabels = {
   efectivo: 'Efectivo',
@@ -322,6 +323,7 @@ export function TenantDashboardPage() {
               <ChevronRight aria-hidden="true" />
             </Link>
           </li>
+          {INVENTARIO_ENABLED && <li><Link to="/app/inventario"><PackageCheck aria-hidden="true" /><span>Inventario y recetas</span><ChevronRight aria-hidden="true" /></Link></li>}
           <li>
             <Link to="/app/pedidos">
               <ClipboardList aria-hidden="true" />
