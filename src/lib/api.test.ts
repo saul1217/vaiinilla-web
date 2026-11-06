@@ -855,12 +855,13 @@ describe('Vaiinilla API client', () => {
       return HttpResponse.json({ data: successfulResult, meta: {}, error: null });
     }));
     await expect(api.syncOfflineStaffOrder('tenant-token', input)).rejects.toThrow();
-    await api.syncOfflineStaffOrder('tenant-token', input);
+    const retryResult = await api.syncOfflineStaffOrder('tenant-token', input);
 
     expect(keys[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     expect(keys[1]).toBe(keys[0]);
     expect(keys).toHaveLength(2);
     expect(chargeCount).toBe(1);
+    expect((retryResult as unknown as { cobro?: { id?: string } }).cobro?.id).toBe('charge-1');
     expect(window.localStorage.getItem('vaiinilla:offline-staff-order:retry-local-order')).toBe(keys[0]);
   });
 });
