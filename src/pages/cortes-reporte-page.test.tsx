@@ -15,11 +15,11 @@ function renderPage() {
 describe('CortesReportePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    apiMock.cashDayCut.mockResolvedValue({ resumen: {}, turnos: [{ id: 'caja-1', fecha_operativa: '2026-11-04', efectivo: '125.50' }] });
+    apiMock.cashDayCut.mockResolvedValue({ resumen: {}, turnos: [{ id: 'caja-1', fecha_operativa: '2026-11-04', efectivo: { fondo: '50.00', cobros_efectivo: '100.00', efectivo_esperado: '150.00' } }] });
   });
 
   it('presenta los campos del contrato de cortes del backend', async () => {
     renderPage();
-    expect(await screen.findByRole('button', { name: /2026-11-04.*\$125\.50/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /2026-11-04.*\$150\.00/ })).toBeInTheDocument();
   });
 });
