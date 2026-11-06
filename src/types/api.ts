@@ -457,10 +457,14 @@ export interface StoreVideo {
 }
 
 /** Cómo funciona el negocio (guía "Flujo de mi tienda"). Solo la administración. */
+export type AssistantMode = 'ambos' | 'personal' | 'ninguno';
+
 export interface BusinessSettings {
   tipo: string;
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
+  /** Disponibilidad del asistente; null cuando la migración de IA aún no está instalada. */
+  asistente_modo: AssistantMode | null;
   /** Si el negocio permite recargas y compras con saldo / wallet. */
   permite_saldo?: boolean;
   gracia_liberacion_min: number;
@@ -483,8 +487,8 @@ export interface BusinessSettings {
 export type StoreImageKind = 'logo' | 'foto';
 
 export type BusinessSettingsInput = Partial<
-  Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url' | 'imagen_url' | 'logo_url'>
->;
+  Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url' | 'imagen_url' | 'logo_url' | 'asistente_modo'>
+> & { asistente_modo?: AssistantMode };
 
 /** Una cuenta abierta (pagar al final) que nadie ha cobrado. */
 export interface UnpaidAccount {

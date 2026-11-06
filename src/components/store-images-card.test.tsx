@@ -13,6 +13,7 @@ const base: BusinessSettings = {
   tipo: 'restaurante',
   entrega_requiere_qr: true,
   permite_pago_al_final: false,
+  asistente_modo: null,
   gracia_liberacion_min: 5,
   tipos_disponibles: ['restaurante'],
 };
