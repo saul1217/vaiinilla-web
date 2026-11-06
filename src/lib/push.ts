@@ -143,3 +143,37 @@ export async function disablePush(sessionToken: string): Promise<void> {
     tokenActual = null;
   }
 }
+
+const ESPERA_BAJA_MS = 4000;
+
+/**
+ * Baja el token de ESTE dispositivo para la sesión que sale, antes de que se borre
+ * su credencial. Solo toca el token local (DELETE /devices/:token); los demás
+ * dispositivos del mismo usuario no se afectan.
+ *
+ * Nunca lanza ni espera más de unos segundos: un fallo de red se registra y el cierre
+ * de sesión continúa. Sin permiso de notificaciones concedido no hay token que dar de
+ * baja, así que no se intenta pedir ninguno.
+ */
+export async function releasePush(sessionToken: string | null | undefined): Promise<void> {
+  if (!sessionToken) return;
+  if (
+    !tokenActual &&
+    (typeof Notification === 'undefined' || Notification.permission !== 'granted')
+  ) {
+    return;
+  }
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      disablePush(sessionToken),
+      new Promise<void>((resolve) => {
+        temporizador = setTimeout(resolve, ESPERA_BAJA_MS);
+      }),
+    ]);
+  } catch (error) {
+    console.warn('[push] no se pudo dar de baja el token al cerrar sesión:', error);
+  } finally {
+    clearTimeout(temporizador);
+  }
+}

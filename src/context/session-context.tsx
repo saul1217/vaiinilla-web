@@ -5,11 +5,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import type { User } from 'firebase/auth';
 import { api } from '../lib/api';
+import { releasePush } from '../lib/push';
 import {
   endBrowserSession,
   forgetTenantMembership,
@@ -42,9 +44,9 @@ interface SessionContextValue {
   platform: PlatformSession | null;
   openTenantSession: (user: User, access: SessionAccess) => Promise<TenantSession>;
   openPlatformSession: (user: User) => Promise<PlatformSession>;
-  clearTenant: () => void;
+  clearTenant: () => Promise<void>;
   clearPlatform: () => void;
-  clearAll: () => void;
+  clearAll: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -77,12 +79,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     !user || (tenantRestoration.uid === user.uid && tenantRestoration.ready)
   );
 
-  const clearTenant = useCallback(() => {
+  // Credencial vigente, para dar de baja el token push antes de soltarla.
+  const tenantTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    tenantTokenRef.current = tenant?.token ?? null;
+  }, [tenant]);
+
+  const clearTenant = useCallback(async () => {
+    await releasePush(tenantTokenRef.current);
     forgetTenantMembership();
     setTenant(null);
   }, []);
   const clearPlatform = useCallback(() => setPlatform(null), []);
-  const clearAll = useCallback(() => {
+  const clearAll = useCallback(async () => {
+    await releasePush(tenantTokenRef.current);
     endBrowserSession();
     setTenant(null);
     setPlatform(null);
@@ -181,6 +191,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (remaining > 0) {
           schedule(Math.min(TENANT_RENEWAL_RETRY_MS, remaining));
         } else {
+          void releasePush(tenant.token);
           setTenant((current) => (
             current?.access.membresia_id === membershipId ? null : current
           ));
