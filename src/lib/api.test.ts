@@ -824,7 +824,7 @@ describe('Vaiinilla API client', () => {
     await api.syncOfflineStaffOrder('tenant-token', input);
   });
 
-  it('genera y guarda en la biblioteca una llave estable para reintentos offline', async () => {
+  it('reutiliza la llave estable tras un cobro exitoso con respuesta fallida', async () => {
     window.localStorage.clear();
     const input: StaffOrderInput = {
       metodo_pago: 'efectivo', destino: 'para_llevar', espacio_id: null,
@@ -832,22 +832,35 @@ describe('Vaiinilla API client', () => {
       sin_conexion: { id: 'retry-local-order', sesion_caja_id: '11111111-1111-4111-8111-111111111111', capturado_en: '2026-11-04T12:00:00-06:00', folio_local: 'C-2' },
     };
     const keys: Array<string | null> = [];
-    const chargedKeys = new Set<string>();
-    server.use(http.post(`${baseUrl}/pedidos`, ({ request }) => {
+    const committedResults = new Map<string, { pedido: typeof orderFixture; cobro: { id: string } }>();
+    let chargeCount = 0;
+    server.use(http.post(`${baseUrl}/pedidos`, async ({ request }) => {
       const key = request.headers.get('Idempotency-Key');
       keys.push(key);
-      if (keys.length === 1) return HttpResponse.json({ data: null, meta: {}, error: { code: 'NETWORK_ERROR' } }, { status: 503 });
-      chargedKeys.add(key!);
-      return HttpResponse.json({ data: { pedido: orderFixture, cobro: null }, meta: {}, error: null });
+      const body = await request.json() as { sin_conexion?: { sesion_caja_id?: string } };
+      expect(body.sin_conexion?.sesion_caja_id).toBe('11111111-1111-4111-8111-111111111111');
+      if (!key) throw new Error('Idempotency-Key is required');
+      const previousResult = committedResults.get(key);
+      if (previousResult) {
+        return HttpResponse.json({ data: previousResult, meta: {}, error: null });
+      }
+      // The server commits the charge, then the response is lost. The retry must
+      // replay this result instead of running the charge again.
+      chargeCount += 1;
+      const successfulResult = { pedido: orderFixture, cobro: { id: 'charge-1' } };
+      committedResults.set(key, successfulResult);
+      if (keys.length === 1) {
+        return HttpResponse.json({ data: null, meta: {}, error: { code: 'NETWORK_ERROR' } }, { status: 503 });
+      }
+      return HttpResponse.json({ data: successfulResult, meta: {}, error: null });
     }));
     await expect(api.syncOfflineStaffOrder('tenant-token', input)).rejects.toThrow();
     await api.syncOfflineStaffOrder('tenant-token', input);
-    await api.syncOfflineStaffOrder('tenant-token', input);
 
-    expect(keys[0]).toBeTruthy();
+    expect(keys[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     expect(keys[1]).toBe(keys[0]);
-    expect(keys[2]).toBe(keys[0]);
-    expect(chargedKeys.size).toBe(1);
+    expect(keys).toHaveLength(2);
+    expect(chargeCount).toBe(1);
     expect(window.localStorage.getItem('vaiinilla:offline-staff-order:retry-local-order')).toBe(keys[0]);
   });
 });
