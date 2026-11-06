@@ -91,7 +91,7 @@ const responses = {
     horas: 0.67, clientes: s.cuenta!.grupos!.map((g) => g.etiqueta), abandonada: false })), total: '370.00', abandonadas: 0 },
   pendingRefunds: [], listBookingRefunds: [], listStaffBookings: [],
   cashbackRule: { id: 'cashback-1', nombre: 'Tardes con sabor', porcentaje: '5.00', hora_inicio: '12:00', hora_fin: '18:00', dias_activos: [1, 2, 3, 4, 5], vigencia_inicio: null, vigencia_fin: null, activa: true, creado_en: since, actualizado_en: now },
-  businessSettings: { tipo: 'restaurante', entrega_requiere_qr: false, permite_pago_al_final: true, permite_saldo: true,
+  businessSettings: { tipo: 'restaurante', entrega_requiere_qr: false, permite_pago_al_final: true, asistente_modo: 'ambos', permite_saldo: true,
     gracia_liberacion_min: 15, franjas_pedido: [{ desde: '08:00', hasta: '21:00' }], visible_en_directorio: true,
     tienda_url: '/tienda/cafe-jardin', videos_local: [], imagen_url: null, logo_url: null, tipos_disponibles: ['cafeteria', 'restaurante', 'padel'] },
   bookingSettings: { apertura: '08:00', cierre: '21:00', dias_adelanto: 7, zona_horaria: 'America/Mexico_City' },
