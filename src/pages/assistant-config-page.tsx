@@ -24,8 +24,7 @@ export function AssistantConfigPage() {
   // Check the existing settings resource; never call the model just to probe availability.
   const availabilityError = availability.error;
   const assistantUnsupported = availability.isError && availabilityError instanceof VaiinillaApiError &&
-    (availabilityError.status === 404 || [405, 501].includes(availabilityError.status) ||
-      ['UNSUPPORTED_OPERATION', 'FEATURE_UNSUPPORTED'].includes(availabilityError.code));
+    availabilityError.status === 404;
   if (assistantUnsupported) return null;
   const send = (text: string) => {
     const next = [...messages, { rol: 'dueno' as const, texto: text }];
