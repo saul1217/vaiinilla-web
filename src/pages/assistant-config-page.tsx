@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { AppPageHeader } from '../components/app-page-header';
 import { Feedback } from '../components/ui';
@@ -12,6 +12,7 @@ type Reply = { mensaje?: string; opciones?: string[]; propuesta?: { cambios?: Re
 export function AssistantConfigPage() {
   const { tenant } = useSessions();
   const token = tenant?.token ?? '';
+  const availability = useQuery({ queryKey: ['store-assistant-availability'], enabled: !!token, retry: false, queryFn: () => api.askStoreAssistant(token, []) });
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [reply, setReply] = useState<Reply | null>(null);
@@ -19,7 +20,7 @@ export function AssistantConfigPage() {
   const ask = useMutation({ mutationFn: (next: Message[]) => api.askStoreAssistant(token, next), onSuccess: value => { const result = value as Reply; setReply(result); if (result.mensaje) setMessages(old => [...old, { rol: 'asistente', texto: result.mensaje! }]); } });
   const apply = useMutation({ mutationFn: () => api.saveBusinessSettings(token, (reply?.propuesta?.cambios ?? {}) as BusinessSettingsInput), onSuccess: () => setNotice('Cambios aplicados a la configuración del negocio.') });
   // 404, unavailable, and other API failures disable the assistant view on this deployment.
-  if (ask.isError || apply.isError) return null;
+  if (availability.isLoading || availability.isError || ask.isError || apply.isError) return null;
   const send = (text: string) => {
     const next = [...messages, { rol: 'dueno' as const, texto: text }];
     setMessages(next);

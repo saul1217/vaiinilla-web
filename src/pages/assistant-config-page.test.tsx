@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssistantConfigPage } from './assistant-config-page';
 
@@ -14,14 +13,17 @@ function renderPage() {
 }
 
 describe('AssistantConfigPage', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); apiMock.askStoreAssistant.mockResolvedValue({ mensaje: '¿Qué te gustaría configurar?' }); });
+
+  it('oculta el asistente si la consulta inicial responde 404', async () => {
+    apiMock.askStoreAssistant.mockRejectedValue(new Error('404'));
+    const { container } = renderPage();
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
 
   it('oculta el asistente si su primera solicitud responde 404', async () => {
     apiMock.askStoreAssistant.mockRejectedValue(new Error('404'));
-    const user = userEvent.setup();
     const { container } = renderPage();
-    await user.type(screen.getByRole('textbox', { name: 'Tu mensaje' }), 'Configurar horario');
-    await user.click(screen.getByRole('button', { name: 'Enviar' }));
     await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 });
