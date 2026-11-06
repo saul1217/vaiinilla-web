@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssistantConfigPage } from './assistant-config-page';
+import { VaiinillaApiError } from '../lib/api-error';
 
 const apiMock = vi.hoisted(() => ({ businessSettings: vi.fn(), askStoreAssistant: vi.fn(), saveBusinessSettings: vi.fn() }));
 vi.mock('../lib/api', () => ({ api: apiMock }));
@@ -16,15 +17,43 @@ function renderPage() {
 describe('AssistantConfigPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    apiMock.businessSettings.mockResolvedValue({});
+    apiMock.businessSettings.mockResolvedValue({ asistente_modo: 'ambos' });
     apiMock.askStoreAssistant.mockResolvedValue({ mensaje: '¿Qué te gustaría configurar?' });
     apiMock.saveBusinessSettings.mockResolvedValue({});
   });
 
-  it.each(['404', '503'])('permanece oculto si el recurso de ajustes inicial responde %s', async (status) => {
-    apiMock.businessSettings.mockRejectedValue(new Error(status));
+  it('permanece oculto si el recurso de ajustes responde 404', async () => {
+    apiMock.businessSettings.mockRejectedValue(new VaiinillaApiError(404, { code: 'NOT_FOUND', message: 'Not found' }));
     const { container } = renderPage();
     await waitFor(() => expect(container).toBeEmptyDOMElement());
+    expect(apiMock.askStoreAssistant).not.toHaveBeenCalled();
+  });
+
+  it.each([new Error('Network error'), new VaiinillaApiError(503, { code: 'UNAVAILABLE', message: 'Unavailable' })])('muestra error recuperable ante fallas transitorias', async error => {
+    const user = userEvent.setup();
+    apiMock.businessSettings.mockRejectedValueOnce(error).mockResolvedValueOnce({ asistente_modo: 'personal' });
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Reintentar' })).toBeVisible();
+    expect(screen.getByText('Asistente de configuración')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByLabelText('personal')).toBeChecked();
+    expect(apiMock.askStoreAssistant).not.toHaveBeenCalled();
+  });
+
+  it('oculta el selector cuando asistente_modo es null', async () => {
+    apiMock.businessSettings.mockResolvedValue({ asistente_modo: null });
+    renderPage();
+    await screen.findByText('¿Qué te gustaría configurar en tu tienda?');
+    expect(screen.queryByText('Modo del asistente')).not.toBeInTheDocument();
+  });
+
+  it.each(['ambos', 'personal', 'ninguno'] as const)('guarda el modo %s sin invocar al modelo', async mode => {
+    const user = userEvent.setup();
+    apiMock.businessSettings.mockResolvedValue({ asistente_modo: mode === 'ambos' ? 'personal' : 'ambos' });
+    renderPage();
+    const personal = await screen.findByLabelText(mode);
+    await user.click(personal);
+    await waitFor(() => expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('tenant-token', { asistente_modo: mode }));
     expect(apiMock.askStoreAssistant).not.toHaveBeenCalled();
   });
 
