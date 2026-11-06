@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { RejectOrderDialog } from '../components/reject-order-dialog';
+import { SegmentedControl } from '../components/segmented-control';
 import { itemRejectionNotice } from '../lib/rejection-notice';
 import { TipPicker } from '../components/tip-picker';
 import { addMoney, tipAmount, tipExceedsTotal, type TipChoice } from '../lib/tips';
@@ -25,17 +26,92 @@ import { QrTokenField } from '../components/qr-token-field';
 import { StaffOrderForm } from '../components/staff-order-form';
 import { Button, Feedback, Field } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
+import { AccountAbonoForm } from '../components/account-abono-form';
 import { WaiterBoard } from '../components/waiter-board';
 import { useStaffTheme } from '../lib/staff-ui';
 import { useSessions } from '../context/session-context';
 import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
 import { api } from '../lib/api';
-import { errorMessage } from '../lib/api-error';
-import { MONEY_PATTERN, calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
+import { errorMessage, VaiinillaApiError } from '../lib/api-error';
+import { MONEY_PATTERN, calculateChange, centsToMoney, formatMoney, moneyToCents, normalizeMoneyInput } from '../lib/money';
 import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeferredDeliveryOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
 import { deliveryRequiresQr } from '../lib/delivery-policy';
 import { printOrderTicket } from '../lib/order-ticket-print';
 import type { OrderDetail, StaffOrderResult } from '../types/api';
+import type { AccountAbonoResult } from '../types/api';
+import { isPosMixedPaymentsEnabled } from '../lib/features';
+
+function MixedOrderPayment({
+  token,
+  order,
+  onDone,
+  onUnavailable,
+  unavailable,
+  onCancel,
+}: {
+  token: string;
+  order: OrderDetail;
+  onDone: (remaining: string, liquidated: boolean) => void;
+  onUnavailable: () => void;
+  unavailable: boolean;
+  onCancel: () => void;
+}) {
+  const [pendingAttempt, setPendingAttempt] = useState(() => api.pendingMixedPayment(order.id));
+  const [method, setMethod] = useState<'efectivo' | 'terminal'>(pendingAttempt?.body.metodo_pago ?? 'efectivo');
+  const [amount, setAmount] = useState(pendingAttempt?.body.monto ?? order.saldo_pendiente ?? order.total);
+  const [received, setReceived] = useState(pendingAttempt?.body.monto_recibido ?? '');
+  const due = order.saldo_pendiente ?? order.total;
+  const amountCents = moneyToCents(amount) ?? 0n;
+  const dueCents = moneyToCents(due) ?? 0n;
+  const receivedCents = moneyToCents(received);
+  const validAmount = MONEY_PATTERN.test(amount) && amountCents > 0n && amountCents <= dueCents;
+  const enoughCash = method === 'terminal' || (receivedCents !== null && receivedCents >= amountCents);
+  const payment = useMutation({
+    mutationFn: () => api.payOrderMixed(token, order.id, {
+      metodoPago: method,
+      monto: normalizeMoneyInput(amount),
+      ...(method === 'efectivo' ? { montoRecibido: normalizeMoneyInput(received) } : {}),
+    }, due),
+    onSuccess: (result) => {
+      setPendingAttempt(null);
+      onDone(result.restante, result.liquidada);
+    },
+    onError: (error) => {
+      setPendingAttempt(api.pendingMixedPayment(order.id));
+      if (error instanceof VaiinillaApiError && error.status === 404) onUnavailable();
+    },
+  });
+
+  if (unavailable) return <div className="transaction-form">
+    <Feedback tone="error">El servidor todavía no tiene disponible el pago mixto. Puedes cerrar esta ventana y usar el cobro normal.</Feedback>
+    <div className="form-actions"><Button type="button" variant="secondary" onClick={onCancel}>Cerrar</Button></div>
+  </div>;
+
+  return <form className="transaction-form staff-payment mixed-payment" onSubmit={(event) => { event.preventDefault(); payment.mutate(); }}>
+    <p className="staff-payment__due"><span>Saldo restante</span><strong>{formatMoney(due)}</strong></p>
+    {payment.isError && <Feedback tone="error">{errorMessage(payment.error)}</Feedback>}
+    {pendingAttempt && <Feedback tone="error">Este pago quedó pendiente de confirmar. Reintenta el mismo pago; el monto y el método están bloqueados para evitar otro cobro.</Feedback>}
+    <SegmentedControl legend="Forma de pago" value={method}
+      options={[{ value: 'efectivo', label: 'Efectivo' }, { value: 'terminal', label: 'Terminal' }]}
+      onChange={setMethod} disabled={Boolean(pendingAttempt)} />
+    <Field id="mixed-payment-amount" label="Monto de este pago (MXN)" inputMode="decimal" value={amount}
+      onChange={(event) => setAmount(event.target.value.trim())}
+      disabled={Boolean(pendingAttempt)}
+      onBlur={() => { const normalized = normalizeMoneyInput(amount); if (normalized !== amount) setAmount(normalized); }}
+      error={amount && !validAmount ? amountCents > dueCents ? 'El monto supera el saldo restante.' : 'Escribe un monto mayor que cero.' : undefined}
+      hint={`Puedes registrar otro pago después. Máximo ${formatMoney(due)}.`} />
+    {method === 'efectivo' && <Field id="mixed-payment-received" label="Efectivo recibido (MXN)" inputMode="decimal" value={received}
+      onChange={(event) => setReceived(event.target.value.trim())}
+      disabled={Boolean(pendingAttempt)}
+      onBlur={() => { const normalized = normalizeMoneyInput(received); if (normalized !== received) setReceived(normalized); }}
+      error={received && !enoughCash ? 'El efectivo recibido es menor al pago.' : undefined}
+      hint={enoughCash && receivedCents !== null ? `Cambio: ${formatMoney(centsToMoney(receivedCents - amountCents))}` : 'Solo se registra para pagos en efectivo.'} />}
+    <div className="form-actions">
+      <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
+      <Button type="submit" loading={payment.isPending} disabled={!validAmount || !enoughCash || payment.isPending}>{pendingAttempt ? 'Reintentar el mismo pago' : 'Registrar pago'}</Button>
+    </div>
+  </form>;
+}
 
 const moneySchema = z.object({
   amount: z.string().trim().regex(MONEY_PATTERN, 'Escribe un monto, por ejemplo 500 o 500.50.').transform(normalizeMoneyInput),
@@ -72,6 +148,7 @@ export function PosPage() {
   const isCashier = role === 'cajero';
   const isOperationalWorker = isHeartbeatRole(role);
   const canOperateSession = role === 'admin' || isCashier;
+  const mixedPaymentsEnabled = isPosMixedPaymentsEnabled();
   useStaffTheme();
   const businessName = tenant?.access.establecimiento.nombre;
   const queryClient = useQueryClient();
@@ -79,6 +156,8 @@ export function PosPage() {
   const [sessionOpen, setSessionOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
+  const isCashOrderForTable = cashOrder?.destino === 'en_espacio' && cashOrder.espacio?.tipo === 'mesa';
+  const [mixedEndpointUnavailable, setMixedEndpointUnavailable] = useState(false);
   // Un solo aviso a la vez, que se va solo: los avisos no se acumulan en la página.
   const [notice, setNotice] = useState<ReactNode>(null);
   // Monto final capturado, esperando que Caja confirme el cierre.
@@ -127,13 +206,29 @@ export function PosPage() {
     refetchInterval: 5_000,
   });
 
-  async function refreshOperation() {
+  const refreshOperation = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['cash-session'] }),
       queryClient.invalidateQueries({ queryKey: ['orders'] }),
       queryClient.invalidateQueries({ queryKey: ['operational-status'] }),
     ]);
-  }
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (!mixedPaymentsEnabled || !token || role !== 'cajero') return;
+    let active = true;
+    void api.recoverPendingMixedPayments(token).then(async (recovered) => {
+      if (!active || recovered.length === 0) return;
+      const paid = recovered.filter(({ result }) => result.liquidada).length;
+      setNotice(paid > 0
+        ? 'Se confirmó automáticamente un pago pendiente; el pedido quedó liquidado.'
+        : 'Se confirmó automáticamente un pago pendiente con su saldo actualizado.');
+      await refreshOperation();
+    }).catch(() => {
+      // La intención permanece guardada y se vuelve a intentar en la siguiente carga.
+    });
+    return () => { active = false; };
+  }, [mixedPaymentsEnabled, refreshOperation, role, token]);
 
   const openMutation = useMutation({
     mutationFn: ({ amount }: MoneyForm) => api.openCashSession(token, amount),
@@ -226,6 +321,7 @@ export function PosPage() {
 
   function beginCash(order: OrderDetail) {
     collectMutation.reset();
+    setMixedEndpointUnavailable(false);
     setTip({ kind: 'none' });
     setCashOrder(order);
     cashForm.reset({ amount: '' });
@@ -392,15 +488,21 @@ export function PosPage() {
           ) : (
             <CashierQueue cashOrders={cashOrders} readyOrders={readyOrders} actions={(order, group) => group === 'cash' ? (<>
                         <Button disabled={!active} onClick={() => beginCash(order)}>
-                          <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar
+                          <CircleDollarSign aria-hidden="true" className="size-5" />
+                          {mixedPaymentsEnabled && !mixedEndpointUnavailable ? 'Pago mixto' : 'Cobrar'}
                         </Button>
                         <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
                           <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
                         </Button>
                       </>) : (<>
                         {hasOutstandingCashBalance(order) ? (
-                          <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
-                            <CircleDollarSign aria-hidden="true" className="size-5" /> Cobrar {formatMoney(order.saldo_pendiente!)}
+                        <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
+                            <CircleDollarSign aria-hidden="true" className="size-5" />
+                            {order.destino === 'en_espacio' && order.espacio?.tipo === 'mesa'
+                              ? `Abonar cuenta · ${formatMoney(order.saldo_pendiente!)}`
+                              : mixedPaymentsEnabled && !mixedEndpointUnavailable
+                                ? `Pago mixto · ${formatMoney(order.saldo_pendiente!)}`
+                                : `Cobrar ${formatMoney(order.saldo_pendiente!)}`}
                           </Button>
                         ) : isCashierPaidDeliveryOrder(order) ? (
                           <>
@@ -482,9 +584,51 @@ export function PosPage() {
         onOpenChange={(open) => { if (!open) setCashOrder(null); }}
         title={cashOrder ? `Cobrar pedido ${cashOrder.folio}` : 'Cobrar pedido'}
         contentClassName="staff-payment-dialog"
-        description={`Saldo pendiente: ${formatMoney(cashAmountDue)}. Confirma el efectivo recibido antes de registrar el cobro.`}
+        description={isCashOrderForTable
+            ? 'Abona a la cuenta de la mesa en efectivo o terminal.'
+            : mixedPaymentsEnabled && !mixedEndpointUnavailable
+            ? 'Registra un pago parcial en efectivo o terminal; puedes agregar otro hasta liquidar.'
+            : `Saldo pendiente: ${formatMoney(cashAmountDue)}. Confirma el efectivo recibido antes de registrar el cobro.`}
       >
-        {cashOrder && (
+        {cashOrder && isCashOrderForTable && cashOrder.espacio && (
+          <AccountAbonoForm
+            token={token}
+            spaceId={cashOrder.espacio.id}
+            restante={cashOrder.saldo_pendiente ?? cashOrder.total}
+            mode="partes"
+            onCancel={() => setCashOrder(null)}
+            onDone={async (result: AccountAbonoResult) => {
+              const changeText = result.abono.cambio !== '0.00' ? ` Cambio: ${formatMoney(result.abono.cambio)}.` : '';
+              setNotice(result.liquidada
+                ? <>Cobrado {formatMoney(result.abono.monto)}.{changeText} Cuenta saldada.</>
+                : <>Abonado {formatMoney(result.abono.monto)}.{changeText} Falta {formatMoney(result.restante)}.</>);
+              setCashOrder(null);
+              await refreshOperation();
+            }}
+          />
+        )}
+        {cashOrder && !isCashOrderForTable && mixedPaymentsEnabled && (
+          <MixedOrderPayment
+            token={token}
+            order={cashOrder}
+            unavailable={mixedEndpointUnavailable}
+            onUnavailable={() => setMixedEndpointUnavailable(true)}
+            onCancel={() => setCashOrder(null)}
+            onDone={async (remaining, liquidated) => {
+              setNotice(liquidated
+                ? <>Pago registrado. Pedido liquidado.</>
+                : <>Pago registrado. Restan <strong>{formatMoney(remaining)}</strong>; puedes agregar otro método.</>);
+              if (liquidated) setCashOrder(null);
+              else setCashOrder((current) => current ? {
+                ...current,
+                saldo_pendiente: remaining,
+                monto_pagado: centsToMoney((moneyToCents(current.total) ?? 0n) - (moneyToCents(remaining) ?? 0n)),
+              } : null);
+              await refreshOperation();
+            }}
+          />
+        )}
+        {cashOrder && !isCashOrderForTable && (!mixedPaymentsEnabled || mixedEndpointUnavailable) && (
           <form
             className="transaction-form staff-payment"
             onSubmit={(event) => void cashForm.handleSubmit(({ amount }) => {

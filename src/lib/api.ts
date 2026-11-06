@@ -6,6 +6,7 @@ import type {
   AccountDeletion,
   CashSession,
   CashPaymentResult,
+  MixedPaymentResult,
   StaffOrderInput,
   StaffOrderResult,
   CashbackRule,
@@ -88,6 +89,66 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   idempotencyKey?: string;
 }
 
+const mixedPaymentStoragePrefix = 'vaiinilla:mixed-payment:';
+type MixedPaymentAttempt = {
+  idempotencyKey: string;
+  body: { metodo_pago: 'efectivo' | 'terminal'; monto: string; monto_recibido?: string };
+  /** Saldo mostrado al iniciar el intento. */
+  expectedRemaining: string;
+  /** Presente cuando el servidor confirmó el intento. */
+  completedRemaining?: string;
+};
+function mixedPaymentStorageKey(orderId: string): string {
+  return `${mixedPaymentStoragePrefix}${orderId}`;
+}
+
+function readMixedPaymentAttempt(storageKey: string): MixedPaymentAttempt | null {
+  const stored = window.localStorage.getItem(storageKey);
+  if (!stored) return null;
+  return JSON.parse(stored) as MixedPaymentAttempt;
+}
+
+function writeMixedPaymentAttempt(storageKey: string, attempt: MixedPaymentAttempt): void {
+  window.localStorage.setItem(storageKey, JSON.stringify(attempt));
+}
+
+const mixedPaymentLocks = new Map<string, Promise<void>>();
+
+async function withMixedPaymentLock<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (locks) return locks.request(key, run);
+
+  const previous = mixedPaymentLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const queued = previous.then(() => current);
+  mixedPaymentLocks.set(key, queued);
+  await previous;
+  try {
+    return await run();
+  } finally {
+    release();
+    if (mixedPaymentLocks.get(key) === queued) mixedPaymentLocks.delete(key);
+  }
+}
+
+function clearMixedPaymentAttempt(storageKey: string): void {
+  window.localStorage.removeItem(storageKey);
+}
+
+function listPendingMixedPaymentAttempts(): Array<{ orderId: string; attempt: MixedPaymentAttempt }> {
+  const pending: Array<{ orderId: string; attempt: MixedPaymentAttempt }> = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (!key?.startsWith(mixedPaymentStoragePrefix)) continue;
+    const attempt = readMixedPaymentAttempt(key);
+    if (attempt && attempt.completedRemaining === undefined) {
+      pending.push({ orderId: key.slice(mixedPaymentStoragePrefix.length), attempt });
+    }
+  }
+  return pending;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
   const { token, body, idempotent, idempotencyKey, ...requestOptions } = options;
   const headers = new Headers(options.headers);
@@ -133,6 +194,28 @@ function params(values: Record<string, string | number | undefined>): string {
 }
 
 export const api = {
+  pendingMixedPayment(orderId: string): MixedPaymentAttempt | null {
+    try {
+      const attempt = readMixedPaymentAttempt(mixedPaymentStorageKey(orderId));
+      return attempt?.completedRemaining === undefined ? attempt : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async recoverPendingMixedPayments(token: string): Promise<Array<{ orderId: string; result: MixedPaymentResult }>> {
+    const pending = listPendingMixedPaymentAttempts();
+    const recovered = await Promise.all(pending.map(async ({ orderId, attempt }) => {
+      const result = await api.payOrderMixed(token, orderId, {
+        metodoPago: attempt.body.metodo_pago,
+        monto: attempt.body.monto,
+        ...(attempt.body.monto_recibido ? { montoRecibido: attempt.body.monto_recibido } : {}),
+      }, attempt.expectedRemaining);
+      return { orderId, result };
+    }));
+    return recovered;
+  },
+
   async getLegalVersions(): Promise<LegalVersions> {
     return (await request<LegalVersions>('/publico/legal/vigente')).data;
   },
@@ -402,6 +485,57 @@ export const api = {
         },
       })
     ).data;
+  },
+
+  async payOrderMixed(
+    token: string,
+    id: string,
+    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
+    expectedRemaining: string,
+  ): Promise<MixedPaymentResult> {
+    const requestedBody = {
+      metodo_pago: input.metodoPago,
+      monto: input.monto,
+      ...(input.metodoPago === 'efectivo' && input.montoRecibido
+        ? { monto_recibido: input.montoRecibido }
+        : {}),
+    };
+    const storageKey = mixedPaymentStorageKey(id);
+    return withMixedPaymentLock(`${mixedPaymentStoragePrefix}${id}`, async () => {
+      let attempt = readMixedPaymentAttempt(storageKey);
+      if (attempt?.completedRemaining !== undefined) {
+        // A stale tab must not turn its old balance into a second charge.
+        if (attempt.completedRemaining !== expectedRemaining) {
+          throw new Error('El saldo del pedido cambió en otra pestaña. Actualiza Caja antes de cobrar de nuevo.');
+        }
+        attempt = null;
+      }
+      if (!attempt) {
+        attempt = {
+          idempotencyKey: createIdempotencyKey(),
+          body: requestedBody,
+          expectedRemaining,
+        };
+        writeMixedPaymentAttempt(storageKey, attempt);
+      }
+      try {
+        const result = await request<MixedPaymentResult>(`/pedidos/${id}/pagos-mixtos`, {
+          method: 'POST',
+          token,
+          idempotencyKey: attempt.idempotencyKey,
+          body: attempt.body,
+        });
+        writeMixedPaymentAttempt(storageKey, { ...attempt, completedRemaining: result.data.restante });
+        return result.data;
+      } catch (error) {
+        // Estos estados rechazan la solicitud sin aplicar el pago. Un 409 puede
+        // ser una repetición cuyo resultado se perdió, así que conserva la clave.
+        if (error instanceof VaiinillaApiError && [400, 404, 422].includes(error.status)) {
+          clearMixedPaymentAttempt(storageKey);
+        }
+        throw error;
+      }
+    });
   },
 
   /** La llave la pone quien llama: los reintentos del mismo pedido deben reenviar la misma. */
