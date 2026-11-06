@@ -814,7 +814,7 @@ describe('Vaiinilla API client', () => {
     const input: StaffOrderInput = {
       metodo_pago: 'efectivo', destino: 'para_llevar', espacio_id: null,
       items: [{ producto_id: 101, cantidad: 1, opcion_ids: [] }],
-      sin_conexion: { id: 'local-uuid', sesion_caja_id: 'sesion-1', capturado_en: '2026-11-04T12:00:00-06:00', folio_local: 'C-1' },
+      sin_conexion: { id: 'local-uuid', sesion_caja_id: '11111111-1111-4111-8111-111111111111', capturado_en: '2026-11-04T12:00:00-06:00', folio_local: 'C-1' },
     };
     server.use(http.post(`${baseUrl}/pedidos`, async ({ request }) => {
       expect(request.headers.get('Idempotency-Key')).toBe(window.localStorage.getItem('vaiinilla:offline-staff-order:local-uuid'));
@@ -829,19 +829,25 @@ describe('Vaiinilla API client', () => {
     const input: StaffOrderInput = {
       metodo_pago: 'efectivo', destino: 'para_llevar', espacio_id: null,
       items: [{ producto_id: 101, cantidad: 1, opcion_ids: [] }],
-      sin_conexion: { id: 'retry-local-order', sesion_caja_id: 'sesion-1', capturado_en: '2026-11-04T12:00:00-06:00', folio_local: 'C-2' },
+      sin_conexion: { id: 'retry-local-order', sesion_caja_id: '11111111-1111-4111-8111-111111111111', capturado_en: '2026-11-04T12:00:00-06:00', folio_local: 'C-2' },
     };
     const keys: Array<string | null> = [];
+    const chargedKeys = new Set<string>();
     server.use(http.post(`${baseUrl}/pedidos`, ({ request }) => {
-      keys.push(request.headers.get('Idempotency-Key'));
+      const key = request.headers.get('Idempotency-Key');
+      keys.push(key);
+      if (keys.length === 1) return HttpResponse.json({ data: null, meta: {}, error: { code: 'NETWORK_ERROR' } }, { status: 503 });
+      chargedKeys.add(key!);
       return HttpResponse.json({ data: { pedido: orderFixture, cobro: null }, meta: {}, error: null });
     }));
-
+    await expect(api.syncOfflineStaffOrder('tenant-token', input)).rejects.toThrow();
     await api.syncOfflineStaffOrder('tenant-token', input);
     await api.syncOfflineStaffOrder('tenant-token', input);
 
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).toBe(keys[0]);
+    expect(chargedKeys.size).toBe(1);
     expect(window.localStorage.getItem('vaiinilla:offline-staff-order:retry-local-order')).toBe(keys[0]);
   });
 });
