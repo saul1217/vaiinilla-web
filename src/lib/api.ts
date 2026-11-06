@@ -6,6 +6,7 @@ import type {
   AccountDeletion,
   CashSession,
   CashPaymentResult,
+  MixedPaymentResult,
   StaffOrderInput,
   StaffOrderResult,
   CashbackRule,
@@ -399,6 +400,27 @@ export const api = {
           monto_recibido: montoRecibido,
           version_esperada: versionEsperada,
           ...(propina && propina !== '0.00' ? { propina } : {}),
+        },
+      })
+    ).data;
+  },
+
+  async payOrderMixed(
+    token: string,
+    id: string,
+    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
+  ): Promise<MixedPaymentResult> {
+    return (
+      await request<MixedPaymentResult>(`/pedidos/${id}/pagos-mixtos`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: {
+          metodo_pago: input.metodoPago,
+          monto: input.monto,
+          ...(input.metodoPago === 'efectivo' && input.montoRecibido
+            ? { monto_recibido: input.montoRecibido }
+            : {}),
         },
       })
     ).data;

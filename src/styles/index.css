@@ -7904,6 +7904,10 @@ html[data-admin-theme] .space-account__charge { display: grid; grid-template-col
 html[data-admin-theme] .space-account__charge > strong { grid-column: 1 / -1; color: var(--color-ink); font-size: clamp(2rem, 6vw, 3rem); line-height: 1.15; letter-spacing: -0.04em; }
 html[data-admin-theme] .staff-payment__due { display: grid; gap: 4px; margin: 0; color: var(--color-muted); }
 html[data-admin-theme] .staff-payment__due strong { color: var(--color-ink); font-size: 2.5rem; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+html[data-admin-theme] .mixed-payment .staff-payment__due { padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--color-cream-2); }
+html[data-admin-theme] .mixed-payment .staff-payment__due strong { font-size: clamp(2rem, 9vw, 3rem); }
+html[data-admin-theme] .mixed-payment .app-segments { margin: 0; }
+html[data-admin-theme] .mixed-payment .field__control { min-height: 52px; font-variant-numeric: tabular-nums; }
 html[data-admin-theme] .staff-payment-dialog .tip-picker .space-account__chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 html[data-admin-theme] .staff-payment-dialog .tip-picker .button { padding-inline: 4px; font-size: 0.8125rem; }
 html[data-admin-theme] .change-preview { background: var(--color-cream-2); color: var(--color-ink); border: 1px solid var(--line); border-radius: var(--radius-card); }

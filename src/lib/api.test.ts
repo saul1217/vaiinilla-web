@@ -351,6 +351,27 @@ describe('Vaiinilla API client', () => {
     await expect(api.heartbeat('tenant-token', 'web-caja-01', 'cajero')).resolves.toBeUndefined();
   });
 
+  it('registra un pago mixto con llave UUID y solo agrega efectivo recibido para efectivo', async () => {
+    server.use(
+      http.post(`${baseUrl}/pedidos/${orderFixture.id}/pagos-mixtos`, async ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer tenant-token');
+        expect(request.headers.get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/i);
+        await expect(request.json()).resolves.toEqual({
+          metodo_pago: 'efectivo',
+          monto: '35.00',
+          monto_recibido: '40.00',
+        });
+        return HttpResponse.json({
+          data: { pago: { metodo_pago: 'efectivo', monto: '35.00' }, restante: '65.00', liquidada: false, pedido: orderFixture },
+          meta: {}, error: null,
+        }, { status: 201 });
+      }),
+    );
+    await expect(api.payOrderMixed('tenant-token', orderFixture.id, {
+      metodoPago: 'efectivo', monto: '35.00', montoRecibido: '40.00',
+    })).resolves.toMatchObject({ pago: { metodo_pago: 'efectivo', monto: '35.00' }, restante: '65.00', liquidada: false });
+  });
+
   it('avanza Cocina con versión esperada e idempotencia', async () => {
     server.use(
       http.post(`${baseUrl}/pedidos/${orderFixture.id}/transiciones`, async ({ request }) => {
