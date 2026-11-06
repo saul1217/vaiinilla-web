@@ -89,30 +89,29 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   idempotencyKey?: string;
 }
 
-const mixedPaymentStoragePrefix = 'vaiinilla:pending-mixed-payment:';
-
-function mixedPaymentStorageKey(orderId: string, body: unknown): string {
-  return `${mixedPaymentStoragePrefix}${orderId}:${JSON.stringify(body)}`;
+const mixedPaymentStoragePrefix = 'vaiinilla:mixed-payment:';
+type MixedPaymentAttempt = {
+  idempotencyKey: string;
+  body: { metodo_pago: 'efectivo' | 'terminal'; monto: string; monto_recibido?: string };
+  /** Saldo mostrado al iniciar el intento. */
+  expectedRemaining: string;
+  /** Presente cuando el servidor confirmó el intento. */
+  completedRemaining?: string;
+};
+function mixedPaymentStorageKey(orderId: string): string {
+  return `${mixedPaymentStoragePrefix}${orderId}`;
 }
 
-function readOrCreateMixedPaymentKey(storageKey: string): string {
-  try {
-    const saved = window.localStorage.getItem(storageKey);
-    if (saved) return saved;
-    const key = createIdempotencyKey();
-    window.localStorage.setItem(storageKey, key);
-    return key;
-  } catch {
-    // Keep retries in this page session if storage is disabled.
-    const saved = pendingMixedPaymentKeys.get(storageKey);
-    if (saved) return saved;
-    const key = createIdempotencyKey();
-    pendingMixedPaymentKeys.set(storageKey, key);
-    return key;
-  }
+function readMixedPaymentAttempt(storageKey: string): MixedPaymentAttempt | null {
+  const stored = window.localStorage.getItem(storageKey);
+  if (!stored) return null;
+  return JSON.parse(stored) as MixedPaymentAttempt;
 }
 
-const pendingMixedPaymentKeys = new Map<string, string>();
+function writeMixedPaymentAttempt(storageKey: string, attempt: MixedPaymentAttempt): void {
+  window.localStorage.setItem(storageKey, JSON.stringify(attempt));
+}
+
 const mixedPaymentLocks = new Map<string, Promise<void>>();
 
 async function withMixedPaymentLock<T>(key: string, run: () => Promise<T>): Promise<T> {
@@ -133,13 +132,21 @@ async function withMixedPaymentLock<T>(key: string, run: () => Promise<T>): Prom
   }
 }
 
-function clearMixedPaymentKey(storageKey: string): void {
-  pendingMixedPaymentKeys.delete(storageKey);
-  try {
-    window.localStorage.removeItem(storageKey);
-  } catch {
-    // The in-memory entry was still cleared.
+function clearMixedPaymentAttempt(storageKey: string): void {
+  window.localStorage.removeItem(storageKey);
+}
+
+function listPendingMixedPaymentAttempts(): Array<{ orderId: string; attempt: MixedPaymentAttempt }> {
+  const pending: Array<{ orderId: string; attempt: MixedPaymentAttempt }> = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (!key?.startsWith(mixedPaymentStoragePrefix)) continue;
+    const attempt = readMixedPaymentAttempt(key);
+    if (attempt && attempt.completedRemaining === undefined) {
+      pending.push({ orderId: key.slice(mixedPaymentStoragePrefix.length), attempt });
+    }
   }
+  return pending;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
@@ -187,6 +194,28 @@ function params(values: Record<string, string | number | undefined>): string {
 }
 
 export const api = {
+  pendingMixedPayment(orderId: string): MixedPaymentAttempt | null {
+    try {
+      const attempt = readMixedPaymentAttempt(mixedPaymentStorageKey(orderId));
+      return attempt?.completedRemaining === undefined ? attempt : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async recoverPendingMixedPayments(token: string): Promise<Array<{ orderId: string; result: MixedPaymentResult }>> {
+    const pending = listPendingMixedPaymentAttempts();
+    const recovered = await Promise.all(pending.map(async ({ orderId, attempt }) => {
+      const result = await api.payOrderMixed(token, orderId, {
+        metodoPago: attempt.body.metodo_pago,
+        monto: attempt.body.monto,
+        ...(attempt.body.monto_recibido ? { montoRecibido: attempt.body.monto_recibido } : {}),
+      }, attempt.expectedRemaining);
+      return { orderId, result };
+    }));
+    return recovered;
+  },
+
   async getLegalVersions(): Promise<LegalVersions> {
     return (await request<LegalVersions>('/publico/legal/vigente')).data;
   },
@@ -462,30 +491,47 @@ export const api = {
     token: string,
     id: string,
     input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
+    expectedRemaining: string,
   ): Promise<MixedPaymentResult> {
-    const body = {
+    const requestedBody = {
       metodo_pago: input.metodoPago,
       monto: input.monto,
       ...(input.metodoPago === 'efectivo' && input.montoRecibido
         ? { monto_recibido: input.montoRecibido }
         : {}),
     };
-    const storageKey = mixedPaymentStorageKey(id, body);
-    return withMixedPaymentLock(storageKey, async () => {
-      const idempotencyKey = readOrCreateMixedPaymentKey(storageKey);
+    const storageKey = mixedPaymentStorageKey(id);
+    return withMixedPaymentLock(`${mixedPaymentStoragePrefix}${id}`, async () => {
+      let attempt = readMixedPaymentAttempt(storageKey);
+      if (attempt?.completedRemaining !== undefined) {
+        // A stale tab must not turn its old balance into a second charge.
+        if (attempt.completedRemaining !== expectedRemaining) {
+          throw new Error('El saldo del pedido cambió en otra pestaña. Actualiza Caja antes de cobrar de nuevo.');
+        }
+        attempt = null;
+      }
+      if (!attempt) {
+        attempt = {
+          idempotencyKey: createIdempotencyKey(),
+          body: requestedBody,
+          expectedRemaining,
+        };
+        writeMixedPaymentAttempt(storageKey, attempt);
+      }
       try {
         const result = await request<MixedPaymentResult>(`/pedidos/${id}/pagos-mixtos`, {
           method: 'POST',
           token,
-          idempotencyKey,
-          body,
+          idempotencyKey: attempt.idempotencyKey,
+          body: attempt.body,
         });
-        clearMixedPaymentKey(storageKey);
+        writeMixedPaymentAttempt(storageKey, { ...attempt, completedRemaining: result.data.restante });
         return result.data;
       } catch (error) {
-        // 409 and 422 definitively close this attempt; network/transient errors retain its key.
-        if (error instanceof VaiinillaApiError && (error.status === 409 || error.status === 422)) {
-          clearMixedPaymentKey(storageKey);
+        // Estos estados rechazan la solicitud sin aplicar el pago. Un 409 puede
+        // ser una repetición cuyo resultado se perdió, así que conserva la clave.
+        if (error instanceof VaiinillaApiError && [400, 404, 422].includes(error.status)) {
+          clearMixedPaymentAttempt(storageKey);
         }
         throw error;
       }
