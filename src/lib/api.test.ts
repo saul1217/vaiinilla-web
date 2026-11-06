@@ -372,6 +372,60 @@ describe('Vaiinilla API client', () => {
     })).resolves.toMatchObject({ pago: { metodo_pago: 'efectivo', monto: '35.00' }, restante: '65.00', liquidada: false });
   });
 
+  it('reintenta pago mixto con la misma llave si la respuesta de red no llega', async () => {
+    localStorage.clear();
+    const keys: string[] = [];
+    let calls = 0;
+    server.use(http.post(`${baseUrl}/pedidos/${orderFixture.id}/pagos-mixtos`, ({ request }) => {
+      keys.push(request.headers.get('Idempotency-Key') ?? '');
+      calls += 1;
+      if (calls === 1) return HttpResponse.error();
+      return HttpResponse.json({ data: { pago: { metodo_pago: 'terminal', monto: '35.00' }, restante: '65.00', liquidada: false, pedido: orderFixture }, meta: {}, error: null }, { status: 201 });
+    }));
+    const input = { metodoPago: 'terminal' as const, monto: '35.00' };
+    await expect(api.payOrderMixed('tenant-token', orderFixture.id, input)).rejects.toThrow();
+    await expect(api.payOrderMixed('tenant-token', orderFixture.id, input)).resolves.toMatchObject({ restante: '65.00' });
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(keys[1]).toBe(keys[0]);
+    expect(localStorage.length).toBe(0);
+  });
+
+  it('reintenta con la misma llave tras 409 y no genera un segundo cobro', async () => {
+    localStorage.clear();
+    const keys: string[] = [];
+    let charges = 0;
+    server.use(http.post(`${baseUrl}/pedidos/${orderFixture.id}/pagos-mixtos`, ({ request }) => {
+      const key = request.headers.get('Idempotency-Key') ?? '';
+      keys.push(key);
+      if (keys.filter((seen) => seen === key).length === 1) {
+        charges += 1;
+        return HttpResponse.error();
+      }
+      return HttpResponse.json({ data: null, meta: {}, error: { code: 'IDEMPOTENCY_CONFLICT', message: 'Llave reutilizada' } }, { status: 409 });
+    }));
+    const input = { metodoPago: 'terminal' as const, monto: '36.00' };
+    await expect(api.payOrderMixed('tenant-token', orderFixture.id, input)).rejects.toThrow();
+    await expect(api.payOrderMixed('tenant-token', orderFixture.id, input)).rejects.toMatchObject({ status: 409 });
+    expect(localStorage.length).toBe(0);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+    expect(charges).toBe(1);
+  });
+
+  it('cierra el intento con 422 para que la corrección use una llave nueva', async () => {
+    localStorage.clear();
+    const keys: string[] = [];
+    server.use(http.post(`${baseUrl}/pedidos/${orderFixture.id}/pagos-mixtos`, ({ request }) => {
+      keys.push(request.headers.get('Idempotency-Key') ?? '');
+      if (keys.length === 1) return HttpResponse.json({ data: null, meta: {}, error: { code: 'INVALID_AMOUNT', message: 'Monto no válido' } }, { status: 422 });
+      return HttpResponse.json({ data: { pago: { metodo_pago: 'terminal', monto: '35.00' }, restante: '65.00', liquidada: false, pedido: orderFixture }, meta: {}, error: null }, { status: 201 });
+    }));
+    await expect(api.payOrderMixed('tenant-token', orderFixture.id, { metodoPago: 'terminal', monto: '36.00' })).rejects.toMatchObject({ status: 422 });
+    expect(localStorage.length).toBe(0);
+    await expect(api.payOrderMixed('tenant-token', orderFixture.id, { metodoPago: 'terminal', monto: '35.00' })).resolves.toMatchObject({ restante: '65.00' });
+    expect(keys[1]).not.toBe(keys[0]);
+  });
+
   it('avanza Cocina con versión esperada e idempotencia', async () => {
     server.use(
       http.post(`${baseUrl}/pedidos/${orderFixture.id}/transiciones`, async ({ request }) => {

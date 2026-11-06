@@ -89,6 +89,59 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   idempotencyKey?: string;
 }
 
+const mixedPaymentStoragePrefix = 'vaiinilla:pending-mixed-payment:';
+
+function mixedPaymentStorageKey(orderId: string, body: unknown): string {
+  return `${mixedPaymentStoragePrefix}${orderId}:${JSON.stringify(body)}`;
+}
+
+function readOrCreateMixedPaymentKey(storageKey: string): string {
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+    if (saved) return saved;
+    const key = createIdempotencyKey();
+    window.localStorage.setItem(storageKey, key);
+    return key;
+  } catch {
+    // Keep retries in this page session if storage is disabled.
+    const saved = pendingMixedPaymentKeys.get(storageKey);
+    if (saved) return saved;
+    const key = createIdempotencyKey();
+    pendingMixedPaymentKeys.set(storageKey, key);
+    return key;
+  }
+}
+
+const pendingMixedPaymentKeys = new Map<string, string>();
+const mixedPaymentLocks = new Map<string, Promise<void>>();
+
+async function withMixedPaymentLock<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (locks) return locks.request(key, run);
+
+  const previous = mixedPaymentLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const queued = previous.then(() => current);
+  mixedPaymentLocks.set(key, queued);
+  await previous;
+  try {
+    return await run();
+  } finally {
+    release();
+    if (mixedPaymentLocks.get(key) === queued) mixedPaymentLocks.delete(key);
+  }
+}
+
+function clearMixedPaymentKey(storageKey: string): void {
+  pendingMixedPaymentKeys.delete(storageKey);
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch {
+    // The in-memory entry was still cleared.
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
   const { token, body, idempotent, idempotencyKey, ...requestOptions } = options;
   const headers = new Headers(options.headers);
@@ -410,20 +463,33 @@ export const api = {
     id: string,
     input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
   ): Promise<MixedPaymentResult> {
-    return (
-      await request<MixedPaymentResult>(`/pedidos/${id}/pagos-mixtos`, {
-        method: 'POST',
-        token,
-        idempotent: true,
-        body: {
-          metodo_pago: input.metodoPago,
-          monto: input.monto,
-          ...(input.metodoPago === 'efectivo' && input.montoRecibido
-            ? { monto_recibido: input.montoRecibido }
-            : {}),
-        },
-      })
-    ).data;
+    const body = {
+      metodo_pago: input.metodoPago,
+      monto: input.monto,
+      ...(input.metodoPago === 'efectivo' && input.montoRecibido
+        ? { monto_recibido: input.montoRecibido }
+        : {}),
+    };
+    const storageKey = mixedPaymentStorageKey(id, body);
+    return withMixedPaymentLock(storageKey, async () => {
+      const idempotencyKey = readOrCreateMixedPaymentKey(storageKey);
+      try {
+        const result = await request<MixedPaymentResult>(`/pedidos/${id}/pagos-mixtos`, {
+          method: 'POST',
+          token,
+          idempotencyKey,
+          body,
+        });
+        clearMixedPaymentKey(storageKey);
+        return result.data;
+      } catch (error) {
+        // 409 and 422 definitively close this attempt; network/transient errors retain its key.
+        if (error instanceof VaiinillaApiError && (error.status === 409 || error.status === 422)) {
+          clearMixedPaymentKey(storageKey);
+        }
+        throw error;
+      }
+    });
   },
 
   /** La llave la pone quien llama: los reintentos del mismo pedido deben reenviar la misma. */

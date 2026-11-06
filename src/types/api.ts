@@ -639,6 +639,7 @@ export interface StaffBooking {
   inicio: string;
   fin: string;
   monto?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- keep the backend's open string status type.
   estado: 'pendiente_pago' | 'confirmada' | 'en_curso' | 'terminada' | 'cancelada' | 'expirada' | 'conflicto' | string;
   /** Hora en que vence el apartado en efectivo; null si ya no aplica. */
   expira_en?: string | null;
