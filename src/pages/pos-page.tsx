@@ -26,6 +26,7 @@ import { QrTokenField } from '../components/qr-token-field';
 import { StaffOrderForm } from '../components/staff-order-form';
 import { Button, Feedback, Field } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
+import { AccountAbonoForm } from '../components/account-abono-form';
 import { WaiterBoard } from '../components/waiter-board';
 import { useStaffTheme } from '../lib/staff-ui';
 import { useSessions } from '../context/session-context';
@@ -37,6 +38,7 @@ import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeferredDeliver
 import { deliveryRequiresQr } from '../lib/delivery-policy';
 import { printOrderTicket } from '../lib/order-ticket-print';
 import type { OrderDetail, StaffOrderResult } from '../types/api';
+import type { AccountAbonoResult } from '../types/api';
 import { isPosMixedPaymentsEnabled } from '../lib/features';
 
 function MixedOrderPayment({
@@ -146,6 +148,7 @@ export function PosPage() {
   const [sessionOpen, setSessionOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
+  const isCashOrderForTable = cashOrder?.destino === 'en_espacio' && cashOrder.espacio?.tipo === 'mesa';
   const [mixedEndpointUnavailable, setMixedEndpointUnavailable] = useState(false);
   // Un solo aviso a la vez, que se va solo: los avisos no se acumulan en la página.
   const [notice, setNotice] = useState<ReactNode>(null);
@@ -557,11 +560,30 @@ export function PosPage() {
         onOpenChange={(open) => { if (!open) setCashOrder(null); }}
         title={cashOrder ? `Cobrar pedido ${cashOrder.folio}` : 'Cobrar pedido'}
         contentClassName="staff-payment-dialog"
-        description={mixedPaymentsEnabled && !mixedEndpointUnavailable
+        description={isCashOrderForTable
+            ? 'Abona a la cuenta de la mesa en efectivo o terminal.'
+            : mixedPaymentsEnabled && !mixedEndpointUnavailable
             ? 'Registra un pago parcial en efectivo o terminal; puedes agregar otro hasta liquidar.'
             : `Saldo pendiente: ${formatMoney(cashAmountDue)}. Confirma el efectivo recibido antes de registrar el cobro.`}
       >
-        {cashOrder && mixedPaymentsEnabled && (
+        {cashOrder && isCashOrderForTable && cashOrder.espacio && (
+          <AccountAbonoForm
+            token={token}
+            spaceId={cashOrder.espacio.id}
+            restante={cashOrder.saldo_pendiente ?? cashOrder.total}
+            mode="monto"
+            onCancel={() => setCashOrder(null)}
+            onDone={async (result: AccountAbonoResult) => {
+              const changeText = result.abono.cambio !== '0.00' ? ` Cambio: ${formatMoney(result.abono.cambio)}.` : '';
+              setNotice(result.liquidada
+                ? <>Cobrado {formatMoney(result.abono.monto)}.{changeText} Cuenta saldada.</>
+                : <>Abonado {formatMoney(result.abono.monto)}.{changeText} Falta {formatMoney(result.restante)}.</>);
+              setCashOrder(null);
+              await refreshOperation();
+            }}
+          />
+        )}
+        {cashOrder && !isCashOrderForTable && mixedPaymentsEnabled && (
           <MixedOrderPayment
             token={token}
             order={cashOrder}
@@ -582,7 +604,7 @@ export function PosPage() {
             }}
           />
         )}
-        {cashOrder && (!mixedPaymentsEnabled || mixedEndpointUnavailable) && (
+        {cashOrder && !isCashOrderForTable && (!mixedPaymentsEnabled || mixedEndpointUnavailable) && (
           <form
             className="transaction-form staff-payment"
             onSubmit={(event) => void cashForm.handleSubmit(({ amount }) => {

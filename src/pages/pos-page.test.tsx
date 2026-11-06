@@ -9,6 +9,7 @@ import { PosPage } from './pos-page';
 const apiMock = vi.hoisted(() => ({
   activeCashSession: vi.fn(), operationalStatus: vi.fn(), listOrders: vi.fn(),
   payOrderMixed: vi.fn(),
+  abonarSpaceAccount: vi.fn(),
   collectCash: vi.fn(), deliverOrder: vi.fn(), closeCashSession: vi.fn(),
   rejectOrder: vi.fn(), rejectOrderItem: vi.fn(), catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
   businessSettings: vi.fn(),
@@ -97,6 +98,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     apiMock.listOrders.mockResolvedValue({ orders: [baseOrder], cursor: null });
     apiMock.collectCash.mockResolvedValue({ cambio: '0.00' });
     apiMock.payOrderMixed.mockResolvedValue({ pago: { metodo_pago: 'efectivo', monto: '50.00' }, restante: '75.00', liquidada: false, pedido: baseOrder });
+    apiMock.abonarSpaceAccount.mockResolvedValue({ abono: { id: 'abono-1', metodo_pago: 'terminal', monto: '125.00', monto_recibido: null, cambio: '0.00' }, restante: '0.00', liquidada: true, pedidos_cobrados: 1 });
     apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: false, tipo: 'cafeteria', entrega_requiere_qr: true, gracia_liberacion_min: 5, franjas_pedido: [] });
   });
 
@@ -319,6 +321,24 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(await screen.findByText('Pago registrado. Pedido liquidado.')).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     vi.unstubAllEnvs();
+  });
+
+  it('usa AccountAbonoForm y el endpoint de abonos para mesas con el flag activo', async () => {
+    vi.stubEnv('VITE_POS_MIXED_PAYMENTS_ENABLED', 'true');
+    apiMock.listOrders.mockResolvedValue({ orders: [{
+      ...baseOrder, destino: 'en_espacio', espacio: { id: 67, nombre: 'Mesa 67', tipo: 'mesa' },
+    }], cursor: null });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Abonar cuenta · $125.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/Falta por cobrar/)).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Confirmar pago' })).toBeVisible();
+    expect(within(dialog).getByLabelText('Monto de este pago')).toBeVisible();
+    await user.click(within(dialog).getByRole('radio', { name: 'Terminal' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pago' }));
+    await waitFor(() => expect(apiMock.abonarSpaceAccount).toHaveBeenCalledWith('token', 67, expect.objectContaining({ metodo: 'terminal', modo: 'monto' })));
+    expect(apiMock.payOrderMixed).not.toHaveBeenCalled();
   });
 
   it.each([409, 422])('muestra errores %s del endpoint sin cobrar por la ruta anterior', async (status) => {
