@@ -40,6 +40,20 @@ describe('AssistantConfigPage', () => {
     expect(apiMock.askStoreAssistant).not.toHaveBeenCalled();
   });
 
+  it.each([405, 501])('mantiene visible la página y permite reintentar si ajustes responde %i', async status => {
+    const user = userEvent.setup();
+    apiMock.businessSettings.mockRejectedValueOnce(new VaiinillaApiError(status, { code: 'UNAVAILABLE', message: 'Unavailable' }))
+      .mockResolvedValueOnce({ asistente_modo: 'personal' });
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Reintentar' })).toBeVisible();
+    expect(screen.getByText('Asistente de configuración')).toBeVisible();
+    expect(apiMock.askStoreAssistant).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByLabelText('personal')).toBeChecked();
+    expect(screen.getByText('Asistente de configuración')).toBeVisible();
+    expect(apiMock.askStoreAssistant).not.toHaveBeenCalled();
+  });
+
   it('oculta el selector cuando asistente_modo es null', async () => {
     apiMock.businessSettings.mockResolvedValue({ asistente_modo: null });
     renderPage();
