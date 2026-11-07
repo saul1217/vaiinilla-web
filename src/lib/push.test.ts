@@ -47,7 +47,7 @@ beforeEach(() => {
 
 describe('baja del token push al cerrar sesión', () => {
   it('da de baja el token de este dispositivo con la credencial de quien sale', async () => {
-    await enablePush('sesion-A');
+    await enablePush('sesion-A', { uid: 'A' });
     expect(currentPushToken()).toBe('fcm-dispositivo');
 
     await releasePush('sesion-A');
@@ -69,9 +69,9 @@ describe('baja del token push al cerrar sesión', () => {
       return Promise.resolve();
     });
 
-    await enablePush('sesion-A');
+    await enablePush('sesion-A', { uid: 'A' });
     await releasePush('sesion-A');
-    await enablePush('sesion-B');
+    await enablePush('sesion-B', { uid: 'B' });
 
     expect([...filas]).toEqual(['sesion-B|fcm-dispositivo']);
   });
@@ -87,18 +87,18 @@ describe('baja del token push al cerrar sesión', () => {
       return Promise.resolve();
     });
 
-    await enablePush('sesion-A');
+    await enablePush('sesion-A', { uid: 'A' });
     await releasePush('sesion-A');
     expect(mocks.unregisterDevice).toHaveBeenCalledWith('sesion-A', 'fcm-dispositivo');
     expect(mocks.deleteToken).toHaveBeenCalledTimes(1);
 
-    await enablePush('sesion-B');
+    await enablePush('sesion-B', { uid: 'B' });
     expect([...filas].some((f) => f.startsWith('sesion-A'))).toBe(false);
     expect([...filas]).toEqual(['sesion-B|fcm-dispositivo']);
   });
 
   it('si la baja en el back falla, igual elimina el token de Firebase', async () => {
-    await enablePush('sesion-A');
+    await enablePush('sesion-A', { uid: 'A' });
     mocks.unregisterDevice.mockRejectedValue(new Error('sin red'));
 
     await expect(releasePush('sesion-A')).resolves.toBeUndefined();
@@ -106,7 +106,7 @@ describe('baja del token push al cerrar sesión', () => {
   });
 
   it('si deleteToken falla, el cierre de sesión continúa', async () => {
-    await enablePush('sesion-A');
+    await enablePush('sesion-A', { uid: 'A' });
     mocks.deleteToken.mockRejectedValue(new Error('fcm caído'));
 
     await expect(releasePush('sesion-A')).resolves.toBeUndefined();
@@ -114,7 +114,7 @@ describe('baja del token push al cerrar sesión', () => {
   });
 
   it('un fallo de red no bloquea el cierre de sesión', async () => {
-    await enablePush('sesion-A');
+    await enablePush('sesion-A', { uid: 'A' });
     mocks.unregisterDevice.mockRejectedValue(new Error('sin red'));
 
     await expect(releasePush('sesion-A')).resolves.toBeUndefined();

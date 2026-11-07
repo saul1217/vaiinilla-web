@@ -88,6 +88,18 @@ async function pushAlWorker(cachesFalso: ReturnType<typeof fakeCaches>): Promise
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() });
+  Object.defineProperty(navigator, 'serviceWorker', {
+    configurable: true,
+    value: {
+      register: vi.fn(() => Promise.resolve({})),
+      getRegistration: vi.fn(() => Promise.resolve({})),
+    },
+  });
+  mocks.getToken.mockResolvedValue('T');
+  mocks.registerDevice.mockResolvedValue(undefined);
+  mocks.unregisterDevice.mockResolvedValue(undefined);
 });
 
 describe('service worker falla cerrado', () => {
@@ -116,8 +128,8 @@ describe('la página apaga el marcador sin depender del logout', () => {
   async function conPushActivo() {
     const c = fakeCaches();
     vi.stubGlobal('caches', c);
-    window.localStorage.setItem('vaiinilla_push_activo', 'si');
-    await syncPushSession(true);
+    window.localStorage.setItem('vaiinilla_push_activo', 'si:A');
+    await syncPushSession({ token: 'sesion-A', uid: 'A' });
     return c;
   }
 
@@ -129,7 +141,7 @@ describe('la página apaga el marcador sin depender del logout', () => {
 
   it('sesión revocada: la app carga sin sesión y deja el marcador en off', async () => {
     const c = await conPushActivo();
-    await syncPushSession(false);
+    await syncPushSession(null);
     expect(c.store.get('/__push-sesion__')).toBe('off');
     expect(await pushAlWorker(c)).toBe(0);
   });
@@ -137,19 +149,112 @@ describe('la página apaga el marcador sin depender del logout', () => {
   it('logout omitido (pestaña cerrada): al recargar sin sesión no hay avisos', async () => {
     const c = await conPushActivo();
     // Sin releasePush ni disablePush: solo la carga de la app sin sesión.
-    await syncPushSession(false);
+    await syncPushSession(null);
     expect(await pushAlWorker(c)).toBe(0);
   });
 
   it('con sesión pero sin push activado en este dispositivo, queda en off', async () => {
     const c = fakeCaches();
     vi.stubGlobal('caches', c);
-    await syncPushSession(true);
+    await syncPushSession({ token: 'sesion-A', uid: 'A' });
     expect(c.store.get('/__push-sesion__')).toBe('off');
+    expect(mocks.registerDevice).not.toHaveBeenCalled();
   });
 
   it('Cache Storage roto no lanza al sincronizar', async () => {
     vi.stubGlobal('caches', fakeCaches({ failOpen: true }));
-    await expect(syncPushSession(false)).resolves.toBeUndefined();
+    await expect(syncPushSession(null)).resolves.toBeUndefined();
+  });
+});
+
+describe('preferencia heredada en el navegador (A cierra sin logout, entra B)', () => {
+  const MARCA = '/__push-sesion__';
+
+  it('se abre la sesión con la preferencia propia sin tocar el interruptor: se registra con la credencial actual y la marca sube solo después', async () => {
+    const c = fakeCaches();
+    vi.stubGlobal('caches', c);
+    // El navegador se cerró sin logout dejando la marca en 'on'.
+    window.localStorage.setItem('vaiinilla_push_activo', 'si:B');
+    c.store.set(MARCA, 'on');
+
+    let terminarRegistro!: () => void;
+    mocks.registerDevice.mockImplementation(
+      () => new Promise<void>((resolve) => { terminarRegistro = resolve; }),
+    );
+
+    const sync = syncPushSession({ token: 'sesion-B', uid: 'B' });
+    await vi.waitFor(() => expect(mocks.registerDevice).toHaveBeenCalledWith('sesion-B', 'T'));
+    // Mientras el registro no termina, nadie autoriza nada.
+    expect(c.store.get(MARCA)).toBe('off');
+    expect(await pushAlWorker(c)).toBe(0);
+
+    terminarRegistro();
+    await sync;
+    expect(c.store.get(MARCA)).toBe('on');
+    expect(await pushAlWorker(c)).toBe(1);
+  });
+
+  it('preferencia de otro uid: no registra, no enciende y A no autoriza nada', async () => {
+    const c = fakeCaches();
+    vi.stubGlobal('caches', c);
+    window.localStorage.setItem('vaiinilla_push_activo', 'si:A');
+    c.store.set(MARCA, 'on');
+
+    await syncPushSession({ token: 'sesion-B', uid: 'B' });
+
+    expect(mocks.registerDevice).not.toHaveBeenCalled();
+    expect(c.store.get(MARCA)).toBe('off');
+    expect(await pushAlWorker(c)).toBe(0);
+  });
+
+  it("el valor antiguo 'si' sin uid no autoriza a nadie", async () => {
+    const c = fakeCaches();
+    vi.stubGlobal('caches', c);
+    window.localStorage.setItem('vaiinilla_push_activo', 'si');
+
+    await syncPushSession({ token: 'sesion-A', uid: 'A' });
+
+    expect(mocks.registerDevice).not.toHaveBeenCalled();
+    expect(c.store.get(MARCA)).toBe('off');
+  });
+
+  it('error en el registro: la marca se queda en off', async () => {
+    const c = fakeCaches();
+    vi.stubGlobal('caches', c);
+    window.localStorage.setItem('vaiinilla_push_activo', 'si:B');
+    c.store.set(MARCA, 'on');
+    mocks.registerDevice.mockRejectedValue(new Error('sin red'));
+
+    await syncPushSession({ token: 'sesion-B', uid: 'B' });
+
+    expect(c.store.get(MARCA)).toBe('off');
+    expect(await pushAlWorker(c)).toBe(0);
+  });
+
+  it('registro que termina tarde tras un cambio de sesión: no enciende nada', async () => {
+    const c = fakeCaches();
+    vi.stubGlobal('caches', c);
+    window.localStorage.setItem('vaiinilla_push_activo', 'si:B');
+
+    let terminarRegistro!: () => void;
+    mocks.registerDevice.mockImplementation(
+      () => new Promise<void>((resolve) => { terminarRegistro = resolve; }),
+    );
+    let vigente = true;
+    const sync = syncPushSession({ token: 'sesion-B', uid: 'B' }, () => vigente);
+    await vi.waitFor(() => expect(mocks.registerDevice).toHaveBeenCalled());
+
+    // La sesión cambia (logout o entra otra persona) antes de que termine el registro.
+    vigente = false;
+    await syncPushSession(null);
+    mocks.registerDevice.mockResolvedValue(undefined);
+    terminarRegistro();
+    await sync;
+
+    expect(c.store.get(MARCA)).toBe('off');
+    expect(await pushAlWorker(c)).toBe(0);
+    // La fila creada por la sesión vencida se suelta con su propia credencial.
+    expect(mocks.unregisterDevice).toHaveBeenCalledWith('sesion-B', 'T');
+    expect(window.localStorage.getItem('vaiinilla_push_activo')).toBe('si:B');
   });
 });

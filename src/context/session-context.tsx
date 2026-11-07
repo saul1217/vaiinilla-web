@@ -98,13 +98,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => setBeforeSignOut(null);
   }, [releaseCurrentPush]);
 
-  // Fail-closed del worker: al cargar sin sesión, o si la sesión se revoca o vence,
-  // la marca pasa a 'off' aunque nadie haya hecho logout.
-  const hasTenant = tenant !== null;
+  // Fail-closed del worker: la marca baja a 'off' al cargar sin sesión, al cambiar de
+  // usuario o si la sesión se revoca o vence, aunque nadie haya hecho logout. Con sesión
+  // y preferencia propia se vuelve a registrar el token con la credencial actual y la
+  // marca solo sube a 'on' si el registro sale bien y la sesión sigue siendo la misma.
+  const tenantUid = tenant?.context.usuario_id ?? null;
   useEffect(() => {
     if (!tenantReady) return;
-    void syncPushSession(hasTenant);
-  }, [tenantReady, hasTenant]);
+    let vigente = true;
+    const token = tenantTokenRef.current;
+    void syncPushSession(
+      tenantUid && token ? { token, uid: tenantUid } : null,
+      () => vigente,
+    );
+    return () => {
+      vigente = false;
+    };
+  }, [tenantReady, tenantUid]);
 
   const clearTenant = useCallback(async () => {
     await releaseCurrentPush();
