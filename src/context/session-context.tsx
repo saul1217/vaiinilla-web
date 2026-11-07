@@ -11,6 +11,7 @@ import {
 } from 'react';
 import type { User } from 'firebase/auth';
 import { api } from '../lib/api';
+import { setBeforeSignOut } from '../lib/firebase';
 import { releasePush } from '../lib/push';
 import {
   endBrowserSession,
@@ -85,18 +86,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     tenantTokenRef.current = tenant?.token ?? null;
   }, [tenant]);
 
+  // Suelta la credencial del ref al darla de baja para que el signOut posterior no repita la baja.
+  const releaseCurrentPush = useCallback(async () => {
+    const sesion = tenantTokenRef.current;
+    tenantTokenRef.current = null;
+    await releasePush(sesion);
+  }, []);
+
+  useEffect(() => {
+    setBeforeSignOut(() => releaseCurrentPush());
+    return () => setBeforeSignOut(null);
+  }, [releaseCurrentPush]);
+
   const clearTenant = useCallback(async () => {
-    await releasePush(tenantTokenRef.current);
+    await releaseCurrentPush();
     forgetTenantMembership();
     setTenant(null);
-  }, []);
+  }, [releaseCurrentPush]);
   const clearPlatform = useCallback(() => setPlatform(null), []);
   const clearAll = useCallback(async () => {
-    await releasePush(tenantTokenRef.current);
+    await releaseCurrentPush();
     endBrowserSession();
     setTenant(null);
     setPlatform(null);
-  }, []);
+  }, [releaseCurrentPush]);
 
   useEffect(() => {
     let cancelled = false;

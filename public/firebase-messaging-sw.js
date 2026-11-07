@@ -75,6 +75,18 @@ function textoDelAviso(d) {
   }
 }
 
+// Marca que deja la página (src/lib/push.ts) en Cache Storage; 'off' = sesión cerrada.
+// Ausente se toma como activa para no apagar a quien activó el push antes.
+async function haySesion() {
+  try {
+    const cache = await caches.open('vaiinilla-push-sesion');
+    const marca = await cache.match('/__push-sesion__');
+    return !marca || (await marca.text()) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
 function configDesdeUrl() {
   const p = new URL(self.location.href).searchParams;
   const config = {
@@ -92,7 +104,10 @@ function configDesdeUrl() {
 function iniciar(config) {
   firebase.initializeApp(config);
 
-  firebase.messaging().onBackgroundMessage((payload) => {
+  firebase.messaging().onBackgroundMessage(async (payload) => {
+    // Sin sesión activa en este dispositivo no se muestra nada: el aviso trae datos
+    // de clientes y no debe verlo quien entre después.
+    if (!(await haySesion())) return undefined;
     const datos = payload.data || {};
     const { titulo, cuerpo } = textoDelAviso(datos);
     // Mostrar SIEMPRE una notificación: si no, Chrome pone la suya genérica

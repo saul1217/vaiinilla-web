@@ -8,7 +8,7 @@
 // abierta y esto cubre el resto (pestaña en segundo plano, navegador cerrado,
 // teléfono bloqueado), que es donde `new Notification()` no alcanza en móviles.
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getMessaging, getToken, isSupported } from 'firebase/messaging';
+import { deleteToken, getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { api } from './api';
 
 const firebaseConfig = {
@@ -51,6 +51,23 @@ function rutaDelWorker(): string {
 }
 
 const PREFERENCIA = 'vaiinilla_push_activo';
+
+// Marca compartida con el service worker (Cache Storage es visible para ambos). El
+// worker no puede leer la sesión en memoria, así que la página le deja dicho si hay
+// sesión: tras cerrarla vale 'off' y el worker no muestra avisos. Ausente (usuarios
+// que activaron el push antes de este cambio) se trata como activa.
+const CACHE_SESION = 'vaiinilla-push-sesion';
+const CLAVE_SESION = '/__push-sesion__';
+
+async function marcarSesionPush(activa: boolean): Promise<void> {
+  try {
+    if (typeof caches === 'undefined') return;
+    const cache = await caches.open(CACHE_SESION);
+    await cache.put(CLAVE_SESION, new Response(activa ? 'on' : 'off'));
+  } catch {
+    // Sin Cache Storage queda la baja del token, que es la barrera principal.
+  }
+}
 
 /**
  * Preferencia del usuario, separada del permiso del navegador: puede tener el
@@ -105,6 +122,7 @@ export async function enablePush(
     await api.registerDevice(sessionToken, token);
     tokenActual = token;
     guardarPreferencia(true);
+    await marcarSesionPush(true);
     return 'ok';
   } catch (error) {
     console.warn('[push] no se pudo activar:', error);
@@ -121,6 +139,8 @@ export async function enablePush(
  */
 export async function disablePush(sessionToken: string): Promise<void> {
   guardarPreferencia(false);
+  // Primero la marca local: el worker deja de mostrar avisos aunque la red falle.
+  await marcarSesionPush(false);
   let token = tokenActual;
   if (!token && pushConfigured) {
     try {
@@ -141,6 +161,14 @@ export async function disablePush(sessionToken: string): Promise<void> {
     console.warn('[push] no se pudo dar de baja el token:', error);
   } finally {
     tokenActual = null;
+  }
+  // Invalida el token en FCM: el dispositivo deja de recibir aunque la baja en el
+  // back haya fallado. Se pide uno nuevo la próxima vez que alguien active el push.
+  try {
+    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    await deleteToken(getMessaging(app));
+  } catch (error) {
+    console.warn('[push] no se pudo eliminar el token de Firebase:', error);
   }
 }
 
