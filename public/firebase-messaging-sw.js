@@ -75,15 +75,17 @@ function textoDelAviso(d) {
   }
 }
 
-// Marca que deja la página (src/lib/push.ts) en Cache Storage; 'off' = sesión cerrada.
-// Ausente se toma como activa para no apagar a quien activó el push antes.
+// Marca que deja la página (src/lib/push.ts) en Cache Storage. Falla cerrado: solo
+// 'on' autoriza mostrar avisos. Marca ausente, con otro valor, ilegible o con Cache
+// Storage roto = sin sesión. Un worker nuevo arranca, por tanto, en off hasta que la
+// página con sesión válida lo encienda.
 async function haySesion() {
   try {
     const cache = await caches.open('vaiinilla-push-sesion');
     const marca = await cache.match('/__push-sesion__');
-    return !marca || (await marca.text()) !== 'off';
+    return !!marca && (await marca.text()) === 'on';
   } catch {
-    return true;
+    return false;
   }
 }
 

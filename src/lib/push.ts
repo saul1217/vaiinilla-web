@@ -54,8 +54,8 @@ const PREFERENCIA = 'vaiinilla_push_activo';
 
 // Marca compartida con el service worker (Cache Storage es visible para ambos). El
 // worker no puede leer la sesión en memoria, así que la página le deja dicho si hay
-// sesión: tras cerrarla vale 'off' y el worker no muestra avisos. Ausente (usuarios
-// que activaron el push antes de este cambio) se trata como activa.
+// sesión. El worker falla cerrado: solo muestra avisos si la marca vale exactamente
+// 'on'; ausente, 'off', ilegible o con Cache Storage roto se trata como sin sesión.
 const CACHE_SESION = 'vaiinilla-push-sesion';
 const CLAVE_SESION = '/__push-sesion__';
 
@@ -65,8 +65,19 @@ async function marcarSesionPush(activa: boolean): Promise<void> {
     const cache = await caches.open(CACHE_SESION);
     await cache.put(CLAVE_SESION, new Response(activa ? 'on' : 'off'));
   } catch {
-    // Sin Cache Storage queda la baja del token, que es la barrera principal.
+    // Sin Cache Storage queda la baja del token. El worker ya falla cerrado: sin
+    // marca 'on' legible no muestra nada.
   }
+}
+
+/**
+ * Alinea la marca del worker con la sesión real cada vez que la app carga o la sesión
+ * cambia, sin depender de que se haya hecho logout (pestaña cerrada, sesión revocada o
+ * vencida). Sin sesión: 'off'. Con sesión solo se enciende si la persona tiene el push
+ * activado en este dispositivo.
+ */
+export async function syncPushSession(haySesion: boolean): Promise<void> {
+  await marcarSesionPush(haySesion && pushPreferido());
 }
 
 /**

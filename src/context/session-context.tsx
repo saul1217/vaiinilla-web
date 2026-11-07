@@ -12,7 +12,7 @@ import {
 import type { User } from 'firebase/auth';
 import { api } from '../lib/api';
 import { setBeforeSignOut } from '../lib/firebase';
-import { releasePush } from '../lib/push';
+import { releasePush, syncPushSession } from '../lib/push';
 import {
   endBrowserSession,
   forgetTenantMembership,
@@ -97,6 +97,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setBeforeSignOut(() => releaseCurrentPush());
     return () => setBeforeSignOut(null);
   }, [releaseCurrentPush]);
+
+  // Fail-closed del worker: al cargar sin sesión, o si la sesión se revoca o vence,
+  // la marca pasa a 'off' aunque nadie haya hecho logout.
+  const hasTenant = tenant !== null;
+  useEffect(() => {
+    if (!tenantReady) return;
+    void syncPushSession(hasTenant);
+  }, [tenantReady, hasTenant]);
 
   const clearTenant = useCallback(async () => {
     await releaseCurrentPush();
