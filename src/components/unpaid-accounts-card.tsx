@@ -9,6 +9,12 @@ import { unpaidAgeLabel } from '../lib/unpaid';
 import type { UnpaidAccount } from '../types/api';
 import { Button, Feedback, Field, Modal } from './ui';
 
+/** El back manda `num_pedidos`, o `pedidos` como número o como lista: nunca se pinta el objeto. */
+function orderCount(account: UnpaidAccount): number {
+  if (typeof account.num_pedidos === 'number') return account.num_pedidos;
+  return Array.isArray(account.pedidos) ? account.pedidos.length : Number(account.pedidos) || 0;
+}
+
 /**
  * Cuentas abiertas (pagar al final) que nadie ha cobrado. Las **abandonadas** son de un espacio que
  * ya se liberó: alguien se fue sin pagar. Si no hay nada pendiente, no ocupa lugar en el Resumen.
@@ -68,7 +74,7 @@ export function UnpaidAccountsCard() {
           >
             <strong className="text-ink">{account.espacio.nombre}</strong>
             <span className="text-muted">
-              {account.pedidos} {account.pedidos === 1 ? 'pedido' : 'pedidos'}
+              {orderCount(account)} {orderCount(account) === 1 ? 'pedido' : 'pedidos'}
               {account.clientes.length > 0 ? ` · ${account.clientes.join(', ')}` : ''}
             </span>
             <span className="text-muted">{unpaidAgeLabel(account.horas)}</span>

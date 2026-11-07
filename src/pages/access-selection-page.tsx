@@ -58,7 +58,7 @@ export function AccessSelectionPage() {
   }
 
   async function exit() {
-    clearAll();
+    await clearAll();
     await signOut();
     history.replace('/acceso');
   }

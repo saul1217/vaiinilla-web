@@ -69,13 +69,13 @@ export function TenantShell({ children }: { children: ReactNode }) {
   if (!tenant) return null;
   const items = navigationForRole(tenant.context.rol);
 
-  function switchContext() {
-    clearTenant();
+  async function switchContext() {
+    await clearTenant();
     history.replace('/accesos');
   }
 
   async function exit() {
-    clearAll();
+    await clearAll();
     await signOut();
     history.replace('/acceso');
   }
@@ -211,7 +211,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
   if (!platform) return null;
 
   async function exit() {
-    clearAll();
+    await clearAll();
     await signOut();
     history.replace('/plataforma/acceso');
   }
