@@ -26,7 +26,8 @@ import {
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { NavLink, useHistory, useLocation } from 'react-router-dom';
 import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-theme';
-import { CASHBACK_ENABLED, INVENTARIO_ENABLED } from '../lib/features';
+import { CASHBACK_ENABLED } from '../lib/features';
+import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { Logo } from './brand-mark';

@@ -26,7 +26,8 @@ import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
 import { IA_CONFIG_ENABLED } from '../lib/features';
-import { CASHBACK_ENABLED, INVENTARIO_ENABLED } from '../lib/features';
+import { CASHBACK_ENABLED } from '../lib/features';
+import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 
 const paymentLabels = {
   efectivo: 'Efectivo',
