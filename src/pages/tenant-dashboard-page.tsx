@@ -24,8 +24,7 @@ import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
-import { CASHBACK_ENABLED } from '../lib/features';
-import { INVENTARIO_ENABLED } from '../lib/features';
+import { CASHBACK_ENABLED, INVENTARIO_ENABLED } from '../lib/features';
 
 const paymentLabels = {
   efectivo: 'Efectivo',

@@ -1033,6 +1033,11 @@ export const api = {
     return (await request<Record<string, unknown>>(`/inventario/productos/${encodeURIComponent(productId)}/receta`, { method: 'PUT', token, body: { lineas: lines } })).data;
   },
 
+  /** Solo admin: deja o no a Cocina editar el inventario (`cocina_edita_inventario`, migración 205). */
+  async setInventoryKitchenPermission(token: string, allow: boolean): Promise<{ cocina_edita: boolean }> {
+    return (await request<{ cocina_edita: boolean }>('/inventario/permisos', { method: 'PATCH', token, body: { cocina_edita: allow } })).data;
+  },
+
   async addInventorySupply(token: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
     return (await request<Record<string, unknown>>('/inventario/insumos', { method: 'POST', token, body: input })).data;
   },

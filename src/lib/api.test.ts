@@ -825,4 +825,15 @@ describe('Vaiinilla API client', () => {
     await expect(api.inventoryRecipe('tenant-token', '24')).resolves.toMatchObject({ lineas: [] });
     await expect(api.saveInventoryRecipe('tenant-token', '24', [{ insumo_id: 7, cantidad: 2 }])).resolves.toMatchObject({ lineas: [{ insumo_id: 7 }] });
   });
+
+  it('cambia el permiso de Cocina sobre el inventario con PATCH /inventario/permisos', async () => {
+    server.use(
+      http.patch(`${baseUrl}/inventario/permisos`, async ({ request }) => {
+        await expect(request.json()).resolves.toEqual({ cocina_edita: true });
+        return HttpResponse.json({ data: { cocina_edita: true }, meta: {}, error: null });
+      }),
+    );
+    await expect(api.setInventoryKitchenPermission('tenant-token', true)).resolves.toEqual({ cocina_edita: true });
+  });
 });
+
