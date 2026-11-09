@@ -1,0 +1,187 @@
+/*
+ * Tokens de diseño de la app de Android (winkakao3-dev/vaiinilla-android).
+ * Fuente: app/src/main/java/com/vaiinilla/app/ui/theme/
+ *   Color.kt                 -> paleta y colores por modo
+ *   VaiinillaThemeMode.kt    -> qué color va en cada modo (claro, oscuro, AMOLED)
+ *   Type.kt                  -> escala tipográfica (FontFamily.SansSerif = Roboto)
+ *   Theme.kt                 -> radios (Shapes 14/20/28/34)
+ *   components/VaiinillaBottomNav.kt, EditorialUi.kt, EmptyState.kt, Skeleton.kt
+ *                            -> medidas de barra inferior, botones, chips, vacíos y carga
+ * 1 dp / 1 sp de Android = 1 px CSS. Las únicas diferencias a propósito son las
+ * áreas táctiles (mínimo 44 px en la web) y el texto de la barra inferior
+ * (11 px en vez de 8 sp, para que se lea en navegador).
+ *
+ * `data-vai-theme` lo pone `lib/admin-theme.ts` en <html>: claro | oscuro | amoled.
+ */
+
+:root {
+  /* Paleta de marca (Color.kt) */
+  --vai-ink: #171817;
+  --vai-ink-2: #2a2b29;
+  --vai-cream: #f4f1e7;
+  --vai-cream-deep: #e9e6da;
+  --vai-muted-ink: #65675f;
+  --vai-lime: #b9d86d;
+  --vai-lime-soft: #d7ef8b;
+  --vai-coral: #f15b55;
+  --vai-yolk: #ffd15b;
+  --vai-white: #ffffff;
+
+  /* Colores por modo; el valor de :root es el modo claro */
+  --vai-paper: var(--vai-cream);
+  --vai-paper-2: var(--vai-cream-deep);
+  --vai-text: var(--vai-ink);
+  --vai-text-2: var(--vai-ink-2);
+  --vai-muted: var(--vai-muted-ink);
+  --vai-line: rgb(23 24 23 / 12%);
+  --vai-accent: var(--vai-lime);
+  --vai-accent-2: var(--vai-lime-soft);
+  --vai-on-accent: #1d250c;
+  /* Texto sobre una superficie de tinta (botón negro, opción elegida): `onInk` en Android */
+  --vai-on-ink: var(--vai-paper);
+  /* Texto de error y de aviso: coral y yema no se leen sobre papel claro (2.9:1 y 1.2:1) */
+  --vai-coral-text: #b8332d;
+  --vai-amber-text: #945700;
+  /* El coral como fondo lleva texto de tinta: blanco sobre coral da 3.3:1 */
+  --vai-on-coral: var(--vai-ink);
+
+  /* Barra inferior: oscura en todos los modos (NavGlass/NavPill/NavText de Color.kt) */
+  --vai-nav-glass: #2f2f2f;
+  --vai-nav-border: #4e4e4c;
+  --vai-nav-pill: #111111;
+  --vai-nav-text-active: #cce088;
+  --vai-nav-text-idle: #f8f8f8;
+  --vai-nav-inset: rgb(255 255 255 / 2.5%);
+  --vai-nav-shadow: 0 5px 14px rgb(0 0 0 / 70%);
+  --vai-nav-height: 55px;
+  --vai-nav-max-width: 568px;
+  --vai-nav-margin-x: 19px;
+  --vai-nav-gap-bottom: 8px;
+  --vai-nav-inset-x: 10px;
+  --vai-nav-pill-inset-y: 3px;
+  --vai-nav-icon: 24px;
+  --vai-nav-label: 0.6875rem;
+  /* Lo que el contenido debe dejar libre abajo para no quedar bajo la barra */
+  --vai-nav-clearance: calc(var(--vai-nav-height) + var(--vai-nav-gap-bottom) + 16px + env(safe-area-inset-bottom));
+
+  /* Tipografía (Type.kt). Android usa FontFamily.SansSerif, que es Roboto. */
+  --vai-font: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --vai-display-size: 2.375rem;   /* 38sp / 39sp, Black, -1.2sp */
+  --vai-display-line: 2.4375rem;
+  --vai-display-tracking: -1.2px;
+  --vai-headline-size: 1.5rem;    /* 24sp / 27sp, Black */
+  --vai-headline-line: 1.6875rem;
+  --vai-title-size: 1.125rem;     /* 18sp / 21sp, ExtraBold */
+  --vai-title-line: 1.3125rem;
+  --vai-body-lg-size: 0.9375rem;  /* 15sp / 22sp, Medium */
+  --vai-body-lg-line: 1.375rem;
+  --vai-body-size: 0.875rem;      /* 14sp / 20sp, Medium */
+  --vai-body-line: 1.25rem;
+  --vai-label-size: 0.8125rem;    /* 13sp / 16sp, ExtraBold */
+  --vai-label-line: 1rem;
+  --vai-weight-medium: 500;
+  --vai-weight-semibold: 600;
+  --vai-weight-bold: 700;
+  --vai-weight-extrabold: 800;
+  --vai-weight-black: 900;
+
+  /* Espaciados en uso en los componentes de Android */
+  --vai-space-1: 4px;
+  --vai-space-2: 8px;
+  --vai-space-3: 12px;
+  --vai-space-4: 16px;
+  --vai-space-5: 20px;
+  --vai-space-6: 24px;
+  --vai-space-7: 28px;
+  --vai-space-8: 32px;
+
+  /* Radios (Theme.kt Shapes y componentes) */
+  --vai-radius-sm: 14px;
+  --vai-radius-md: 20px;
+  --vai-radius-lg: 28px;
+  --vai-radius-xl: 34px;
+  --vai-radius-button: 18px;
+  --vai-radius-field: 18px;
+  --vai-radius-skeleton: 12px;
+  --vai-radius-pill: 999px;
+
+  /* Medidas de control */
+  --vai-touch-min: 44px;
+  --vai-button-height: 52px;        /* EditorialPrimaryButton */
+  --vai-accent-button-height: 54px; /* EditorialAccentButton / Secondary */
+  --vai-chip-height: 44px;          /* ChoiceChip mide 38dp; en la web sube a 44 px */
+
+  /* Movimiento */
+  --vai-ease: cubic-bezier(0.22, 1, 0.36, 1); /* NavMotionEase */
+  --vai-skeleton-duration: 1150ms;
+}
+
+html[data-vai-theme='oscuro'] {
+  --vai-paper: #1d1e1c;
+  --vai-paper-2: #292a27;
+  --vai-text: #f5f1e5;
+  --vai-text-2: #dedbd0;
+  --vai-muted: #aaa99f;
+  --vai-line: rgb(255 255 255 / 12%);
+  --vai-on-accent: #182008;
+  --vai-coral-text: var(--vai-coral);
+  --vai-amber-text: var(--vai-yolk);
+  color-scheme: dark;
+}
+
+html[data-vai-theme='amoled'] {
+  --vai-paper: #000000;
+  --vai-paper-2: #111111;
+  --vai-text: #f8f5ec;
+  --vai-text-2: #dedbd0;
+  --vai-muted: #a4a39c;
+  --vai-line: rgb(255 255 255 / 15%);
+  --vai-on-accent: #172008;
+  --vai-coral-text: var(--vai-coral);
+  --vai-amber-text: var(--vai-yolk);
+  --vai-lime-wash: rgb(199 232 122 / 12%);
+  color-scheme: dark;
+}
+
+/*
+ * Puente con los tokens que ya usa el panel (index.css). Oscuro ya coincide con
+ * DarkPaper/DarkInk de Android; AMOLED lleva el papel a negro real. Los
+ * selectores llevan los dos atributos para ganarle a html[data-admin-theme='oscuro'].
+ */
+html[data-admin-theme][data-vai-theme] {
+  --font-sans: var(--vai-font);
+  --radius-control: var(--vai-radius-button);
+  --radius-card: var(--vai-radius-md);
+  --radius-sheet: var(--vai-radius-lg);
+  --staff-call: var(--vai-coral);
+  --color-coral: var(--vai-coral);
+}
+
+html[data-admin-theme='oscuro'][data-vai-theme='amoled'] {
+  --color-cream: #000000;
+  --color-cream-2: #111111;
+  --color-cream-3: #1c1c1b;
+  --color-white-warm: #111111;
+  --color-ink: #f8f5ec;
+  --color-ink-soft: #dedbd0;
+  --color-muted: #a4a39c;
+  --line: #383836;
+  --color-danger: var(--vai-coral);
+  --color-danger-soft: rgb(241 91 85 / 14%);
+}
+
+html[data-admin-theme='oscuro'][data-vai-theme='amoled'] .mobile-header {
+  background: rgb(0 0 0 / 92%);
+}
+
+html[data-vai-theme] body {
+  font-family: var(--vai-font);
+}
+
+/* Escala tipográfica como clases, para usar igual que MaterialTheme.typography */
+.vai-display { font: var(--vai-weight-black) var(--vai-display-size) / var(--vai-display-line) var(--vai-font); letter-spacing: var(--vai-display-tracking); }
+.vai-headline { font: var(--vai-weight-black) var(--vai-headline-size) / var(--vai-headline-line) var(--vai-font); }
+.vai-title { font: var(--vai-weight-extrabold) var(--vai-title-size) / var(--vai-title-line) var(--vai-font); }
+.vai-body-lg { font: var(--vai-weight-medium) var(--vai-body-lg-size) / var(--vai-body-lg-line) var(--vai-font); }
+.vai-body { font: var(--vai-weight-medium) var(--vai-body-size) / var(--vai-body-line) var(--vai-font); }
+.vai-label { font: var(--vai-weight-extrabold) var(--vai-label-size) / var(--vai-label-line) var(--vai-font); }
