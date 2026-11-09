@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CortesReportePage } from './cortes-reporte-page';
 
@@ -21,5 +21,22 @@ describe('CortesReportePage', () => {
   it('presenta los campos del contrato de cortes del backend', async () => {
     renderPage();
     expect(await screen.findByRole('button', { name: /2026-11-04.*\$150\.00/ })).toBeInTheDocument();
+  });
+
+  it('cambia a contabilidad con los chips de la base de diseño', async () => {
+    apiMock.accountingReport.mockResolvedValue({ resumen: { ventas: 100 } });
+    renderPage();
+    const contable = screen.getByRole('button', { name: 'Contabilidad' });
+    expect(screen.getByRole('button', { name: 'Corte del día' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(contable);
+    expect(contable).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByText('Ventas del periodo')).toBeInTheDocument();
+    expect(apiMock.accountingReport).toHaveBeenCalledWith('tenant-token', expect.any(String), expect.any(String));
+  });
+
+  it('oculta la pantalla si el backend no tiene el endpoint', async () => {
+    apiMock.cashDayCut.mockRejectedValue(new Error('404'));
+    const { container } = renderPage();
+    await vi.waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 });

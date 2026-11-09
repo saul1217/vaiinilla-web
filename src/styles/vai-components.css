@@ -1,0 +1,191 @@
+/*
+ * Componentes base con las medidas de la app de Android. Usan solo los tokens
+ * de android-tokens.css, así que siguen el modo (claro, oscuro, AMOLED).
+ */
+
+/* Barra inferior (VaiinillaBottomNav.kt): dock oscuro de 55 px, radio 28,
+   píldora #111 de radio 25 en la pestaña activa y texto lima. */
+html[data-vai-theme] .tenant-app { --app-nav-height: calc(var(--vai-nav-height) + var(--vai-nav-gap-bottom)); }
+html[data-vai-theme] .app-mobile-nav {
+  bottom: calc(var(--vai-nav-gap-bottom) + env(safe-area-inset-bottom));
+  width: min(calc(100% - 2 * var(--vai-nav-margin-x)), var(--vai-nav-max-width));
+  min-height: var(--vai-nav-height);
+  gap: 0;
+  padding: var(--vai-nav-pill-inset-y) var(--vai-space-1);
+  border: 1px solid var(--vai-nav-border);
+  border-radius: var(--vai-radius-lg);
+  background: var(--vai-nav-glass);
+  box-shadow: var(--vai-nav-shadow), inset 0 1px 0 var(--vai-nav-inset);
+  font-family: var(--vai-font);
+}
+html[data-vai-theme] .app-mobile-nav > :is(a, button) {
+  min-width: var(--vai-touch-min);
+  min-height: calc(var(--vai-nav-height) - 2 * var(--vai-nav-pill-inset-y));
+  gap: var(--vai-space-1);
+  border-radius: 25px;
+  color: var(--vai-nav-text-idle);
+  font-size: var(--vai-nav-label);
+  font-weight: 400;
+  letter-spacing: -0.04px;
+  transition: background-color 220ms var(--vai-ease), color 220ms var(--vai-ease);
+}
+html[data-vai-theme] .app-mobile-nav svg { width: var(--vai-nav-icon); height: var(--vai-nav-icon); }
+html[data-vai-theme] .app-mobile-nav > .app-link--active {
+  background: var(--vai-nav-pill);
+  color: var(--vai-nav-text-active);
+  font-weight: 600;
+}
+html[data-vai-theme] .app-mobile-nav :is(a, button):focus-visible { outline-color: var(--vai-nav-text-active); outline-offset: -3px; }
+
+/* Tarjetas (Surface de Android: paper2, radio 20; la grande, radio 28) */
+.vai-card {
+  border: 1px solid var(--vai-line);
+  border-radius: var(--vai-radius-md);
+  background: var(--vai-paper-2);
+  color: var(--vai-text);
+  padding: var(--vai-space-4);
+}
+.vai-card--hero { border-radius: var(--vai-radius-lg); padding: var(--vai-space-5); }
+.vai-card--flat { border-color: transparent; background: var(--vai-paper); }
+.vai-card__title { margin: 0; font: var(--vai-weight-extrabold) var(--vai-title-size) / var(--vai-title-line) var(--vai-font); }
+.vai-card__description { margin: var(--vai-space-1) 0 0; color: var(--vai-muted); font: var(--vai-weight-medium) var(--vai-body-size) / var(--vai-body-line) var(--vai-font); }
+
+/* Botones (EditorialUi.kt) */
+.vai-button {
+  display: inline-flex;
+  min-width: var(--vai-touch-min);
+  min-height: var(--vai-button-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--vai-space-2);
+  border: 0;
+  border-radius: var(--vai-radius-button);
+  padding: 14px 18px;
+  font: var(--vai-weight-black) var(--vai-body-size) / 1.2 var(--vai-font);
+  text-decoration: none;
+  transition: transform 160ms var(--vai-ease), background-color 160ms ease, opacity 160ms ease;
+}
+.vai-button:enabled:active { transform: scale(0.97); }
+.vai-button:disabled { cursor: not-allowed; background: var(--vai-paper-2); color: var(--vai-muted); }
+.vai-button:focus-visible { outline: 3px solid var(--vai-accent); outline-offset: 3px; }
+.vai-button svg { width: 20px; height: 20px; flex-shrink: 0; }
+.vai-button--block { width: 100%; }
+/* EditorialPrimaryButton: tinta, 52, radio 18 */
+.vai-button--primary { background: var(--vai-text); color: var(--vai-on-ink); }
+/* EditorialAccentButton: la acción principal de la pantalla, cápsula lima de 54 */
+.vai-button--accent {
+  min-height: var(--vai-accent-button-height);
+  border-radius: var(--vai-radius-pill);
+  background: var(--vai-accent);
+  color: var(--vai-on-accent);
+  font-size: 1.0625rem;
+}
+/* EditorialSecondaryButton: cápsula de papel de 54 */
+.vai-button--secondary {
+  min-height: var(--vai-accent-button-height);
+  border: 1px solid var(--vai-line);
+  border-radius: var(--vai-radius-pill);
+  background: var(--vai-paper-2);
+  color: var(--vai-text);
+  font-size: 1.0625rem;
+}
+/* Coral (#F15B55): avisos y acciones que llaman la atención; texto de tinta (5.4:1) */
+.vai-button--coral { background: var(--vai-coral); color: var(--vai-on-coral); }
+.vai-button--quiet { min-height: var(--vai-touch-min); background: transparent; color: var(--vai-text); }
+.vai-button--accent:disabled,
+.vai-button--secondary:disabled,
+.vai-button--coral:disabled { background: var(--vai-paper-2); color: var(--vai-muted); }
+
+/* Chip (ChoiceChip): cápsula; la elegida se rellena de tinta, no de lima */
+.vai-chip-row { display: flex; flex-wrap: wrap; gap: var(--vai-space-2); }
+.vai-chip-row--scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.vai-chip-row--scroll::-webkit-scrollbar { display: none; }
+.vai-chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  min-width: var(--vai-touch-min);
+  min-height: var(--vai-chip-height);
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--vai-radius-pill);
+  padding: var(--vai-space-2) var(--vai-space-4);
+  background: var(--vai-paper-2);
+  color: var(--vai-text);
+  font: var(--vai-weight-bold) var(--vai-label-size) / var(--vai-label-line) var(--vai-font);
+  transition: background-color 200ms var(--vai-ease), color 200ms var(--vai-ease), transform 160ms var(--vai-ease);
+}
+.vai-chip:enabled:active { transform: scale(0.96); }
+.vai-chip[aria-pressed='true'],
+.vai-chip[aria-checked='true'] { background: var(--vai-text); color: var(--vai-on-ink); }
+.vai-chip:focus-visible { outline: 3px solid var(--vai-accent); outline-offset: 2px; }
+.vai-chip:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* Contador (la burbuja coral del carrito en la barra de Android) */
+.vai-badge {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--vai-radius-pill);
+  padding: 0 5px;
+  background: var(--vai-coral);
+  color: var(--vai-on-coral);
+  font: var(--vai-weight-black) 0.6875rem / 1 var(--vai-font);
+}
+
+/* Estado vacío (EmptyState.kt): papel 2, radio 28, ícono neutro en un cuadro de radio 25 */
+.vai-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: var(--vai-radius-lg);
+  background: var(--vai-paper-2);
+  color: var(--vai-text);
+  padding: var(--vai-space-7);
+  text-align: center;
+}
+.vai-empty__icon {
+  display: grid;
+  place-items: center;
+  border-radius: 25px;
+  background: var(--vai-paper);
+  color: var(--vai-muted);
+  padding: 18px;
+}
+.vai-empty__icon svg { width: 36px; height: 36px; }
+.vai-empty__title { margin: var(--vai-space-4) 0 0; font: var(--vai-weight-black) var(--vai-body-lg-size) / var(--vai-body-lg-line) var(--vai-font); }
+.vai-empty__message { margin: 6px 0 0; max-width: 42ch; color: var(--vai-muted); font: var(--vai-weight-medium) var(--vai-body-size) / var(--vai-body-line) var(--vai-font); }
+.vai-empty__action { width: 100%; margin-top: 18px; }
+
+/* El EmptyState que ya usan las pantallas toma la misma forma */
+html[data-vai-theme] .empty-state { border-radius: var(--vai-radius-lg); background: var(--vai-paper-2); }
+html[data-vai-theme] .empty-state__icon { border-radius: 25px; background: var(--vai-paper); color: var(--vai-muted); }
+
+/* Carga (Skeleton.kt): bloque de papel 2 con un barrido suave de 1150 ms */
+.vai-loading { display: grid; gap: var(--vai-space-3); }
+.vai-skeleton {
+  display: block;
+  min-height: 14px;
+  border-radius: var(--vai-radius-skeleton);
+  background:
+    linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--vai-text) 6%, transparent) 50%, transparent 100%)
+      var(--vai-paper-2);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: vai-skeleton var(--vai-skeleton-duration) linear infinite;
+}
+.vai-skeleton--line { height: 14px; }
+.vai-skeleton--title { height: 22px; width: 60%; }
+.vai-skeleton--card { height: 96px; border-radius: var(--vai-radius-md); }
+@keyframes vai-skeleton {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vai-skeleton { animation: none; background-position: 50% 0; }
+  .vai-button, .vai-chip, html[data-vai-theme] .app-mobile-nav > :is(a, button) { transition: none; }
+}
