@@ -26,6 +26,7 @@ import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
+import { SIN_INTERNET_ENABLED } from '../lib/features';
 
 const paymentLabels = {
   efectivo: 'Efectivo',
@@ -354,6 +355,7 @@ export function TenantDashboardPage() {
             </Link>
           </li>
           {CORTES_REPORTE_ENABLED && <li><Link to="/app/cortes"><ReceiptText aria-hidden="true" /><span>Cortes y reporte</span><ChevronRight aria-hidden="true" /></Link></li>}
+          {SIN_INTERNET_ENABLED && <li><Link to="/app/sin-internet"><ShieldCheck aria-hidden="true" /><span>Operación sin internet</span><ChevronRight aria-hidden="true" /></Link></li>}
         </ul>
       </nav>
     </div>

@@ -6,11 +6,13 @@ import { Spinner } from '../components/brand-mark';
 import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
+import { SIN_INTERNET_ENABLED } from '../lib/features';
 
 const AuthPage = lazy(() => import('../pages/auth-page').then((module) => ({ default: module.AuthPage })));
 const AccessSelectionPage = lazy(() => import('../pages/access-selection-page').then((module) => ({ default: module.AccessSelectionPage })));
 const TenantDashboardPage = lazy(() => import('../pages/tenant-dashboard-page').then((module) => ({ default: module.TenantDashboardPage })));
 const CortesReportePage = lazy(() => import('../pages/cortes-reporte-page').then((module) => ({ default: module.CortesReportePage })));
+const SinInternetPage = lazy(() => import('../pages/sin-internet-page').then((module) => ({ default: module.SinInternetPage })));
 const InvitationsPage = lazy(() => import('../pages/invitations-page').then((module) => ({ default: module.InvitationsPage })));
 const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({ default: module.OrdersPage })));
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
@@ -70,6 +72,7 @@ function TenantArea() {
               <MenuPage />
             </RoleGuard>
           </Route>
+          {SIN_INTERNET_ENABLED && <Route path="/app/sin-internet"><RoleGuard allowed={['admin']}><SinInternetPage /></RoleGuard></Route>}
           {CASHBACK_ENABLED && CashbackPage ? (
             <Route path="/app/cashback">
               <RoleGuard allowed={['admin']}>
