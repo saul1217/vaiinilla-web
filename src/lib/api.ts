@@ -1017,6 +1017,26 @@ export const api = {
     ).data;
   },
 
+  async inventorySupplies(token: string): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>('/inventario/insumos', { token })).data;
+  },
+
+  async inventoryProducts(token: string): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>('/inventario/productos', { token })).data;
+  },
+
+  async inventoryRecipe(token: string, productId: string): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/inventario/productos/${encodeURIComponent(productId)}/receta`, { token })).data;
+  },
+
+  async saveInventoryRecipe(token: string, productId: string, lines: unknown[]): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/inventario/productos/${encodeURIComponent(productId)}/receta`, { method: 'PUT', token, body: { lineas: lines } })).data;
+  },
+
+  async addInventorySupply(token: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>('/inventario/insumos', { method: 'POST', token, body: input })).data;
+  },
+
   async cashDayCut(token: string, date?: string): Promise<Record<string, unknown>> {
     return (await request<Record<string, unknown>>(`/sesiones-caja/cortes${params({ fecha: date })}`, { token })).data;
   },
