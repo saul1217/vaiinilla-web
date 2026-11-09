@@ -73,8 +73,17 @@ export interface DurableStore {
   remove(key: string): void;
 }
 
+/** Con cookies bloqueadas, solo leer `localStorage` lanza SecurityError: se trata como no disponible. */
+function defaultStorage(): Storage | null {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** localStorage con verificación: cualquier falla se reporta, nunca se ignora. */
-export function browserDurableStore(storage: Storage | undefined = globalThis.localStorage): DurableStore {
+export function browserDurableStore(storage: Storage | null = defaultStorage()): DurableStore {
   return {
     read(key) {
       if (!storage) throw new DurableStorageError();
