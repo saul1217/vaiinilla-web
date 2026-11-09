@@ -32,6 +32,9 @@ const friendlyMessages: Record<string, string> = {
   PRODUCT_NOT_FOUND: 'El producto ya no está disponible. Actualiza el menú.',
   CATALOG_VERSION_CONFLICT:
     'El menú cambió en otra sesión. Actualiza la página antes de volver a guardar.',
+  CONFIG_VERSION_CONFLICT: 'La configuración cambió en otra sesión. Recárgala antes de intentar de nuevo.',
+  CONFIG_TRANSITION_BLOCKED: 'La transición está bloqueada. Revisa los bloqueos indicados por el servidor.',
+  CONFIG_LOCK_TIMEOUT: 'La configuración sigue ocupada después de un reintento. Espera unos segundos e inténtalo de nuevo.',
   SPACE_NAME_CONFLICT: 'Ya existe un espacio con ese nombre.',
   SPACE_NOT_FOUND: 'El espacio ya no está disponible. Actualiza la página.',
   SPACE_INACTIVE: 'Ese espacio está inactivo.',

@@ -45,6 +45,32 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 describe('Vaiinilla API client', () => {
+  it('reintenta una sola vez CONFIG_LOCK_TIMEOUT al aplicar una transición y conserva la llave', async () => {
+    const keys: string[] = [];
+    let calls = 0;
+    server.use(
+      http.post(`${baseUrl}/establecimiento/configuracion/transiciones`, ({ request }) => {
+        calls += 1;
+        keys.push(request.headers.get('Idempotency-Key') ?? '');
+        if (calls === 1) {
+          return HttpResponse.json(
+            { data: null, meta: {}, error: { code: 'CONFIG_LOCK_TIMEOUT', message: 'busy' } },
+            { status: 503 },
+          );
+        }
+        return HttpResponse.json({ data: { permitido: true }, meta: {}, error: null });
+      }),
+    );
+
+    await expect(api.applyBusinessTransition('tenant-token', {
+      version_esperada: 3,
+      cambios: { tipo: 'restaurante' },
+    })).resolves.toMatchObject({ permitido: true });
+    expect(calls).toBe(2);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
+  });
+
   it('consulta versiones legales y solicita verificación por el backend', async () => {
     server.use(
       http.get(`${baseUrl}/publico/legal/vigente`, () =>

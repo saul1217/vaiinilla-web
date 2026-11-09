@@ -50,37 +50,31 @@ describe('Flujo de mi tienda', () => {
     expect(screen.getByRole('button', { name: /Cafetería escolar/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('una plantilla cambia el flujo de abajo y se guarda al pulsar Guardar flujo', async () => {
+  it('no permite cambiar el tipo usando una plantilla de otro tipo', async () => {
     const user = userEvent.setup();
     renderFlow();
-    await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
+    const padelTemplate = await screen.findByRole('button', { name: /Club de pádel/ });
+    expect(padelTemplate).toBeDisabled();
     expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
-    expect(screen.getByText('Prepara en cuanto llega el pedido, sin esperar el cobro')).toBeInTheDocument();
-    expect(screen.getByText('La cancha se libera al quedar saldada')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
-    await waitFor(() =>
-      expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('tenant-token', {
-        tipo: 'padel',
-        entrega_requiere_qr: false,
-        permite_pago_al_final: true,
-        gracia_liberacion_min: 5,
-        franjas_pedido: [],
-      }),
-    );
+    await user.click(padelTemplate);
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
   });
 
   it('al guardar muestra de inmediato lo guardado, sin pasar por los datos viejos', async () => {
     const user = userEvent.setup();
-    const padel = { ...cafeteria, tipo: 'padel', entrega_requiere_qr: false, permite_pago_al_final: true };
-    apiMock.saveBusinessSettings.mockResolvedValue(padel);
+    const updated = { ...cafeteria, gracia_liberacion_min: 12 };
+    apiMock.saveBusinessSettings.mockResolvedValue(updated);
     // La recarga posterior tarda: mientras, la pantalla debe mostrar ya lo guardado.
     apiMock.businessSettings.mockResolvedValueOnce(cafeteria).mockReturnValue(new Promise(() => {}));
     renderFlow();
-    await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
+    const grace = await screen.findByLabelText('Gracia al terminar un turno (minutos)');
+    await user.clear(grace);
+    await user.type(grace, '12');
     await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
     expect(await screen.findByText(/Flujo guardado/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Club de pádel/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByText(/es un flujo personalizado/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Gracia al terminar un turno (minutos)')).toHaveValue(12);
+    expect(apiMock.saveBusinessSettings).toHaveBeenCalledTimes(1);
+    expect(apiMock.saveBusinessSettings.mock.calls[0]?.[1]).not.toHaveProperty('tipo');
   });
 
   it('personalizar: pagar al final y entregar sin QR da un flujo personalizado', async () => {
@@ -105,11 +99,9 @@ describe('Flujo de mi tienda', () => {
   });
 
   it('lo que aún no existe sale como Próximamente', async () => {
-    const user = userEvent.setup();
     renderFlow();
-    await user.click(await screen.findByRole('button', { name: /Comedor de empresa/ }));
-    expect(screen.getByText('Descuenta de la nómina')).toBeInTheDocument();
-    expect(screen.getAllByText('Próximamente').length).toBeGreaterThan(0);
+    expect(await screen.findByRole('button', { name: /Comedor de empresa/ })).toBeDisabled();
+    expect(screen.queryByText('Descuenta de la nómina')).not.toBeInTheDocument();
   });
 
   it('elegir solo ciertas horas muestra las franjas, las valida y las guarda ordenadas', async () => {
@@ -174,7 +166,7 @@ describe('Flujo de mi tienda', () => {
   it('muestra el error si el negocio tiene un tipo desconocido', async () => {
     apiMock.businessSettings.mockResolvedValue({ ...cafeteria, tipo: 'otro' });
     renderFlow();
-    expect(await screen.findByText(/tipo que esta pantalla no conoce/)).toBeInTheDocument();
+    expect(await screen.findByText(/tipo desconocido/)).toBeInTheDocument();
   });
 
   it('oculto del directorio por defecto; activarlo se guarda solo y la tienda trae su QR', async () => {

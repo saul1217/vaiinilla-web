@@ -24,6 +24,9 @@ import type {
   PlatformContextResponse,
   PlatformAnalytics,
   PlatformEstablishment,
+  EstablishmentTypeCatalog,
+  ConfigurationTransitionInput,
+  ConfigurationTransitionPreflight,
   PlatformSummary,
   StripeOnboarding,
   StripePlatformConfiguration,
@@ -86,10 +89,11 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   idempotent?: boolean;
   idempotencyKey?: string;
+  retryConfigLockTimeout?: boolean;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
-  const { token, body, idempotent, idempotencyKey, ...requestOptions } = options;
+  const { token, body, idempotent, idempotencyKey, retryConfigLockTimeout, ...requestOptions } = options;
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
   const isFormData = body instanceof FormData;
@@ -98,11 +102,20 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
   if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
   else if (idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
 
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...requestOptions,
-    headers,
-    body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
-  });
+  let response: Response;
+  let lockTimeoutRetried = false;
+  while (true) {
+    response = await fetch(`${apiUrl}${path}`, {
+      ...requestOptions,
+      headers,
+      body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
+    });
+    if (!retryConfigLockTimeout || lockTimeoutRetried || response.status !== 503) break;
+    const retryPayload = (await response.clone().json().catch(() => null)) as ApiErrorEnvelope | null;
+    if (retryPayload?.error?.code !== 'CONFIG_LOCK_TIMEOUT') break;
+    lockTimeoutRetried = true;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 
   if (response.ok && response.status === 204) {
     return { data: undefined as T, meta: {}, error: null };
@@ -573,6 +586,10 @@ export const api = {
       .data;
   },
 
+  async establishmentTypeCatalog(token: string): Promise<EstablishmentTypeCatalog> {
+    return (await request<EstablishmentTypeCatalog>('/plataforma/catalogo/tipos-establecimiento', { token })).data;
+  },
+
   async listEstablishments(
     token: string,
     options: {
@@ -905,6 +922,22 @@ export const api = {
 
   async saveBusinessSettings(token: string, input: BusinessSettingsInput): Promise<BusinessSettings> {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
+  },
+
+  async preflightBusinessTransition(token: string, input: { cambios: Record<string, unknown> }): Promise<ConfigurationTransitionPreflight> {
+    return (await request<ConfigurationTransitionPreflight>('/establecimiento/configuracion/transiciones/preflight', { method: 'POST', token, body: input })).data;
+  },
+
+  async applyBusinessTransition(token: string, input: ConfigurationTransitionInput): Promise<ConfigurationTransitionPreflight> {
+    return (await request<ConfigurationTransitionPreflight>('/establecimiento/configuracion/transiciones', { method: 'POST', token, idempotent: true, retryConfigLockTimeout: true, body: input })).data;
+  },
+
+  async preflightPlatformTransition(token: string, establishmentId: string, input: { cambios: Record<string, unknown> }): Promise<ConfigurationTransitionPreflight> {
+    return (await request<ConfigurationTransitionPreflight>(`/plataforma/establecimientos/${encodeURIComponent(establishmentId)}/configuracion/transiciones/preflight`, { method: 'POST', token, body: input })).data;
+  },
+
+  async applyPlatformTransition(token: string, establishmentId: string, input: ConfigurationTransitionInput): Promise<ConfigurationTransitionPreflight> {
+    return (await request<ConfigurationTransitionPreflight>(`/plataforma/establecimientos/${encodeURIComponent(establishmentId)}/configuracion/transiciones`, { method: 'POST', token, idempotent: true, retryConfigLockTimeout: true, body: input })).data;
   },
 
   async uploadStoreImage(token: string, kind: StoreImageKind, file: File): Promise<BusinessSettings> {

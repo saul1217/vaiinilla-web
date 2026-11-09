@@ -477,6 +477,35 @@ export interface BusinessSettings {
   /** Logo del negocio (carrito y seguimiento en la app). Se cambia con su propia ruta. */
   logo_url?: string | null;
   tipos_disponibles: string[];
+  catalogo_tipos?: EstablishmentTypeCatalog;
+  contrato_v1?: EffectiveBusinessContract;
+}
+
+export interface EstablishmentTypeReason { code: string; message: string; blocking?: boolean }
+export interface EstablishmentTypeOption {
+  tipo: string;
+  etiqueta: string;
+  seleccion_permitida: boolean;
+  reasons: EstablishmentTypeReason[];
+  actual?: boolean | null;
+}
+export interface EstablishmentTypeCatalog { version: string; tipos: EstablishmentTypeOption[] }
+export interface ConfigurationTransitionInput { version_esperada: number | string; cambios: Record<string, unknown> }
+export interface ConfigurationTransitionPreflight {
+  permitido: boolean; reason_codes: string[]; bloqueos: EstablishmentTypeReason[];
+  version_actual: number | string; capacidades_resultantes: EffectiveBusinessContract | Record<string, unknown>;
+}
+export interface EffectiveBusinessContract {
+  version: string;
+  tipo_comercial: string | null;
+  tipo_comercial_conocido: boolean;
+  modo_operativo: Record<string, boolean>;
+  capacidades: Record<string, { enabled: boolean; reasons: EstablishmentTypeReason[] }>;
+  ocultacion_producto: {
+    saldo_wallet?: { visible: boolean; enabled: boolean; reasons: EstablishmentTypeReason[] };
+    cashback?: { visible: boolean; enabled: boolean; reasons: EstablishmentTypeReason[] };
+  };
+  restrictions: EstablishmentTypeReason[];
 }
 
 /** Las dos imágenes del negocio que sube su administración. */
@@ -754,6 +783,7 @@ export interface PlatformEstablishment {
   motivo_suspension: string | null;
   creado_en: string;
   stripe?: PlatformStripeSummary | null;
+  contrato_v1?: EffectiveBusinessContract;
 }
 
 export interface EstablishmentInput {
@@ -777,7 +807,9 @@ export interface EstablishmentInput {
   tipo?: EstablishmentType;
 }
 
-export type EstablishmentType = 'cafeteria' | 'restaurante' | 'padel';
+export type EstablishmentType =
+  | 'cafeteria' | 'restaurante' | 'padel' | 'bar' | 'food_truck' | 'drive_thru'
+  | 'comedor' | 'evento' | 'reposteria' | 'boliche' | 'hotel';
 
 export interface CatalogCategory {
   id: number;
