@@ -198,7 +198,7 @@ describe('pago mixto: intentos por entorno, negocio y usuario', () => {
       version: 2,
       scope: { apiUrl: 'https://otro-entorno.example/api/v1', ...cajeraTiendaUno },
       orderId: orderA,
-      idempotencyKey: '0b6c7f7e-3f7a-4c39-9d2a-5b0b9b1d7a10',
+      idempotencyKey: crypto.randomUUID(),
       body: { metodo_pago: 'terminal', monto: '35.00' },
       expectedRemaining: '100.00',
       createdAt: Date.now(),
