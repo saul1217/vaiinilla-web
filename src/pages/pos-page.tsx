@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { RejectOrderDialog } from '../components/reject-order-dialog';
-import { SegmentedControl } from '../components/segmented-control';
+import { Card, Chip, VaiButton, VaiEmptyState } from '../components/vai';
 import { itemRejectionNotice } from '../lib/rejection-notice';
 import { TipPicker } from '../components/tip-picker';
 import { addMoney, tipAmount, tipExceedsTotal, type TipChoice } from '../lib/tips';
@@ -82,18 +82,33 @@ function MixedOrderPayment({
     },
   });
 
-  if (unavailable) return <div className="transaction-form">
-    <Feedback tone="error">El servidor todavía no tiene disponible el pago mixto. Puedes cerrar esta ventana y usar el cobro normal.</Feedback>
-    <div className="form-actions"><Button type="button" variant="secondary" onClick={onCancel}>Cerrar</Button></div>
+  if (unavailable) return <div className="transaction-form mixed-payment">
+    <VaiEmptyState icon={<CircleDollarSign />} title="Pago mixto no disponible"
+      message="El servidor todavía no tiene disponible el pago mixto. Puedes cerrar esta ventana y usar el cobro normal."
+      action={<VaiButton variant="secondary" block onClick={onCancel}>Cerrar</VaiButton>} />
   </div>;
 
+  const methodOptions = [{ value: 'efectivo', label: 'Efectivo' }, { value: 'terminal', label: 'Terminal' }] as const;
+  const methodLocked = Boolean(pendingAttempt) || payment.isPending;
+
   return <form className="transaction-form staff-payment mixed-payment" onSubmit={(event) => { event.preventDefault(); payment.mutate(); }}>
-    <p className="staff-payment__due"><span>Saldo restante</span><strong>{formatMoney(due)}</strong></p>
+    <Card as="div" tone="flat" className="mixed-payment__due">
+      <p className="staff-payment__due"><span>Saldo restante</span><strong>{formatMoney(due)}</strong></p>
+    </Card>
     {payment.isError && <Feedback tone="error">{errorMessage(payment.error)}</Feedback>}
     {pendingAttempt && <Feedback tone="error">Este pago quedó pendiente de confirmar. Reintenta el mismo pago; el monto y el método están bloqueados para evitar otro cobro.</Feedback>}
-    <SegmentedControl legend="Forma de pago" value={method}
-      options={[{ value: 'efectivo', label: 'Efectivo' }, { value: 'terminal', label: 'Terminal' }]}
-      onChange={setMethod} disabled={Boolean(pendingAttempt)} />
+    <div role="radiogroup" aria-label="Forma de pago" className="vai-chip-row mixed-payment__methods"
+      onKeyDown={(event) => {
+        if (methodLocked || !['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(event.key)) return;
+        event.preventDefault();
+        const next = methodOptions.find((option) => option.value !== method)!;
+        setMethod(next.value);
+        event.currentTarget.querySelector<HTMLButtonElement>(`[data-method="${next.value}"]`)?.focus();
+      }}>
+      {methodOptions.map((option) => <Chip key={option.value} role="radio" aria-checked={method === option.value} aria-pressed={undefined}
+        data-method={option.value} tabIndex={method === option.value ? 0 : -1} selected={method === option.value}
+        disabled={methodLocked} onClick={() => setMethod(option.value)}>{option.label}</Chip>)}
+    </div>
     <Field id="mixed-payment-amount" label="Monto de este pago (MXN)" inputMode="decimal" value={amount}
       onChange={(event) => setAmount(event.target.value.trim())}
       disabled={Boolean(pendingAttempt)}
@@ -106,9 +121,9 @@ function MixedOrderPayment({
       onBlur={() => { const normalized = normalizeMoneyInput(received); if (normalized !== received) setReceived(normalized); }}
       error={received && !enoughCash ? 'El efectivo recibido es menor al pago.' : undefined}
       hint={enoughCash && receivedCents !== null ? `Cambio: ${formatMoney(centsToMoney(receivedCents - amountCents))}` : 'Solo se registra para pagos en efectivo.'} />}
-    <div className="form-actions">
-      <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
-      <Button type="submit" loading={payment.isPending} disabled={!validAmount || !enoughCash || payment.isPending}>{pendingAttempt ? 'Reintentar el mismo pago' : 'Registrar pago'}</Button>
+    <div className="form-actions mixed-payment__actions">
+      <VaiButton variant="quiet" onClick={onCancel}>Cancelar</VaiButton>
+      <VaiButton type="submit" variant="accent" loading={payment.isPending} disabled={!validAmount || !enoughCash}>{pendingAttempt ? 'Reintentar el mismo pago' : 'Registrar pago'}</VaiButton>
     </div>
   </form>;
 }

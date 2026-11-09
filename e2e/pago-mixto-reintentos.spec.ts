@@ -125,3 +125,23 @@ test('Caja: servidor idempotente devuelve respuesta repetida sin segundo cobro',
   expect(state.charges).toBe(1);
   expect(state.remaining).toBe('0.00');
 });
+
+test('Caja: en móvil los controles del pago mixto miden al menos 44 px y no desbordan', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await prepare(page);
+  await page.getByRole('button', { name: /Pago mixto/ }).click();
+  const dialog = page.getByRole('dialog');
+  const targets = [
+    dialog.getByRole('radio', { name: 'Efectivo' }),
+    dialog.getByRole('radio', { name: 'Terminal' }),
+    dialog.getByRole('button', { name: 'Cancelar' }),
+    dialog.getByRole('button', { name: 'Registrar pago' }),
+  ];
+  for (const target of targets) {
+    const box = await target.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(360);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+});
