@@ -2,12 +2,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogResponse, OrderDetail } from '../types/api';
 import { PosPage } from './pos-page';
 
 const apiMock = vi.hoisted(() => ({
   activeCashSession: vi.fn(), operationalStatus: vi.fn(), listOrders: vi.fn(),
+  payOrderMixed: vi.fn(),
+  pendingMixedPayment: vi.fn(() => null),
+  recoverPendingMixedPayments: vi.fn().mockResolvedValue([]),
+  abonarSpaceAccount: vi.fn(),
   collectCash: vi.fn(), deliverOrder: vi.fn(), closeCashSession: vi.fn(),
   rejectOrder: vi.fn(), rejectOrderItem: vi.fn(), catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
   businessSettings: vi.fn(),
@@ -86,13 +90,17 @@ async function enviarCobroAlInstante(user: UserEvent) {
 }
 
 describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
+    vi.unstubAllEnvs();
     vi.clearAllMocks();
     sesion.rol = 'cajero';
     apiMock.activeCashSession.mockResolvedValue({ id: 'cash-1', fecha_operativa: '2026-10-07', monto_inicial: '500.00', monto_final: null, abierta_en: '2026-10-07T10:00:00.000Z', cerrada_en: null, cierre_automatico: false });
     apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: false });
     apiMock.listOrders.mockResolvedValue({ orders: [baseOrder], cursor: null });
     apiMock.collectCash.mockResolvedValue({ cambio: '0.00' });
+    apiMock.payOrderMixed.mockResolvedValue({ pago: { metodo_pago: 'efectivo', monto: '50.00' }, restante: '75.00', liquidada: false, pedido: baseOrder });
+    apiMock.abonarSpaceAccount.mockResolvedValue({ abono: { id: 'abono-1', metodo_pago: 'terminal', monto: '125.00', monto_recibido: null, cambio: '0.00' }, restante: '0.00', liquidada: true, pedidos_cobrados: 1 });
     apiMock.businessSettings.mockResolvedValue({ permite_pago_al_final: false, tipo: 'cafeteria', entrega_requiere_qr: true, gracia_liberacion_min: 5, franjas_pedido: [] });
   });
 
@@ -281,6 +289,89 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
       ['token', baseOrder.id, '100.00', 4, '8.50'],
     ]);
     expect(await screen.findByText(/Cobro registrado/)).toHaveTextContent('$6.50 MXN');
+  });
+
+  it('oculta el pago mixto con el flag apagado', async () => {
+    vi.stubEnv('VITE_POS_MIXED_PAYMENTS_ENABLED', 'false');
+    render(<PosPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('button', { name: 'Cobrar $125.00 MXN' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Pago mixto/ })).not.toBeInTheDocument();
+    vi.unstubAllEnvs();
+  });
+
+  it('registra pagos parciales con efectivo y terminal hasta liquidar', async () => {
+    vi.stubEnv('VITE_POS_MIXED_PAYMENTS_ENABLED', 'true');
+    apiMock.payOrderMixed
+      .mockResolvedValueOnce({ pago: { metodo_pago: 'efectivo', monto: '50.00' }, restante: '75.00', liquidada: false, pedido: baseOrder })
+      .mockResolvedValueOnce({ pago: { metodo_pago: 'terminal', monto: '75.00' }, restante: '0.00', liquidada: true, pedido: baseOrder });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Pago mixto · $125.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    await user.clear(within(dialog).getByLabelText('Monto de este pago (MXN)'));
+    await user.type(within(dialog).getByLabelText('Monto de este pago (MXN)'), '50');
+    await user.type(within(dialog).getByLabelText('Efectivo recibido (MXN)'), '50');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar pago' }));
+    await waitFor(() => expect(apiMock.payOrderMixed).toHaveBeenCalledWith('token', baseOrder.id, { metodoPago: 'efectivo', monto: '50.00', montoRecibido: '50.00' }, '125.00'));
+    expect(await screen.findByText(/Restan/)).toHaveTextContent('$75.00 MXN');
+    expect(within(dialog).getByText('Saldo restante').parentElement).toHaveTextContent('$75.00 MXN');
+    await user.click(within(dialog).getByRole('radio', { name: 'Terminal' }));
+    await user.clear(within(dialog).getByLabelText('Monto de este pago (MXN)'));
+    await user.type(within(dialog).getByLabelText('Monto de este pago (MXN)'), '75');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar pago' }));
+    await waitFor(() => expect(apiMock.payOrderMixed).toHaveBeenLastCalledWith('token', baseOrder.id, { metodoPago: 'terminal', monto: '75.00' }, '75.00'));
+    expect(await screen.findByText('Pago registrado. Pedido liquidado.')).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    vi.unstubAllEnvs();
+  });
+
+  it('usa AccountAbonoForm y el endpoint de abonos para mesas con el flag activo', async () => {
+    vi.stubEnv('VITE_POS_MIXED_PAYMENTS_ENABLED', 'true');
+    apiMock.listOrders.mockResolvedValue({ orders: [{
+      ...baseOrder, destino: 'en_espacio', espacio: { id: 67, nombre: 'Mesa 67', tipo: 'mesa' },
+    }], cursor: null });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Abonar cuenta · $125.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/Falta por cobrar/)).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Confirmar pago' })).toBeVisible();
+    expect(within(dialog).getByRole('group', { name: 'Personas que faltan por pagar' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Una persona más' })).toBeVisible();
+    await user.click(within(dialog).getByRole('radio', { name: 'Terminal' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pago' }));
+    await waitFor(() => expect(apiMock.abonarSpaceAccount).toHaveBeenCalledWith('token', 67, expect.objectContaining({ metodo: 'terminal', modo: 'partes', partes: 2 })));
+    expect(apiMock.payOrderMixed).not.toHaveBeenCalled();
+  });
+
+  it.each([409, 422])('muestra errores %s del endpoint sin cobrar por la ruta anterior', async (status) => {
+    vi.stubEnv('VITE_POS_MIXED_PAYMENTS_ENABLED', 'true');
+    apiMock.payOrderMixed.mockRejectedValueOnce(new Error(`HTTP ${status}: saldo no disponible`));
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Pago mixto · $125.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Efectivo recibido (MXN)'), '125');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar pago' }));
+    expect(await screen.findByText(`HTTP ${status}: saldo no disponible`)).toBeVisible();
+    expect(apiMock.collectCash).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it('oculta la función mixta en esta sesión si el back devuelve 404', async () => {
+    vi.stubEnv('VITE_POS_MIXED_PAYMENTS_ENABLED', 'true');
+    const { VaiinillaApiError } = await import('../lib/api-error');
+    apiMock.payOrderMixed.mockRejectedValueOnce(new VaiinillaApiError(404, { code: 'NOT_FOUND', message: 'No disponible' }));
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Pago mixto · $125.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Efectivo recibido (MXN)'), '125');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar pago' }));
+    expect(await within(dialog).findByText(/todavía no tiene disponible/)).toBeVisible();
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
+    expect(await screen.findByRole('button', { name: 'Cobrar $125.00 MXN' })).toBeVisible();
+    vi.unstubAllEnvs();
   });
 
   it('exige QR después de cobrar solamente cuando la configuración lo requiere', async () => {
