@@ -3,6 +3,7 @@ import {
   BadgePercent,
   Building2,
   ChefHat,
+  PackageCheck,
   ClipboardList,
   ConciergeBell,
   LayoutDashboard,
@@ -26,6 +27,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'rea
 import { NavLink, useHistory, useLocation } from 'react-router-dom';
 import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
+import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { Logo } from './brand-mark';
@@ -53,7 +55,11 @@ const adminNavigation: NavItem[] = [
 ];
 
 const posNavigation: NavItem[] = [{ to: '/app/pos', label: 'Caja', icon: WalletCards }];
-const kitchenNavigation: NavItem[] = [{ to: '/app/cocina', label: 'Cocina', icon: ChefHat }];
+const kitchenNavigation: NavItem[] = [
+  { to: '/app/cocina', label: 'Cocina', icon: ChefHat },
+  // Cocina ve el inventario; editarlo depende de `cocina_edita_inventario` (lo resuelve la página).
+  ...(INVENTARIO_ENABLED ? [{ to: '/app/inventario', label: 'Inventario', icon: PackageCheck } satisfies NavItem] : []),
+];
 const waiterNavigation: NavItem[] = [{ to: '/app/pos', label: 'Mesas', icon: ConciergeBell }];
 
 const platformNavigation: NavItem[] = [

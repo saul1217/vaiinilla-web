@@ -874,4 +874,21 @@ describe('Vaiinilla API client', () => {
     const booking = await api.createStaffBooking('tenant-token', { espacio_id: 3, inicio: '2026-11-10T00:00:00.000Z', duracion_min: 60 }, 'llave-reserva');
     await api.markBookingCashLater('tenant-token', booking.id, 'llave-pago');
   });
+
+  it('trae los insumos con los permisos de la migración 205 desde GET /inventario/insumos', async () => {
+    server.use(
+      http.get(`${baseUrl}/inventario/insumos`, () => HttpResponse.json({ data: { insumos: [{ id: 7, nombre: 'Harina', unidad: 'kg', existencia: 3 }], permisos: { puede_editar: false, cocina_edita: false } }, meta: {}, error: null })),
+    );
+    await expect(api.inventoryOverview('tenant-token')).resolves.toEqual({ insumos: [{ id: 7, nombre: 'Harina', unidad: 'kg', existencia: 3 }], permisos: { puede_editar: false, cocina_edita: false } });
+  });
+
+  it('cambia el permiso de Cocina sobre el inventario con PATCH /inventario/permisos', async () => {
+    server.use(
+      http.patch(`${baseUrl}/inventario/permisos`, async ({ request }) => {
+        await expect(request.json()).resolves.toEqual({ cocina_edita: true });
+        return HttpResponse.json({ data: { cocina_edita: true }, meta: {}, error: null });
+      }),
+    );
+    await expect(api.setInventoryKitchenPermission('tenant-token', true)).resolves.toEqual({ cocina_edita: true });
+  });
 });
