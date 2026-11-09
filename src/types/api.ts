@@ -526,6 +526,61 @@ export interface StoreAssistantReply {
   quedan_mensajes?: number;
 }
 
+export type InventoryUnit = 'pieza' | 'ml' | 'l' | 'g' | 'kg' | 'oz' | 'botella' | 'porcion';
+
+/** Un insumo del inventario (GET /inventario/insumos); solo lo que usa la web. */
+export interface InventorySupply {
+  id: number;
+  nombre: string;
+  unidad: InventoryUnit;
+  activo?: boolean;
+}
+
+export interface InventorySupplyInput {
+  nombre: string;
+  unidad: InventoryUnit;
+  minimo: number;
+  costo_unitario?: number;
+  existencia_inicial?: number;
+}
+
+export interface InventoryMovementInput {
+  /** UUID; el mismo en un reintento para que el servidor no lo registre dos veces. */
+  id: string;
+  insumo_id: number;
+  tipo: 'entrada' | 'merma' | 'conteo';
+  cantidad: number;
+  costo_unitario?: number;
+  nota?: string;
+}
+
+export interface InventoryProduct {
+  id: number;
+  nombre: string;
+}
+
+/** Una línea de la receta de un producto (GET /inventario/productos/{id}/receta). */
+export interface RecipeLine {
+  insumo_id: number;
+  cantidad: number;
+  opcion_id: number | null;
+}
+
+export interface RecipeLineInput {
+  insumo_id: number;
+  cantidad: number;
+  opcion_id: number | null;
+}
+
+/** POST /reservas desde administración: una renta apartada a nombre de alguien. */
+export interface StaffBookingInput {
+  espacio_id: number;
+  inicio: string;
+  duracion_min: number;
+  nombre_cliente?: string;
+  jugadores?: number;
+}
+
 /** Una cuenta abierta (pagar al final) que nadie ha cobrado. */
 export interface UnpaidAccount {
   espacio: { id: number; nombre: string; tipo: SpaceType };
