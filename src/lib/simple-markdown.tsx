@@ -136,8 +136,9 @@ export function SimpleMarkdown({ source }: { source: string }) {
     <>
       {blocks.map((b, i) => {
         if (b.type === 'heading') {
-          const Tag = (('h' + b.level) as unknown) as keyof JSX.IntrinsicElements;
-          return <Tag key={i}>{b.text}</Tag>;
+          if (b.level === 1) return <h1 key={i}>{b.text}</h1>;
+          if (b.level === 2) return <h2 key={i}>{b.text}</h2>;
+          return <h3 key={i}>{b.text}</h3>;
         }
         if (b.type === 'paragraph') {
           return <p key={i}>{renderInline(b.text)}</p>;

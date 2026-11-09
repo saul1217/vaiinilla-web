@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Feedback, PageHeader } from '../components/ui';
-import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
@@ -12,33 +11,11 @@ type TabKey = 'guia' | 'dispositivos';
 
 export function VilloPage() {
   const { platform } = useSessions();
-  const { user } = useAuth();
-  const [token, setToken] = useState<string | null>(platform?.token ?? null);
-
-  // Preferimos el token de plataforma; si no existe, intentamos con el ID token de Firebase.
-  useEffect(() => {
-    let cancelled = false;
-    if (platform?.token) {
-      setToken(platform.token);
-      return;
-    }
-    if (!user) {
-      setToken(null);
-      return;
-    }
-    void user.getIdToken().then((idToken) => {
-      if (!cancelled) setToken(idToken);
-    }).catch(() => {
-      if (!cancelled) setToken(null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [platform?.token, user]);
+  // Igual que el resto del panel de plataforma: usar el token del contexto de sesión.
+  const token = platform?.token ?? null;
 
   const access = useQuery({
     queryKey: ['villo-owner-access', Boolean(token)],
-    enabled: token !== undefined, // esperamos a conocer si hay usuario
     queryFn: async () => {
       await api.villoOwnerAccess(token);
       return true as const;
