@@ -13,6 +13,7 @@ import {
   draftStorageKey,
   pendingOf,
   type DurableStore,
+  type OfflineStaffOrder,
   type OfflineStaffScope,
 } from '../lib/offline-staff-orders';
 
@@ -358,13 +359,13 @@ function offlineApi(store: DurableStore = browserDurableStore(window.localStorag
   };
 }
 
-function renderOffline(offline: OfflineStaffOrdersApi, extra: { onQueued?: ReturnType<typeof vi.fn>; rol?: string } = {}) {
+function renderOffline(offline: OfflineStaffOrdersApi, extra: { onQueued?: (pedido: OfflineStaffOrder) => void; rol?: string } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
   const onCreated = vi.fn();
-  const onQueued = extra.onQueued ?? vi.fn();
+  const onQueued = vi.fn(extra.onQueued ?? (() => undefined));
   const view = render(
     <StaffOrderForm token="token" rol={extra.rol ?? 'cajero'} onCreated={onCreated} queryScope="api.test|est-1|user-1" offline={offline} cashSessionId="11111111-1111-4111-8111-111111111111" onQueued={onQueued} />,
     { wrapper },
