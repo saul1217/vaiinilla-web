@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { Feedback, PageHeader } from '../components/ui';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
+import { SimpleMarkdown } from '../lib/simple-markdown';
 import { NotFoundPage } from './not-found-page';
 
 type TabKey = 'guia' | 'dispositivos';
@@ -119,9 +118,7 @@ function VilloOwnerArea({ authToken }: { authToken: string | null }) {
             <div className="analytics-loading" role="status">Cargando guía…</div>
           ) : guide.data ? (
             <>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {guide.data.markdown}
-              </ReactMarkdown>
+              <SimpleMarkdown source={guide.data.markdown} />
               {updatedAt && (
                 <p className="mt-6 text-xs text-muted">
                   Última actualización:{' '}
