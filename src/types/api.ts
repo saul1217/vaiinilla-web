@@ -232,7 +232,8 @@ export interface StaffOrderInput {
   pago_diferido?: boolean;
   cobrar_ahora?: true;
   monto_recibido?: string;
-  sin_conexion?: { id: string; sesion_caja_id: string; capturado_en: string; folio_local: string };
+  /** Pedido tomado sin internet (migración 161). `sesion_caja_id` solo cuando Caja ya cobró. */
+  sin_conexion?: { id: string; sesion_caja_id?: string; capturado_en: string; folio_local: string };
 }
 
 export interface OperationalSettings {

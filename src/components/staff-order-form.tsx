@@ -4,6 +4,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
+import type { OfflineStaffOrdersApi } from '../hooks/use-offline-staff-orders';
+import { DurableStorageError, STORAGE_UNAVAILABLE_MESSAGE, shouldKeepOffline, type OfflineStaffOrder } from '../lib/offline-staff-orders';
+import { clearStaffOrderDraft, loadStaffOrderDraft, saveStaffOrderDraft, type SavedStaffOrderDraft } from '../lib/staff-order-draft';
 import { formatMoney } from '../lib/money';
 import {
   alternarOpcion,
@@ -38,11 +41,38 @@ interface StaffOrderFormProps {
   rol: string;
   onCreated: (pedido: StaffOrderResult) => void;
   initialSpaceId?: number;
+  /** Negocio, usuario y entorno: las consultas de otra sesión no se mezclan con las de esta. */
+  queryScope?: string;
+  /** Cola sin conexión de la sesión (solo con SIN_INTERNET_ENABLED). Sin ella, el formulario funciona como siempre. */
+  offline?: OfflineStaffOrdersApi;
+  /** Caja abierta al tomar el pedido: un cobro sin internet solo entra a esa caja. */
+  cashSessionId?: string | null;
+  onQueued?: (pedido: OfflineStaffOrder) => void;
+}
+
+const INICIAL_DE_ROL: Record<string, string> = { mesero: 'M', cajero: 'C', admin: 'A' };
+
+function resumenDeLineas(draft: StaffOrderDraft): string {
+  return draft.lineas.map((linea) => `${linea.cantidad}× ${linea.producto.nombre}`).join(', ');
+}
+
+function mensajeDeAlmacenamiento(error: unknown): string {
+  return error instanceof DurableStorageError ? error.message : STORAGE_UNAVAILABLE_MESSAGE;
+}
+
+/** Lee el borrador guardado de esta sesión; si el almacenamiento falla, lo dice en vez de seguir callado. */
+function borradorGuardado(offline: OfflineStaffOrdersApi | undefined): { guardado: SavedStaffOrderDraft | null; error: string | null } {
+  if (!offline?.enabled || !offline.scope) return { guardado: null, error: null };
+  try {
+    return { guardado: loadStaffOrderDraft(offline.store, offline.scope), error: null };
+  } catch (error) {
+    return { guardado: null, error: mensajeDeAlmacenamiento(error) };
+  }
 }
 
 export function StaffOrderForm(props: StaffOrderFormProps) {
   const configuracion = useQuery({
-    queryKey: ['operational-settings', 'staff-order', props.token],
+    queryKey: ['operational-settings', 'staff-order', props.queryScope ?? ''],
     queryFn: () => api.operationalSettings(props.token),
   });
   return (
@@ -60,6 +90,10 @@ function StaffOrderFormBody({
   rol,
   onCreated,
   initialSpaceId,
+  queryScope = '',
+  offline,
+  cashSessionId,
+  onQueued,
   configuracion,
   errorConfiguracion,
   reintentarConfiguracion,
@@ -70,12 +104,52 @@ function StaffOrderFormBody({
 }) {
   const [search, setSearch] = useState('');
   const puedeCobrarAhora = rol === 'cajero';
+  // Con la operación sin internet activa, el borrador y la llave del intento sobreviven a una
+  // recarga: al reenviar el mismo pedido sale la misma Idempotency-Key.
+  const [inicial] = useState(() => borradorGuardado(offline));
   const [draft, setDraft] = useState<StaffOrderDraft>(() =>
-    borradorInicialStaff({ espacioId: initialSpaceId }),
+    inicial.guardado?.draft ?? borradorInicialStaff({ espacioId: initialSpaceId }),
   );
   const [errores, setErrores] = useState<string[]>([]);
-  const [llave, setLlave] = useState<LlaveDeEnvio | null>(null);
-  const pagoAlFinalTocado = useRef(false);
+  const [llave, setLlave] = useState<LlaveDeEnvio | null>(inicial.guardado?.llave ?? null);
+  const [recuperado, setRecuperado] = useState(Boolean(inicial.guardado && inicial.guardado.draft.lineas.length > 0));
+  const [errorAlmacenamiento, setErrorAlmacenamiento] = useState<string | null>(inicial.error);
+  const [errorCola, setErrorCola] = useState<string | null>(null);
+  const pagoAlFinalTocado = useRef(inicial.guardado?.pagoAlFinalTocado ?? false);
+  const guardarBorrador = offline?.enabled && offline.scope ? { store: offline.store, scope: offline.scope } : null;
+
+  function persistir(siguienteLlave: LlaveDeEnvio | null, siguienteDraft: StaffOrderDraft = draft): boolean {
+    if (!guardarBorrador) return true;
+    try {
+      saveStaffOrderDraft(guardarBorrador.store, guardarBorrador.scope, {
+        draft: siguienteDraft,
+        llave: siguienteLlave,
+        pagoAlFinalTocado: pagoAlFinalTocado.current,
+      });
+      setErrorAlmacenamiento(null);
+      return true;
+    } catch (error) {
+      setErrorAlmacenamiento(mensajeDeAlmacenamiento(error));
+      return false;
+    }
+  }
+
+  function olvidarBorrador() {
+    if (!guardarBorrador) return;
+    try {
+      clearStaffOrderDraft(guardarBorrador.store, guardarBorrador.scope);
+    } catch (error) {
+      setErrorAlmacenamiento(mensajeDeAlmacenamiento(error));
+    }
+  }
+
+  // Cada cambio que hace el personal se guarda junto con la llave vigente, si la hay.
+  function cambiarBorrador(update: (previo: StaffOrderDraft) => StaffOrderDraft) {
+    const siguiente = update(draft);
+    if (siguiente === draft) return;
+    setDraft(siguiente);
+    persistir(llave, siguiente);
+  }
 
   useEffect(() => {
     if (!configuracion || pagoAlFinalTocado.current) return;
@@ -87,26 +161,56 @@ function StaffOrderFormBody({
   }, [configuracion]);
 
   const catalogo = useQuery({
-    queryKey: ['staff-order', 'catalog'],
+    queryKey: ['staff-order', 'catalog', queryScope],
     queryFn: () => api.catalog(token),
   });
   const disponibilidad = useQuery({
-    queryKey: ['staff-order', 'spaces'],
+    queryKey: ['staff-order', 'spaces', queryScope],
     queryFn: () => api.spaceAvailability(token),
   });
 
   const crear = useMutation({
     mutationFn: ({ body, key }: { body: StaffOrderInput; key: string }) =>
       api.createStaffOrder(token, body, key),
-    onSuccess: (pedido) => onCreated(pedido),
+    onSuccess: (pedido) => {
+      olvidarBorrador();
+      onCreated(pedido);
+    },
+    onError: (error, { body, key }) => {
+      // Sin red o servidor caído: el pedido se guarda con la misma llave y se manda al volver.
+      if (offline?.enabled && shouldKeepOffline(error)) guardarSinConexion(body, key);
+    },
   });
 
+  function guardarSinConexion(body: StaffOrderInput, key: string) {
+    if (!offline?.enabled) return;
+    if (body.metodo_pago !== 'efectivo') return;
+    try {
+      const nombreEspacio = espacios.find((fila) => fila.espacio.id === body.espacio_id)?.espacio.nombre;
+      const pedido = offline.enqueue({
+        input: body,
+        idempotencyKey: key,
+        roleInitial: INICIAL_DE_ROL[rol] ?? 'P',
+        placeLabel: body.destino === 'en_espacio' ? nombreEspacio ?? 'Mesa' : 'Para llevar',
+        summary: resumenDeLineas(draft),
+        cashSessionId,
+      });
+      setErrorCola(null);
+      olvidarBorrador();
+      crear.reset();
+      onQueued?.(pedido);
+    } catch (error) {
+      // No se guardó: no se da por tomado. El borrador sigue en pantalla.
+      setErrorCola(mensajeDeAlmacenamiento(error));
+    }
+  }
+
   function actualizar(cambios: Partial<StaffOrderDraft>) {
-    setDraft((previo) => ({ ...previo, ...cambios }));
+    cambiarBorrador((previo) => ({ ...previo, ...cambios }));
   }
 
   function cambiarLinea(productoId: number, cambios: Partial<StaffOrderLine>) {
-    setDraft((previo) => ({
+    cambiarBorrador((previo) => ({
       ...previo,
       lineas: previo.lineas.map((linea) =>
         linea.producto.id === productoId ? { ...linea, ...cambios } : linea,
@@ -115,7 +219,7 @@ function StaffOrderFormBody({
   }
 
   function agregar(producto: CatalogProduct) {
-    setDraft((previo) => {
+    cambiarBorrador((previo) => {
       if (previo.lineas.some((linea) => linea.producto.id === producto.id)) return previo;
       const linea: StaffOrderLine = { producto, cantidad: 1, opcionIds: opcionesIniciales(producto) };
       return { ...previo, lineas: [...previo.lineas, linea] };
@@ -123,7 +227,7 @@ function StaffOrderFormBody({
   }
 
   function quitar(productoId: number) {
-    setDraft((previo) => ({
+    cambiarBorrador((previo) => ({
       ...previo,
       lineas: previo.lineas.filter((linea) => linea.producto.id !== productoId),
     }));
@@ -139,7 +243,23 @@ function StaffOrderFormBody({
     // La llave se reutiliza si el pedido no cambió; si cambió, una nueva (reusarla daría 409).
     const siguiente = llaveParaEnvio(llave, JSON.stringify(body), createIdempotencyKey);
     setLlave(siguiente);
+    // La llave queda guardada antes de mandar: si la página se recarga a media petición, el
+    // reenvío usa la misma. Si no se pudo guardar, se avisa y se manda igual con red.
+    persistir(siguiente);
+    setErrorCola(null);
+    if (offline?.enabled && typeof navigator !== 'undefined' && navigator.onLine === false) {
+      guardarSinConexion(body, siguiente.llave);
+      return;
+    }
     crear.mutate({ body, key: siguiente.llave });
+  }
+
+  function descartarBorrador() {
+    olvidarBorrador();
+    pagoAlFinalTocado.current = false;
+    setLlave(null);
+    setRecuperado(false);
+    setDraft(borradorInicialStaff({ espacioId: initialSpaceId, permitePagoAlFinal: configuracion?.permite_pago_al_final }));
   }
 
   const espacios = disponibilidad.data ? espaciosParaPedido(disponibilidad.data) : [];
@@ -159,7 +279,24 @@ function StaffOrderFormBody({
           </ul>
         </Feedback>
       )}
-      {crear.isError && <Feedback tone="error">{errorMessage(crear.error)}</Feedback>}
+      {recuperado && (
+        <Feedback tone="info">
+          Recuperamos el pedido que estabas tomando. Si lo vuelves a enviar sin cambios, no se duplica.
+          <Button type="button" variant="ghost" onClick={descartarBorrador}>Empezar de nuevo</Button>
+        </Feedback>
+      )}
+      {errorAlmacenamiento && <Feedback tone="error">{errorAlmacenamiento}</Feedback>}
+      {errorCola && (
+        <Feedback tone="error">
+          No se guardó el pedido sin conexión. {errorCola}
+        </Feedback>
+      )}
+      {crear.isError && !errorCola && (
+        <Feedback tone="error">
+          {errorMessage(crear.error)}
+          <Button type="submit" variant="ghost">Reintentar</Button>
+        </Feedback>
+      )}
       {errorConfiguracion && (
         <Feedback tone="error">
           No se pudo cargar la configuración operativa. Revisa tu conexión e inténtalo de nuevo.
@@ -201,7 +338,12 @@ function StaffOrderFormBody({
         </div>
         {draft.destino === 'en_espacio' && (
           <div className="staff-order__espacios" role="group" aria-label="Mesa o espacio">
-            {disponibilidad.isError && <Feedback tone="error">No se pudieron cargar las mesas.</Feedback>}
+            {disponibilidad.isError && (
+              <Feedback tone="error">
+                No se pudieron cargar las mesas.
+                <Button type="button" variant="ghost" onClick={() => void disponibilidad.refetch()}>Reintentar</Button>
+              </Feedback>
+            )}
             {espacios.map((fila) => (
               <button
                 key={fila.espacio.id}
@@ -225,7 +367,12 @@ function StaffOrderFormBody({
         {productos.length > 0 && !productos.some((producto) => producto.nombre.toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es'))) && (
           <div role="status"><p>Sin coincidencias.</p><Button type="button" variant="ghost" onClick={() => setSearch('')}>Limpiar búsqueda</Button></div>
         )}
-        {catalogo.isError && <Feedback tone="error">{errorMessage(catalogo.error)}</Feedback>}
+        {catalogo.isError && (
+          <Feedback tone="error">
+            {errorMessage(catalogo.error)}
+            <Button type="button" variant="ghost" onClick={() => void catalogo.refetch()}>Reintentar</Button>
+          </Feedback>
+        )}
         {categorias.map((categoria) => {
           const delaCategoria = productos.filter((producto) => producto.categoria_id === categoria.id && producto.nombre.toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es')));
           if (delaCategoria.length === 0) return null;

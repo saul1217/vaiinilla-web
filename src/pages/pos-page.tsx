@@ -29,7 +29,11 @@ import { WaiterBoard } from '../components/waiter-board';
 import { useStaffTheme } from '../lib/staff-ui';
 import { useSessions } from '../context/session-context';
 import { isHeartbeatRole, useOperationalHeartbeat } from '../hooks/use-operational-heartbeat';
-import { api } from '../lib/api';
+import { api, apiUrl } from '../lib/api';
+import { SIN_INTERNET_ENABLED } from '../lib/features';
+import { environmentOf, type FlushEvent, type OfflineStaffOrder, type OfflineStaffScope } from '../lib/offline-staff-orders';
+import { useOfflineStaffOrders } from '../hooks/use-offline-staff-orders';
+import { OfflineStaffOrdersPanel } from '../components/offline-staff-orders-panel';
 import { errorMessage } from '../lib/api-error';
 import { MONEY_PATTERN, calculateChange, formatMoney, normalizeMoneyInput } from '../lib/money';
 import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeferredDeliveryOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
@@ -42,6 +46,24 @@ const moneySchema = z.object({
 });
 
 type MoneyForm = z.infer<typeof moneySchema>;
+
+/** Lo que se avisa al mandar un pedido que se tomó sin internet. */
+function avisoDeSincronizacion(event: FlushEvent): ReactNode {
+  switch (event.type) {
+    case 'sent':
+      return <>Pedido sin conexión <strong>{event.order.localFolio}</strong> registrado como <strong>{event.folio}</strong>.</>;
+    case 'already-registered':
+      return <>El pedido <strong>{event.order.localFolio}</strong> ya estaba registrado: no se duplicó.</>;
+    case 'cash-not-registered':
+      return <>El pedido <strong>{event.order.localFolio}</strong> quedó como <strong>{event.folio}</strong>, pero el efectivo no entró a la caja. Cóbralo en la lista de Caja.</>;
+    case 'problem':
+      return <>El pedido <strong>{event.order.localFolio}</strong> no se pudo registrar. Revísalo en «Pedidos sin conexión».</>;
+  }
+}
+
+function avisoDeCola(pedido: OfflineStaffOrder): ReactNode {
+  return <>Sin conexión: guardamos el pedido <strong>{pedido.localFolio}</strong>. Se manda solo cuando vuelva la red.</>;
+}
 
 /** Lo que ve quien registró el pedido: el folio y, si Caja cobró, el cambio o el motivo de no cobrar. */
 function avisoDeAlta(pedido: StaffOrderResult): ReactNode {
@@ -91,6 +113,22 @@ export function PosPage() {
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const [staffOrderSpaceId, setStaffOrderSpaceId] = useState<number | undefined>();
   const canCreateStaffOrder = role === 'mesero' || role === 'cajero' || role === 'admin';
+  // Cola y borrador de esta sesión: negocio, usuario y backend. Otra sesión no ve los suyos.
+  const usuarioId = tenant?.context.usuario_id ?? '';
+  const offlineScope = useMemo<OfflineStaffScope | null>(
+    () => (scopeId && usuarioId ? { env: environmentOf(apiUrl ?? ''), establecimientoId: scopeId, usuarioId } : null),
+    [scopeId, usuarioId],
+  );
+  const queryScope = offlineScope ? `${offlineScope.env}|${offlineScope.establecimientoId}|${offlineScope.usuarioId}` : '';
+  const offline = useOfflineStaffOrders({
+    enabled: SIN_INTERNET_ENABLED && canCreateStaffOrder,
+    token,
+    scope: offlineScope,
+    onEvent: (event) => {
+      setNotice(avisoDeSincronizacion(event));
+      if (event.type === 'sent' || event.type === 'cash-not-registered' || event.type === 'already-registered') void refreshOperation();
+    },
+  });
 
   const openStaffOrder = useCallback((spaceId?: number) => {
     setStaffOrderSpaceId(spaceId);
@@ -276,6 +314,8 @@ export function PosPage() {
           {roleLabel(role)} perdió su conexión operativa. Revisa internet; intentaremos reconectar automáticamente.
         </Feedback>
       )}
+
+      <OfflineStaffOrdersPanel offline={offline} />
 
       {role === 'mesero' && (
         <WaiterBoard
@@ -464,6 +504,13 @@ export function PosPage() {
             token={token}
             rol={role ?? ''}
             initialSpaceId={staffOrderSpaceId}
+            queryScope={queryScope}
+            offline={offline.enabled ? offline : undefined}
+            cashSessionId={session.data?.id ?? null}
+            onQueued={(pedido) => {
+              setNewOrderOpen(false);
+              setNotice(avisoDeCola(pedido));
+            }}
             onCreated={async (pedido) => {
               setNewOrderOpen(false);
               setNotice(avisoDeAlta(pedido));
