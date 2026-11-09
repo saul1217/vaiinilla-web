@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:ci": "vitest run --reporter=default --coverage=false",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:ui": "playwright test --project=ui-regresion",
