@@ -15,7 +15,7 @@ const apiMock = vi.hoisted(() => ({
 
 const sesion = vi.hoisted(() => ({ rol: 'cajero' }));
 
-vi.mock('../lib/api', () => ({ api: apiMock }));
+vi.mock('../lib/api', () => ({ api: apiMock, apiUrl: 'http://127.0.0.1:3000' }));
 vi.mock('../context/session-context', () => ({
   useSessions: () => ({
     tenant: {
