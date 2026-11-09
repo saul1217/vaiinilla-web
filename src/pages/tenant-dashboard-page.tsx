@@ -25,6 +25,7 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
+import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
 import { IA_CONFIG_ENABLED } from '../lib/features';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
@@ -358,6 +359,7 @@ export function TenantDashboardPage() {
             </Link>
           </li>
           {CORTES_REPORTE_ENABLED && <li><Link to="/app/cortes"><ReceiptText aria-hidden="true" /><span>Cortes y reporte</span><ChevronRight aria-hidden="true" /></Link></li>}
+          {SIN_INTERNET_ENABLED && <li><Link to="/app/sin-internet"><ShieldCheck aria-hidden="true" /><span>Operación sin internet</span><ChevronRight aria-hidden="true" /></Link></li>}
         </ul>
       </nav>
     </div>

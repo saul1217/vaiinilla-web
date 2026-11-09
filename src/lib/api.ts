@@ -1098,6 +1098,10 @@ export const api = {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
   },
 
+  async setOfflinePause(token: string, enabled: boolean): Promise<BusinessSettings> {
+    return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: { pausa_sin_conexion: enabled } })).data;
+  },
+
   /**
    * Los Excel van en `archivos` en cada mensaje (hasta 3, 2 MB cada uno); sin Excel no se manda la clave.
    * `signal` corta la llamada si el usuario cambia de sesión o de negocio antes de que conteste.

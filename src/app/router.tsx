@@ -7,6 +7,7 @@ import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
+import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
 import { IA_CONFIG_ENABLED } from '../lib/features';
 import { useCortesScope, useCortesSessionIsolation } from '../hooks/use-cortes-session-isolation';
 
@@ -14,6 +15,7 @@ const AuthPage = lazy(() => import('../pages/auth-page').then((module) => ({ def
 const AccessSelectionPage = lazy(() => import('../pages/access-selection-page').then((module) => ({ default: module.AccessSelectionPage })));
 const TenantDashboardPage = lazy(() => import('../pages/tenant-dashboard-page').then((module) => ({ default: module.TenantDashboardPage })));
 const CortesReportePage = lazy(() => import('../pages/cortes-reporte-page').then((module) => ({ default: module.CortesReportePage })));
+const SinInternetPage = lazy(() => import('../pages/sin-internet-page').then((module) => ({ default: module.SinInternetPage })));
 const AssistantConfigPage = lazy(() => import('../pages/assistant-config-page').then((module) => ({ default: module.AssistantConfigPage })));
 const InventarioPage = lazy(() => import('../pages/inventario-page').then((module) => ({ default: module.InventarioPage })));
 const InvitationsPage = lazy(() => import('../pages/invitations-page').then((module) => ({ default: module.InvitationsPage })));
@@ -75,6 +77,7 @@ function TenantArea() {
               <MenuPage />
             </RoleGuard>
           </Route>
+          {SIN_INTERNET_ENABLED && <Route path="/app/sin-internet"><RoleGuard allowed={['admin']}><SinInternetPage /></RoleGuard></Route>}
           {IA_CONFIG_ENABLED && <Route path="/app/asistente-configuracion"><RoleGuard allowed={['admin']}><AssistantConfigPage /></RoleGuard></Route>}
           {INVENTARIO_ENABLED && <Route path="/app/inventario"><RoleGuard allowed={['admin', 'cocina']}><InventarioPage /></RoleGuard></Route>}
           {CASHBACK_ENABLED && CashbackPage ? (

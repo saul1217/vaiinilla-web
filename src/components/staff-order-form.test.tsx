@@ -5,6 +5,17 @@ import { type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogResponse, OrderDetail, SpaceAvailability, StaffOrderInput } from '../types/api';
 import { StaffOrderForm } from './staff-order-form';
+import type { OfflineStaffOrdersApi } from '../hooks/use-offline-staff-orders';
+import { VaiinillaApiError } from '../lib/api-error';
+import {
+  OfflineStaffQueue,
+  browserDurableStore,
+  draftStorageKey,
+  pendingOf,
+  type DurableStore,
+  type OfflineStaffOrder,
+  type OfflineStaffScope,
+} from '../lib/offline-staff-orders';
 
 const apiMock = vi.hoisted(() => ({
   catalog: vi.fn(),
@@ -327,3 +338,139 @@ describe('StaffOrderForm', () => {
     expect(llamadas()[2]?.[2]).not.toBe(primera);
   });
 });
+
+const SCOPE: OfflineStaffScope = { env: 'api.test', establecimientoId: 'est-1', usuarioId: 'user-1' };
+
+function offlineApi(store: DurableStore = browserDurableStore(window.localStorage)): OfflineStaffOrdersApi & { queue: OfflineStaffQueue } {
+  const queue = new OfflineStaffQueue(store, SCOPE);
+  return {
+    queue,
+    enabled: true,
+    scope: SCOPE,
+    store,
+    pending: [],
+    problems: [],
+    sending: false,
+    storageError: null,
+    enqueue: (entry) => queue.enqueue(entry),
+    retry: vi.fn(),
+    resolve: vi.fn(),
+    flushNow: vi.fn(),
+  };
+}
+
+function renderOffline(offline: OfflineStaffOrdersApi, extra: { onQueued?: (pedido: OfflineStaffOrder) => void; rol?: string } = {}) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+  const onCreated = vi.fn();
+  const onQueued = vi.fn(extra.onQueued ?? (() => undefined));
+  const view = render(
+    <StaffOrderForm token="token" rol={extra.rol ?? 'cajero'} onCreated={onCreated} queryScope="api.test|est-1|user-1" offline={offline} cashSessionId="11111111-1111-4111-8111-111111111111" onQueued={onQueued} />,
+    { wrapper },
+  );
+  return { ...view, onCreated, onQueued };
+}
+
+const sinRed = () => new VaiinillaApiError(502, { code: 'HTTP_ERROR', message: 'El servidor no devolvió una respuesta válida.' });
+
+describe('StaffOrderForm sin internet', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    apiMock.catalog.mockResolvedValue(CATALOGO);
+    apiMock.spaceAvailability.mockResolvedValue(ESPACIOS);
+    apiMock.operationalSettings.mockResolvedValue({ permite_pago_al_final: false, entrega_requiere_qr: true });
+  });
+
+  it('recarga a media petición: recupera el borrador y reenvía con la misma llave', async () => {
+    const user = userEvent.setup();
+    apiMock.createStaffOrder.mockReturnValueOnce(new Promise(() => undefined)).mockResolvedValue(PEDIDO_CREADO);
+    const first = renderOffline(offlineApi());
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    await user.type(screen.getByLabelText(/Nombre del cliente/), 'Ana');
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
+    const llaveOriginal = llamadas()[0]?.[2];
+    expect(window.localStorage.getItem(draftStorageKey(SCOPE))).toContain(llaveOriginal);
+    expect(window.localStorage.getItem(draftStorageKey(SCOPE))).not.toContain('token');
+
+    // La página se recarga: el componente se desmonta y vuelve a montarse con lo guardado.
+    first.unmount();
+    const second = renderOffline(offlineApi());
+    expect(await screen.findByText(/Recuperamos el pedido que estabas tomando/)).toBeVisible();
+    expect(screen.getByLabelText(/Nombre del cliente/)).toHaveValue('Ana');
+    await screen.findByRole('group', { name: 'Cantidad de Taco al pastor' });
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(2));
+    expect(llamadas()[1]?.[2]).toBe(llaveOriginal);
+    await waitFor(() => expect(second.onCreated).toHaveBeenCalled());
+    expect(window.localStorage.getItem(draftStorageKey(SCOPE))).toBeNull();
+  });
+
+  it('sin red: guarda el cobro en efectivo en la cola con la llave del intento y la caja abierta', async () => {
+    const user = userEvent.setup();
+    apiMock.createStaffOrder.mockRejectedValue(sinRed());
+    const offline = offlineApi();
+    const { onQueued, onCreated } = renderOffline(offline);
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    await user.click(screen.getByLabelText('Cobrar ahora en efectivo'));
+    await user.click(screen.getByRole('button', { name: 'Enviar y cobrar' }));
+    await waitFor(() => expect(onQueued).toHaveBeenCalledTimes(1));
+    const [order] = pendingOf(offline.queue.snapshot());
+    expect(order?.idempotencyKey).toBe(llamadas()[0]?.[2]);
+    expect(order?.collectedCash).toBe(true);
+    expect(order?.body.sin_conexion?.sesion_caja_id).toBe('11111111-1111-4111-8111-111111111111');
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(draftStorageKey(SCOPE))).toBeNull();
+  });
+
+  it('navegador sin red comprobada: lo guarda de una vez sin intentar mandarlo', async () => {
+    const user = userEvent.setup();
+    const onLine = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+    const offline = offlineApi();
+    const { onQueued } = renderOffline(offline, { rol: 'mesero' });
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    await waitFor(() => expect(onQueued).toHaveBeenCalledTimes(1));
+    expect(apiMock.createStaffOrder).not.toHaveBeenCalled();
+    expect(pendingOf(offline.queue.snapshot())[0]?.localFolio).toMatch(/^M\d{1,3}-001$/);
+    onLine.mockRestore();
+  });
+
+  it('si el almacenamiento falla, avisa, no da el pedido por tomado y conserva el borrador', async () => {
+    const user = userEvent.setup();
+    apiMock.createStaffOrder.mockRejectedValue(sinRed());
+    const store = browserDurableStore({
+      getItem: () => null,
+      setItem: () => { throw new DOMException('QuotaExceededError'); },
+      removeItem: () => undefined,
+    } as unknown as Storage);
+    const { onQueued } = renderOffline(offlineApi(store));
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    expect(await screen.findByText(/no deja guardar pedidos sin conexión/)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    expect(await screen.findByText(/No se guardó el pedido sin conexión/)).toBeVisible();
+    expect(onQueued).not.toHaveBeenCalled();
+    expect(screen.getByRole('group', { name: 'Cantidad de Taco al pastor' })).toBeVisible();
+  });
+
+  it('un error que no es de red no se guarda en la cola: se muestra con Reintentar', async () => {
+    const user = userEvent.setup();
+    apiMock.createStaffOrder
+      .mockRejectedValueOnce(new VaiinillaApiError(422, { code: 'VALIDATION_ERROR', message: 'x' }))
+      .mockResolvedValue(PEDIDO_CREADO);
+    const offline = offlineApi();
+    const { onQueued, onCreated } = renderOffline(offline, { rol: 'mesero' });
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    expect(await screen.findByText('Revisa los datos capturados e inténtalo nuevamente.')).toBeVisible();
+    expect(onQueued).not.toHaveBeenCalled();
+    expect(offline.queue.snapshot().orders).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(llamadas()[1]?.[2]).toBe(llamadas()[0]?.[2]);
+  });
+});
+

@@ -137,6 +137,7 @@ export interface CashSession {
 
 export interface OperationalStatus {
   recibiendo_pedidos: boolean;
+  local_sin_conexion?: boolean;
   sesion_caja_abierta: boolean;
   caja_en_linea: boolean;
   cocina_en_linea: boolean;
@@ -239,6 +240,8 @@ export interface StaffOrderInput {
   pago_diferido?: boolean;
   cobrar_ahora?: true;
   monto_recibido?: string;
+  /** Pedido tomado sin internet (migración 161). `sesion_caja_id` solo cuando Caja ya cobró. */
+  sin_conexion?: { id: string; sesion_caja_id?: string; capturado_en: string; folio_local: string };
 }
 
 export interface OperationalSettings {
@@ -469,6 +472,7 @@ export type AssistantMode = 'ambos' | 'personal' | 'ninguno';
 
 export interface BusinessSettings {
   tipo: string;
+  pausa_sin_conexion?: boolean;
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
   /** Disponibilidad del asistente; null cuando la migración de IA aún no está instalada. */
