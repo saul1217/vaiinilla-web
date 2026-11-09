@@ -13,6 +13,7 @@ const base: BusinessSettings = {
   tipo: 'cafeteria',
   entrega_requiere_qr: true,
   permite_pago_al_final: false,
+  asistente_modo: null,
   gracia_liberacion_min: 5,
   tipos_disponibles: ['cafeteria'],
   videos_local: [],
