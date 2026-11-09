@@ -810,6 +810,15 @@ describe('Vaiinilla API client', () => {
     });
   });
 
+  it('envía la conversación al asistente de configuración', async () => {
+    const messages = [{ rol: 'dueno' as const, texto: 'Tengo una cafetería' }];
+    server.use(http.post(`${baseUrl}/establecimiento/asistente`, async ({ request }) => {
+      await expect(request.json()).resolves.toEqual({ mensajes: messages });
+      return HttpResponse.json({ data: { mensaje: '¿Qué horario manejas?', opciones: ['Mañana', 'Tarde'] }, meta: {}, error: null });
+    }));
+    await expect(api.askStoreAssistant('tenant-token', messages)).resolves.toMatchObject({ mensaje: '¿Qué horario manejas?' });
+  });
+
   it('consulta cortes del día y reporte contable con parámetros', async () => {
     server.use(
       http.get(`${baseUrl}/sesiones-caja/cortes`, ({ request }) => {

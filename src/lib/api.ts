@@ -907,6 +907,10 @@ export const api = {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
   },
 
+  async askStoreAssistant(token: string, messages: Array<{ rol: 'dueno' | 'asistente'; texto: string }>): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>('/establecimiento/asistente', { method: 'POST', token, body: { mensajes: messages } })).data;
+  },
+
   async uploadStoreImage(token: string, kind: StoreImageKind, file: File): Promise<BusinessSettings> {
     const body = new FormData();
     body.append('imagen', file);
