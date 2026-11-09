@@ -14,7 +14,7 @@ vi.mock('../context/auth-context', () => ({
   useAuth: () => ({ user: null, ready: true, configured: true, signOut: vi.fn() }),
 }));
 vi.mock('../context/session-context', () => ({
-  useSessions: vi.fn(() => ({ platform: { token: 'platform-token' }, clearAll: vi.fn() })),
+  useSessions: vi.fn(() => ({ platform: { token: 'fixture' }, clearAll: vi.fn() })),
 }));
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -29,7 +29,7 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => {
   server.resetHandlers();
-  vi.mocked(useSessions).mockReturnValue({ platform: { token: 'platform-token' }, clearAll: vi.fn() } as unknown as ReturnType<typeof useSessions>);
+  vi.mocked(useSessions).mockReturnValue({ platform: { token: 'fixture' }, clearAll: vi.fn() } as unknown as ReturnType<typeof useSessions>);
 });
 afterAll(() => server.close());
 
@@ -37,7 +37,7 @@ describe('Sección privada /villo', () => {
   it('con 204 en acceso y una guía válida, renderiza el markdown', async () => {
     server.use(
       http.get(`${baseUrl}/villo/owner/acceso`, ({ request }) => {
-        expect(request.headers.get('Authorization')).toBe('Bearer platform-token');
+        expect(request.headers.get('Authorization')).toBe('Bearer fixture');
         return new HttpResponse(null, { status: 204 });
       }),
       http.get(`${baseUrl}/villo/owner/guia`, () =>
