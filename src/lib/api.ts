@@ -1,5 +1,16 @@
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
+import {
+  clearMixedPaymentAttempt,
+  isCompleteScope,
+  listPendingMixedPaymentAttempts,
+  mixedPaymentLockName,
+  mixedPaymentUnavailableKey,
+  readMixedPaymentAttempt,
+  writeMixedPaymentAttempt,
+  type MixedPaymentAttempt,
+  type MixedPaymentScope,
+} from './mixed-payment-attempts';
 import type {
   ApiEnvelope,
   ApiErrorEnvelope,
@@ -89,29 +100,6 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   idempotencyKey?: string;
 }
 
-const mixedPaymentStoragePrefix = 'vaiinilla:mixed-payment:';
-type MixedPaymentAttempt = {
-  idempotencyKey: string;
-  body: { metodo_pago: 'efectivo' | 'terminal'; monto: string; monto_recibido?: string };
-  /** Saldo mostrado al iniciar el intento. */
-  expectedRemaining: string;
-  /** Presente cuando el servidor confirmó el intento. */
-  completedRemaining?: string;
-};
-function mixedPaymentStorageKey(orderId: string): string {
-  return `${mixedPaymentStoragePrefix}${orderId}`;
-}
-
-function readMixedPaymentAttempt(storageKey: string): MixedPaymentAttempt | null {
-  const stored = window.localStorage.getItem(storageKey);
-  if (!stored) return null;
-  return JSON.parse(stored) as MixedPaymentAttempt;
-}
-
-function writeMixedPaymentAttempt(storageKey: string, attempt: MixedPaymentAttempt): void {
-  window.localStorage.setItem(storageKey, JSON.stringify(attempt));
-}
-
 const mixedPaymentLocks = new Map<string, Promise<void>>();
 
 async function withMixedPaymentLock<T>(key: string, run: () => Promise<T>): Promise<T> {
@@ -132,21 +120,49 @@ async function withMixedPaymentLock<T>(key: string, run: () => Promise<T>): Prom
   }
 }
 
-function clearMixedPaymentAttempt(storageKey: string): void {
-  window.localStorage.removeItem(storageKey);
+/** Negocio y usuario de la sesión que cobra; el entorno lo pone el cliente (apiUrl). */
+export interface MixedPaymentOwner {
+  establecimientoId: string;
+  usuarioId: string;
 }
 
-function listPendingMixedPaymentAttempts(): Array<{ orderId: string; attempt: MixedPaymentAttempt }> {
-  const pending: Array<{ orderId: string; attempt: MixedPaymentAttempt }> = [];
-  for (let index = 0; index < window.localStorage.length; index += 1) {
-    const key = window.localStorage.key(index);
-    if (!key?.startsWith(mixedPaymentStoragePrefix)) continue;
-    const attempt = readMixedPaymentAttempt(key);
-    if (attempt && attempt.completedRemaining === undefined) {
-      pending.push({ orderId: key.slice(mixedPaymentStoragePrefix.length), attempt });
+function mixedPaymentScope(owner: MixedPaymentOwner): MixedPaymentScope {
+  const scope = { apiUrl, establecimientoId: owner.establecimientoId, usuarioId: owner.usuarioId };
+  if (!isCompleteScope(scope)) throw new Error('No se pudo identificar la sesión de Caja. Vuelve a entrar antes de cobrar.');
+  return scope;
+}
+
+function sameMixedPaymentBody(a: MixedPaymentAttempt['body'], b: MixedPaymentAttempt['body']): boolean {
+  return a.metodo_pago === b.metodo_pago && a.monto === b.monto && (a.monto_recibido ?? '') === (b.monto_recibido ?? '');
+}
+
+/** Manda el intento guardado con su llave. Solo se llama dentro del candado del pedido. */
+async function sendMixedPaymentAttempt(token: string, attempt: MixedPaymentAttempt): Promise<MixedPaymentResult> {
+  try {
+    const result = await request<MixedPaymentResult>(`/pedidos/${attempt.orderId}/pagos-mixtos`, {
+      method: 'POST',
+      token,
+      idempotencyKey: attempt.idempotencyKey,
+      body: attempt.body,
+    });
+    writeMixedPaymentAttempt({ ...attempt, completedRemaining: result.data.restante });
+    return result.data;
+  } catch (error) {
+    // Estos estados rechazan la solicitud sin aplicar el pago. Un 409 puede
+    // ser una repetición cuyo resultado se perdió, así que conserva la clave.
+    if (error instanceof VaiinillaApiError && [400, 404, 422].includes(error.status)) {
+      clearMixedPaymentAttempt(attempt.scope, attempt.orderId);
     }
+    throw error;
   }
-  return pending;
+}
+
+/** Pago mixto con otro pago del mismo pedido aún sin confirmar: hay que reintentar ese primero. */
+export class MixedPaymentPendingError extends Error {
+  constructor() {
+    super('Este pedido tiene un pago pendiente de confirmar. Reintenta ese mismo pago antes de registrar otro.');
+    this.name = 'MixedPaymentPendingError';
+  }
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
@@ -194,25 +210,56 @@ function params(values: Record<string, string | number | undefined>): string {
 }
 
 export const api = {
-  pendingMixedPayment(orderId: string): MixedPaymentAttempt | null {
+  /** Intento sin confirmar del pedido para esta sesión (entorno, negocio y usuario), si hay. */
+  pendingMixedPayment(owner: MixedPaymentOwner, orderId: string): MixedPaymentAttempt | null {
     try {
-      const attempt = readMixedPaymentAttempt(mixedPaymentStorageKey(orderId));
+      const attempt = readMixedPaymentAttempt(mixedPaymentScope(owner), orderId);
       return attempt?.completedRemaining === undefined ? attempt : null;
     } catch {
       return null;
     }
   },
 
-  async recoverPendingMixedPayments(token: string): Promise<Array<{ orderId: string; result: MixedPaymentResult }>> {
-    const pending = listPendingMixedPaymentAttempts();
-    const recovered = await Promise.all(pending.map(async ({ orderId, attempt }) => {
-      const result = await api.payOrderMixed(token, orderId, {
-        metodoPago: attempt.body.metodo_pago,
-        monto: attempt.body.monto,
-        ...(attempt.body.monto_recibido ? { montoRecibido: attempt.body.monto_recibido } : {}),
-      }, attempt.expectedRemaining);
-      return { orderId, result };
-    }));
+  /** El backend de esta sesión (entorno, negocio y usuario) ya respondió que no tiene el pago mixto. */
+  isMixedPaymentUnavailable(owner: MixedPaymentOwner): boolean {
+    try {
+      return window.sessionStorage.getItem(mixedPaymentUnavailableKey(mixedPaymentScope(owner))) === '1';
+    } catch {
+      return false;
+    }
+  },
+
+  /** Lo recuerda en la pestaña para no volver a intentar el endpoint al cerrar y abrir el cobro. */
+  markMixedPaymentUnavailable(owner: MixedPaymentOwner): void {
+    try {
+      window.sessionStorage.setItem(mixedPaymentUnavailableKey(mixedPaymentScope(owner)), '1');
+    } catch {
+      // Sin almacenamiento solo dura lo que dure la página.
+    }
+  },
+
+  /**
+   * Reenvía, uno por uno y con su misma llave, solo los intentos sin confirmar de
+   * esta sesión. Nunca crea un intento nuevo: si otra pestaña ya lo resolvió, lo salta.
+   */
+  async recoverPendingMixedPayments(
+    token: string,
+    owner: MixedPaymentOwner,
+  ): Promise<Array<{ orderId: string; result: MixedPaymentResult }>> {
+    const scope = mixedPaymentScope(owner);
+    const recovered: Array<{ orderId: string; result: MixedPaymentResult }> = [];
+    for (const { orderId } of listPendingMixedPaymentAttempts(scope)) {
+      try {
+        const result = await withMixedPaymentLock(mixedPaymentLockName(scope, orderId), async () => {
+          const attempt = readMixedPaymentAttempt(scope, orderId);
+          if (!attempt || attempt.completedRemaining !== undefined) return null;
+          return sendMixedPaymentAttempt(token, attempt);
+        });
+        if (result) recovered.push({ orderId, result });
+      } catch {
+        // Queda guardado (salvo rechazo definitivo) y se reintenta desde el pedido o en la siguiente carga.
+      }
+    }
     return recovered;
   },
 
@@ -489,10 +536,12 @@ export const api = {
 
   async payOrderMixed(
     token: string,
+    owner: MixedPaymentOwner,
     id: string,
     input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
     expectedRemaining: string,
   ): Promise<MixedPaymentResult> {
+    const scope = mixedPaymentScope(owner);
     const requestedBody = {
       metodo_pago: input.metodoPago,
       monto: input.monto,
@@ -500,9 +549,8 @@ export const api = {
         ? { monto_recibido: input.montoRecibido }
         : {}),
     };
-    const storageKey = mixedPaymentStorageKey(id);
-    return withMixedPaymentLock(`${mixedPaymentStoragePrefix}${id}`, async () => {
-      let attempt = readMixedPaymentAttempt(storageKey);
+    return withMixedPaymentLock(mixedPaymentLockName(scope, id), async () => {
+      let attempt = readMixedPaymentAttempt(scope, id);
       if (attempt?.completedRemaining !== undefined) {
         // A stale tab must not turn its old balance into a second charge.
         if (attempt.completedRemaining !== expectedRemaining) {
@@ -510,31 +558,23 @@ export const api = {
         }
         attempt = null;
       }
+      if (attempt && !sameMixedPaymentBody(attempt.body, requestedBody)) {
+        // Otro pago del pedido (otra pestaña o una respuesta perdida) sigue sin confirmar.
+        throw new MixedPaymentPendingError();
+      }
       if (!attempt) {
         attempt = {
+          version: 2,
+          scope,
+          orderId: id,
           idempotencyKey: createIdempotencyKey(),
           body: requestedBody,
           expectedRemaining,
+          createdAt: Date.now(),
         };
-        writeMixedPaymentAttempt(storageKey, attempt);
+        writeMixedPaymentAttempt(attempt);
       }
-      try {
-        const result = await request<MixedPaymentResult>(`/pedidos/${id}/pagos-mixtos`, {
-          method: 'POST',
-          token,
-          idempotencyKey: attempt.idempotencyKey,
-          body: attempt.body,
-        });
-        writeMixedPaymentAttempt(storageKey, { ...attempt, completedRemaining: result.data.restante });
-        return result.data;
-      } catch (error) {
-        // Estos estados rechazan la solicitud sin aplicar el pago. Un 409 puede
-        // ser una repetición cuyo resultado se perdió, así que conserva la clave.
-        if (error instanceof VaiinillaApiError && [400, 404, 422].includes(error.status)) {
-          clearMixedPaymentAttempt(storageKey);
-        }
-        throw error;
-      }
+      return sendMixedPaymentAttempt(token, attempt);
     });
   },
 
