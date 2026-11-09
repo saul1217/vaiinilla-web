@@ -1115,4 +1115,21 @@ export const api = {
       )
     ).data;
   },
+ 
+  /** Acceso del dueño de la plataforma a la sección Villo (204 = permitido). */
+  async villoOwnerAccess(token: string | null | undefined): Promise<void> {
+    await request<void>('/villo/owner/acceso', { token: token ?? '' });
+  },
+ 
+  /** Guía en Markdown para el dueño de la plataforma. */
+  async villoOwnerGuide(
+    token: string | null | undefined,
+  ): Promise<{ markdown: string; actualizado_en: string }> {
+    return (
+      await request<{ markdown: string; actualizado_en: string }>(
+        '/villo/owner/guia',
+        { token: token ?? '' },
+      )
+    ).data;
+  },
 };
