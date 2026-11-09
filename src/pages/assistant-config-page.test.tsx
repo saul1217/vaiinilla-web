@@ -27,9 +27,8 @@ const apiMock = vi.hoisted(() => ({
 }));
 const WRITES = ['saveBusinessSettings', 'createSpaceBatch', 'updateSpace', 'createCategory', 'createProduct', 'createInventorySupply',
   'saveProductRecipe', 'registerInventoryMovement', 'createStaffBooking', 'markBookingCashLater', 'createInvitation'] as const;
-const session = vi.hoisted(() => ({
-  tenant: { token: 'tenant-token', context: { usuario_id: 'u1', establecimiento_id: 'e1' } } as { token: string; context: { usuario_id: string; establecimiento_id: string } } | null,
-}));
+type FakeTenant = { token: string; context: { usuario_id: string; establecimiento_id: string } };
+const session = vi.hoisted(() => ({ tenant: null as FakeTenant | null }));
 vi.mock('../lib/api', () => ({ api: apiMock }));
 vi.mock('../context/session-context', () => ({ useSessions: () => ({ tenant: session.tenant }) }));
 
@@ -170,7 +169,7 @@ describe('AssistantConfigPage', () => {
     expect(apiMock.createSpaceBatch).toHaveBeenCalledWith('tenant-token', { tipo: 'mesa', prefijo: 'Mesa', desde: 1, hasta: 8 }, expect.any(String));
     expect(apiMock.createInventorySupply).toHaveBeenCalledWith('tenant-token', { nombre: 'Clamato', unidad: 'ml', minimo: 500, existencia_inicial: 3000 }, expect.any(String));
     expect(apiMock.saveProductRecipe).toHaveBeenCalledWith('tenant-token', 90, [{ insumo_id: 12, cantidad: 120, opcion_id: null }], expect.any(String));
-    const movement = apiMock.registerInventoryMovement.mock.calls[0][1] as Record<string, unknown>;
+    const movement = apiMock.registerInventoryMovement.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(movement).toMatchObject({ insumo_id: 7, tipo: 'entrada', cantidad: 5, costo_unitario: 30 });
     expect(movement.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(apiMock.createStaffBooking).toHaveBeenCalledWith('tenant-token', { espacio_id: 3, inicio: '2026-11-10T00:00:00.000Z', duracion_min: 120, nombre_cliente: 'Familia Pérez', jugadores: 6 }, expect.any(String));
@@ -188,11 +187,11 @@ describe('AssistantConfigPage', () => {
     await say(user, 'Mi menú');
     await user.click(await screen.findByRole('button', { name: 'Aplicar Menú' }));
     expect(await screen.findByText(/No se pudo guardar: Café/)).toBeVisible();
-    const firstKey = apiMock.createProduct.mock.calls[1][2] as string;
+    const firstKey = apiMock.createProduct.mock.calls[1]?.[2] as string;
     await user.click(screen.getByRole('button', { name: 'Reintentar lo que faltó en Menú' }));
     await screen.findByText('Guardado en tu tienda.');
     // El paso se repite completo (la categoría ya existía), pero con las mismas llaves: el servidor no duplica Agua.
-    expect(apiMock.createProduct.mock.calls[3][2]).toBe(firstKey);
+    expect(apiMock.createProduct.mock.calls[3]?.[2]).toBe(firstKey);
     expect(apiMock.createCategory).not.toHaveBeenCalled();
   });
 
