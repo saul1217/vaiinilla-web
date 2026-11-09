@@ -11,6 +11,7 @@ import './styles/app-primitives.css';
 import './styles/admin-screens.css';
 import './styles/mesero-slice.css';
 import './styles/android-tokens.css';
+import './styles/vai-components.css';
 
 clearLegacyStaffUi();
 installPreloadErrorReload();
