@@ -87,6 +87,10 @@ import type {
   RecipeLine,
   RecipeLineInput,
   StaffBookingInput,
+  VilloDevice,
+  VilloDeviceAlert,
+  VilloDeviceTokenIssued,
+  VilloDeviceUpdateInput,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -1333,6 +1337,61 @@ export const api = {
         '/villo/owner/guia',
         { token: token ?? '' },
       )
+    ).data;
+  },
+  /** VILLO del negocio (rol admin, token de contexto del negocio). Nunca trae tokens. */
+  async listVilloDevices(token: string): Promise<VilloDevice[]> {
+    return (await request<VilloDevice[]>('/villo/dispositivos', { token })).data;
+  },
+
+  async createVilloDevice(
+    token: string,
+    input: { nombre: string; espacio_id?: number | null },
+  ): Promise<VilloDevice> {
+    return (
+      await request<VilloDevice>('/villo/dispositivos', { method: 'POST', token, body: input })
+    ).data;
+  },
+
+  async updateVilloDevice(
+    token: string,
+    id: string,
+    input: VilloDeviceUpdateInput,
+  ): Promise<VilloDevice> {
+    return (
+      await request<VilloDevice>(`/villo/dispositivos/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        token,
+        body: input,
+      })
+    ).data;
+  },
+
+  /** Token nuevo en claro, una sola vez (no-store). Invalida el anterior. No lo guardes. */
+  async issueVilloDeviceToken(token: string, id: string): Promise<VilloDeviceTokenIssued> {
+    return (
+      await request<VilloDeviceTokenIssued>(
+        `/villo/dispositivos/${encodeURIComponent(id)}/token`,
+        { method: 'POST', token, cache: 'no-store' },
+      )
+    ).data;
+  },
+
+  async revokeVilloDevice(token: string, id: string, motivo?: string): Promise<VilloDevice> {
+    return (
+      await request<VilloDevice>(`/villo/dispositivos/${encodeURIComponent(id)}/revocar`, {
+        method: 'POST',
+        token,
+        body: motivo ? { motivo } : {},
+      })
+    ).data;
+  },
+
+  async listVilloDeviceAlerts(token: string, id: string): Promise<VilloDeviceAlert[]> {
+    return (
+      await request<VilloDeviceAlert[]>(`/villo/dispositivos/${encodeURIComponent(id)}/alertas`, {
+        token,
+      })
     ).data;
   },
 };
