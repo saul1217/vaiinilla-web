@@ -1017,6 +1017,18 @@ export const api = {
     ).data;
   },
 
+  async cashDayCut(token: string, date?: string): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/sesiones-caja/cortes${params({ fecha: date })}`, { token })).data;
+  },
+
+  async cashSessionCut(token: string, sessionId: string): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/sesiones-caja/${encodeURIComponent(sessionId)}/corte`, { token })).data;
+  },
+
+  async accountingReport(token: string, from: string, to: string): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/reportes/contable${params({ desde: from, hasta: to })}`, { token })).data;
+  },
+
   async configurePlatformStripe(
     token: string,
     id: string,
