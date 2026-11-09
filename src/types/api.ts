@@ -493,7 +493,9 @@ export type BusinessSettingsInput = Partial<
 /** Una cuenta abierta (pagar al final) que nadie ha cobrado. */
 export interface UnpaidAccount {
   espacio: { id: number; nombre: string; tipo: SpaceType };
-  pedidos: number;
+  /** Conteo (número) o lista de pedidos, según la versión del back. */
+  pedidos: number | { id: number; folio?: string | number; total?: string; restante?: string }[];
+  num_pedidos?: number;
   total: string;
   desde: string;
   horas: number;

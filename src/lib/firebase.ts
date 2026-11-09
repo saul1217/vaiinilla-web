@@ -198,7 +198,24 @@ export function hasTotpEnrollment(user: User): boolean {
   );
 }
 
+type BeforeSignOut = () => Promise<void>;
+let beforeSignOut: BeforeSignOut | null = null;
+
+/**
+ * Registra qué hacer mientras la sesión del tenant sigue viva, justo antes de cerrar
+ * la de Firebase (p. ej. dar de baja el token push). Cubre todos los caminos que
+ * llaman a `firebaseSignOut`, incluida la sesión que se invalida sola.
+ */
+export function setBeforeSignOut(fn: BeforeSignOut | null): void {
+  beforeSignOut = fn;
+}
+
 export async function firebaseSignOut(): Promise<void> {
+  try {
+    await beforeSignOut?.();
+  } catch (error) {
+    console.warn('[auth] fallo previo al cierre de sesión:', error);
+  }
   endBrowserSession();
   if (!firebaseConfigured) return;
   const auth = await readyAuth();

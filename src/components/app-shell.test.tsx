@@ -19,6 +19,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   delete document.documentElement.dataset.adminTheme;
+  delete document.documentElement.dataset.vaiTheme;
 });
 
 describe('tema compartido en la navegación', () => {
@@ -35,7 +36,7 @@ describe('tema compartido en la navegación', () => {
     expect(CASHBACK_ENABLED).toBe(false);
   });
 
-  it.each(['mesero', 'cajero', 'cocina', 'admin'])('%s puede cambiar y recordar ambos temas desde el menú móvil', (role) => {
+  it.each(['mesero', 'cajero', 'cocina', 'admin'])('%s recorre y recuerda los tres temas desde el menú móvil', (role) => {
     session.role = role;
     localStorage.setItem('vaiinilla.panel.admin-theme', 'claro');
     const mount = () => render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
@@ -44,14 +45,27 @@ describe('tema compartido en la navegación', () => {
     expect(screen.getByRole('dialog', { name: 'Opciones de cuenta' })).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cambiar a tema oscuro' }));
     expect(document.documentElement).toHaveAttribute('data-admin-theme', 'oscuro');
+    expect(document.documentElement).toHaveAttribute('data-vai-theme', 'oscuro');
     expect(localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('oscuro');
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cambiar a tema AMOLED' }));
+    expect(document.documentElement).toHaveAttribute('data-admin-theme', 'oscuro');
+    expect(document.documentElement).toHaveAttribute('data-vai-theme', 'amoled');
+    expect(localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('amoled');
     view.unmount();
     mount();
-    expect(document.documentElement).toHaveAttribute('data-admin-theme', 'oscuro');
+    expect(document.documentElement).toHaveAttribute('data-vai-theme', 'amoled');
     fireEvent.click(screen.getByRole('button', { name: 'Abrir opciones de cuenta' }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cambiar a tema claro' }));
     expect(document.documentElement).toHaveAttribute('data-admin-theme', 'claro');
+    expect(document.documentElement).toHaveAttribute('data-vai-theme', 'claro');
     expect(localStorage.getItem('vaiinilla.panel.admin-theme')).toBe('claro');
+  });
+
+  it('arranca en AMOLED (negro real) cuando el dispositivo no ha elegido tema', () => {
+    session.role = 'mesero';
+    render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
+    expect(document.documentElement).toHaveAttribute('data-admin-theme', 'oscuro');
+    expect(document.documentElement).toHaveAttribute('data-vai-theme', 'amoled');
   });
 });
 
