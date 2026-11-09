@@ -5,3 +5,4 @@ export const CASHBACK_ENABLED = false;
 export function isPosMixedPaymentsEnabled(): boolean {
   return import.meta.env.VITE_POS_MIXED_PAYMENTS_ENABLED === 'true';
 }
+export const CORTES_REPORTE_ENABLED = false;

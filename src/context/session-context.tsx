@@ -5,11 +5,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import type { User } from 'firebase/auth';
 import { api } from '../lib/api';
+import { setBeforeSignOut } from '../lib/firebase';
+import { releasePush, syncPushSession } from '../lib/push';
 import {
   endBrowserSession,
   forgetTenantMembership,
@@ -42,9 +45,9 @@ interface SessionContextValue {
   platform: PlatformSession | null;
   openTenantSession: (user: User, access: SessionAccess) => Promise<TenantSession>;
   openPlatformSession: (user: User) => Promise<PlatformSession>;
-  clearTenant: () => void;
+  clearTenant: () => Promise<void>;
   clearPlatform: () => void;
-  clearAll: () => void;
+  clearAll: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -77,16 +80,54 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     !user || (tenantRestoration.uid === user.uid && tenantRestoration.ready)
   );
 
-  const clearTenant = useCallback(() => {
+  // Credencial vigente, para dar de baja el token push antes de soltarla.
+  const tenantTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    tenantTokenRef.current = tenant?.token ?? null;
+  }, [tenant]);
+
+  // Suelta la credencial del ref al darla de baja para que el signOut posterior no repita la baja.
+  const releaseCurrentPush = useCallback(async () => {
+    const sesion = tenantTokenRef.current;
+    tenantTokenRef.current = null;
+    await releasePush(sesion);
+  }, []);
+
+  useEffect(() => {
+    setBeforeSignOut(() => releaseCurrentPush());
+    return () => setBeforeSignOut(null);
+  }, [releaseCurrentPush]);
+
+  // Fail-closed del worker: la marca baja a 'off' al cargar sin sesión, al cambiar de
+  // usuario o si la sesión se revoca o vence, aunque nadie haya hecho logout. Con sesión
+  // y preferencia propia se vuelve a registrar el token con la credencial actual y la
+  // marca solo sube a 'on' si el registro sale bien y la sesión sigue siendo la misma.
+  const tenantUid = tenant?.context.usuario_id ?? null;
+  useEffect(() => {
+    if (!tenantReady) return;
+    let vigente = true;
+    const token = tenantTokenRef.current;
+    void syncPushSession(
+      tenantUid && token ? { token, uid: tenantUid } : null,
+      () => vigente,
+    );
+    return () => {
+      vigente = false;
+    };
+  }, [tenantReady, tenantUid]);
+
+  const clearTenant = useCallback(async () => {
+    await releaseCurrentPush();
     forgetTenantMembership();
     setTenant(null);
-  }, []);
+  }, [releaseCurrentPush]);
   const clearPlatform = useCallback(() => setPlatform(null), []);
-  const clearAll = useCallback(() => {
+  const clearAll = useCallback(async () => {
+    await releaseCurrentPush();
     endBrowserSession();
     setTenant(null);
     setPlatform(null);
-  }, []);
+  }, [releaseCurrentPush]);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +222,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (remaining > 0) {
           schedule(Math.min(TENANT_RENEWAL_RETRY_MS, remaining));
         } else {
+          void releasePush(tenant.token);
           setTenant((current) => (
             current?.access.membresia_id === membershipId ? null : current
           ));
