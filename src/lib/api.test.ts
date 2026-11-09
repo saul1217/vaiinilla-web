@@ -818,4 +818,14 @@ describe('Vaiinilla API client', () => {
     }));
     await expect(api.askStoreAssistant('tenant-token', messages)).resolves.toMatchObject({ mensaje: '¿Qué horario manejas?' });
   });
+
+  it('manda los Excel del asistente en archivos', async () => {
+    const messages = [{ rol: 'dueno' as const, texto: 'Mi inventario [excel1]' }];
+    const files = [{ id: 'excel1', nombre: 'Inventario.xlsx', contenido: 'UEsDBA==' }];
+    server.use(http.post(`${baseUrl}/establecimiento/asistente`, async ({ request }) => {
+      await expect(request.json()).resolves.toEqual({ mensajes: messages, archivos: files });
+      return HttpResponse.json({ data: { mensaje: 'Leí tu Excel', opciones: [], propuesta: null, sigue: false, quedan_mensajes: 58 }, meta: {}, error: null });
+    }));
+    await expect(api.askStoreAssistant('tenant-token', messages, files)).resolves.toMatchObject({ quedan_mensajes: 58 });
+  });
 });

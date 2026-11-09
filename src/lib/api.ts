@@ -64,6 +64,9 @@ import type {
   PendingRefund,
   RefundMethod,
   StoreImageKind,
+  StoreAssistantFile,
+  StoreAssistantMessage,
+  StoreAssistantReply,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -907,8 +910,10 @@ export const api = {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
   },
 
-  async askStoreAssistant(token: string, messages: Array<{ rol: 'dueno' | 'asistente'; texto: string }>): Promise<Record<string, unknown>> {
-    return (await request<Record<string, unknown>>('/establecimiento/asistente', { method: 'POST', token, body: { mensajes: messages } })).data;
+  /** Los Excel van en `archivos` en cada mensaje (hasta 3, 2 MB cada uno); sin Excel no se manda la clave. */
+  async askStoreAssistant(token: string, messages: StoreAssistantMessage[], files: StoreAssistantFile[] = []): Promise<StoreAssistantReply> {
+    const body = files.length ? { mensajes: messages, archivos: files } : { mensajes: messages };
+    return (await request<StoreAssistantReply>('/establecimiento/asistente', { method: 'POST', token, body })).data;
   },
 
   async uploadStoreImage(token: string, kind: StoreImageKind, file: File): Promise<BusinessSettings> {
