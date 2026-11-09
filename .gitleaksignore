@@ -8,3 +8,5 @@ e7bbd2bebae22d3445233e6eb3688a43ae0f7f0c:.env.development:gcp-api-key:7
 fcc54b99464fac0bce225c0af99ea827d7823e14:src/lib/api.test.ts:generic-api-key:118
 # Otro UUID de prueba; no es una credencial.
 e53e334b68439606ab4fa90f0ea647cab6e3429e:src/lib/api.test.ts:generic-api-key:791
+# UUID de idempotencia inventada en una prueba del pago mixto (trabajo #26, web#134); no es una credencial.
+5bc68c185153abaa9944fe33dff74f1fa82ce004:src/lib/mixed-payment.test.ts:generic-api-key:201
