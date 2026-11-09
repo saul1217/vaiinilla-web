@@ -76,6 +76,16 @@ import type {
   PendingRefund,
   RefundMethod,
   StoreImageKind,
+  StoreAssistantFile,
+  StoreAssistantMessage,
+  StoreAssistantReply,
+  InventoryMovementInput,
+  InventoryProduct,
+  InventorySupply,
+  InventorySupplyInput,
+  RecipeLine,
+  RecipeLineInput,
+  StaffBookingInput,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -381,12 +391,14 @@ export const api = {
   async createInvitation(
     token: string,
     input: { email: string; rol: InvitationRole },
+    idempotencyKey?: string,
   ): Promise<StaffInvitation> {
     return (
       await request<StaffInvitation>('/personal/invitaciones', {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: input,
       })
     ).data;
@@ -636,12 +648,13 @@ export const api = {
     return (await request<CatalogResponse>('/catalogo', { token })).data;
   },
 
-  async createCategory(token: string, input: CatalogCategoryInput): Promise<CatalogCategory> {
+  async createCategory(token: string, input: CatalogCategoryInput, idempotencyKey?: string): Promise<CatalogCategory> {
     return (
       await request<CatalogCategory>('/catalogo/categorias', {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: input,
       })
     ).data;
@@ -662,12 +675,13 @@ export const api = {
     ).data;
   },
 
-  async createProduct(token: string, input: CatalogProductInput): Promise<CatalogProduct> {
+  async createProduct(token: string, input: CatalogProductInput, idempotencyKey?: string): Promise<CatalogProduct> {
     return (
       await request<CatalogProduct>('/catalogo/productos', {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: input,
       })
     ).data;
@@ -1053,8 +1067,9 @@ export const api = {
   async createSpaceBatch(
     token: string,
     input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number },
+    idempotencyKey?: string,
   ): Promise<SpaceBatchResult> {
-    return (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, body: input })).data;
+    return (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
   },
 
   async createSpace(token: string, input: { nombre: string; tipo: SpaceType }): Promise<ManagedSpace> {
@@ -1065,8 +1080,9 @@ export const api = {
     token: string,
     id: number,
     input: SpaceUpdateInput,
+    idempotencyKey?: string,
   ): Promise<ManagedSpace> {
-    return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, body: input })).data;
+    return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, idempotencyKey, body: input })).data;
   },
 
   async businessSettings(token: string): Promise<BusinessSettings> {
@@ -1079,6 +1095,58 @@ export const api = {
 
   async saveBusinessSettings(token: string, input: BusinessSettingsInput): Promise<BusinessSettings> {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
+  },
+
+  /**
+   * Los Excel van en `archivos` en cada mensaje (hasta 3, 2 MB cada uno); sin Excel no se manda la clave.
+   * `signal` corta la llamada si el usuario cambia de sesión o de negocio antes de que conteste.
+   */
+  async askStoreAssistant(
+    token: string,
+    messages: StoreAssistantMessage[],
+    files: StoreAssistantFile[] = [],
+    signal?: AbortSignal,
+  ): Promise<StoreAssistantReply> {
+    const body = files.length ? { mensajes: messages, archivos: files } : { mensajes: messages };
+    return (await request<StoreAssistantReply>('/establecimiento/asistente', { method: 'POST', token, body, signal })).data;
+  },
+
+  /** Insumos activos del inventario (GET /inventario/insumos). */
+  async inventorySupplies(token: string): Promise<InventorySupply[]> {
+    return (await request<{ insumos: InventorySupply[] }>('/inventario/insumos', { token })).data.insumos;
+  },
+
+  async createInventorySupply(token: string, input: InventorySupplyInput, idempotencyKey?: string): Promise<InventorySupply> {
+    return (await request<InventorySupply>('/inventario/insumos', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+  },
+
+  /** Entrada, merma o conteo. El `id` (UUID) evita que un reintento lo cuente dos veces. */
+  async registerInventoryMovement(token: string, input: InventoryMovementInput): Promise<void> {
+    await request('/inventario/movimientos', { method: 'POST', token, idempotencyKey: input.id, body: input });
+  },
+
+  /** Productos del menú vistos desde inventario (id y nombre, con o sin receta). */
+  async inventoryProducts(token: string): Promise<InventoryProduct[]> {
+    return (await request<{ productos: InventoryProduct[] }>('/inventario/productos', { token })).data.productos;
+  },
+
+  async productRecipe(token: string, productId: number): Promise<RecipeLine[]> {
+    return (await request<{ producto_id: number; lineas: RecipeLine[] }>(`/inventario/productos/${productId}/receta`, { token })).data.lineas;
+  },
+
+  /** Reemplaza la receta completa del producto. */
+  async saveProductRecipe(token: string, productId: number, lines: RecipeLineInput[], idempotencyKey?: string): Promise<void> {
+    await request(`/inventario/productos/${productId}/receta`, { method: 'PUT', token, idempotent: true, idempotencyKey, body: { lineas: lines } });
+  },
+
+  /** Aparta una pista u horario para alguien que llamó; queda por cobrar en Caja con `markBookingCashLater`. */
+  async createStaffBooking(token: string, input: StaffBookingInput, idempotencyKey?: string): Promise<CounterRental> {
+    return (await request<CounterRental>('/reservas', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+  },
+
+  /** Efectivo sin monto: la renta queda por cobrar en Caja, como una renta de mostrador. */
+  async markBookingCashLater(token: string, bookingId: string, idempotencyKey?: string): Promise<void> {
+    await request(`/reservas/${bookingId}/pago`, { method: 'POST', token, idempotent: true, idempotencyKey, body: { metodo_pago: 'efectivo' } });
   },
 
   async uploadStoreImage(token: string, kind: StoreImageKind, file: File): Promise<BusinessSettings> {

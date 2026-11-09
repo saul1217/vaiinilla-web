@@ -36,7 +36,7 @@ async function prepare(page: Page, options: PrepareOptions = {}) {
       access:{establecimiento:{id:'${options.establecimientoId ?? 'qa'}', nombre:'Caja QA', slug:'qa'}, rol:'cajero', estado_establecimiento:'activo'}};
     export const useSessions = () => ({tenant, tenantReady:true, platform:null, clearAll:()=>{}, clearTenant:()=>{}});
   ` }));
-  await page.route('**/src/lib/features.ts*', (route) => route.fulfill({ contentType: 'text/javascript', body: `export const CASHBACK_ENABLED=false; export const CORTES_REPORTE_ENABLED=false; export const isPosMixedPaymentsEnabled=()=>true;` }));
+  await page.route('**/src/lib/features.ts*', (route) => route.fulfill({ contentType: 'text/javascript', body: `export const CASHBACK_ENABLED=false; export const CORTES_REPORTE_ENABLED=false; export const IA_CONFIG_ENABLED=false; export const isPosMixedPaymentsEnabled=()=>true;` }));
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
