@@ -38,6 +38,7 @@ const LegalIndexPage = lazy(() => import('../pages/legal-index-page').then((modu
 const LegalDocumentPage = lazy(() => import('../pages/legal-document-page').then((module) => ({ default: module.LegalDocumentPage })));
 const AccountDeletionPage = lazy(() => import('../pages/account-deletion-page').then((module) => ({ default: module.AccountDeletionPage })));
 const StripeOnboardingReturnPage = lazy(() => import('../pages/stripe-onboarding-return-page').then((module) => ({ default: module.StripeOnboardingReturnPage })));
+const VilloPage = lazy(() => import('../pages/villo-page').then((module) => ({ default: module.VilloPage })));
 
 function LoadingRoute() {
   return (
@@ -149,6 +150,7 @@ export function AppRouter() {
           <Route exact path="/legal/privacidad/:version"><LegalDocumentPage kind="privacidad" /></Route>
           <Route exact path="/eliminar-cuenta"><AccountDeletionPage /></Route>
           <Route exact path="/stripe/onboarding/return"><StripeOnboardingReturnPage /></Route>
+          <Route exact path="/villo"><VilloPage /></Route>
           <Route path="/app"><TenantArea /></Route>
           <Route exact path="/plataforma/acceso"><AuthPage surface="platform" /></Route>
           <Route path="/plataforma"><PlatformArea /></Route>
