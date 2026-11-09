@@ -86,10 +86,11 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   idempotent?: boolean;
   idempotencyKey?: string;
+  expectedStatus?: number;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
-  const { token, body, idempotent, idempotencyKey, ...requestOptions } = options;
+  const { token, body, idempotent, idempotencyKey, expectedStatus, ...requestOptions } = options;
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
   const isFormData = body instanceof FormData;
@@ -103,6 +104,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
     headers,
     body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
   });
+
+  if (expectedStatus !== undefined && response.status !== expectedStatus) {
+    throw new VaiinillaApiError(response.status, {
+      code: 'HTTP_ERROR',
+      message: 'El servidor devolvió un estado inesperado.',
+    });
+  }
 
   if (response.ok && response.status === 204) {
     return { data: undefined as T, meta: {}, error: null };
@@ -1032,6 +1040,26 @@ export const api = {
           idempotencyKey,
           body: { stripe_enabled: stripeEnabled },
         },
+      )
+    ).data;
+  },
+
+  /** Acceso del dueño de la plataforma a la sección Villo (204 = permitido). */
+  async villoOwnerAccess(token: string | null | undefined): Promise<void> {
+    await request<void>('/villo/owner/acceso', {
+      token: token ?? '',
+      expectedStatus: 204,
+    });
+  },
+
+  /** Guía en Markdown para el dueño de la plataforma. */
+  async villoOwnerGuide(
+    token: string | null | undefined,
+  ): Promise<{ markdown: string; actualizado_en: string }> {
+    return (
+      await request<{ markdown: string; actualizado_en: string }>(
+        '/villo/owner/guia',
+        { token: token ?? '' },
       )
     ).data;
   },
