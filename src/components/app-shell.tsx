@@ -14,6 +14,7 @@ import {
   Store,
   Sun,
   Moon,
+  MoonStar,
   Table2,
   Workflow,
   UserPlus,
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { NavLink, useHistory, useLocation } from 'react-router-dom';
-import { useAdminTheme } from '../lib/admin-theme';
+import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
@@ -126,18 +127,14 @@ function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenC
   const secondary = navigation.filter((item) => !primary.includes(item));
   const accountActions = <>
     <Button variant="ghost" onClick={onSwitchContext}><ArrowLeftRight aria-hidden="true" />Cambiar acceso</Button>
-    <Button variant="ghost" onClick={() => setTheme(theme === 'oscuro' ? 'claro' : 'oscuro')}
-      aria-label={theme === 'oscuro' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}>
-      {theme === 'oscuro' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-      {theme === 'oscuro' ? 'Tema claro' : 'Tema oscuro'}
-    </Button>
+    <ThemeCycleButton theme={theme} onChange={setTheme} />
     <Button variant="ghost" onClick={() => void onExit()}><LogOut aria-hidden="true" />Cerrar sesión</Button>
   </>;
   return <div className="app-frame app-frame--tenant tenant-app">
     <a href="#contenido" className="skip-link">Saltar al contenido</a>
-    <AppIdentityHeader title={title} subtitle={subtitle} dark={theme === 'oscuro'} opener={accountButton}
+    <AppIdentityHeader title={title} subtitle={subtitle} dark={isDarkAdminTheme(theme)} opener={accountButton}
       open={accountOpen} onOpen={() => onAccountOpenChange(true)} />
-    <DesktopAppRail navigation={navigation} title={title} subtitle={subtitle} dark={theme === 'oscuro'}>{accountActions}</DesktopAppRail>
+    <DesktopAppRail navigation={navigation} title={title} subtitle={subtitle} dark={isDarkAdminTheme(theme)}>{accountActions}</DesktopAppRail>
     <main id="contenido" ref={main} className="app-main tenant-app__main" tabIndex={-1}>{children}</main>
     <MobileAppNav navigation={primary} more={secondary.length > 0} moreActive={secondary.some((item) => location.pathname === item.to)}
       moreOpen={moreOpen} opener={moreButton} onMore={() => { moreReturnFocus.current = moreButton.current; setMoreOpen(true); }} />
@@ -153,6 +150,20 @@ function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenC
       {accountActions}
     </AccountMenuSheet>
   </div>;
+}
+
+/** Como `VaiinillaThemeMode.next()` en Android: claro, oscuro, AMOLED y de vuelta a claro. */
+const NEXT_THEME: Record<AdminTheme, { next: AdminTheme; label: string; icon: LucideIcon }> = {
+  claro: { next: 'oscuro', label: 'Tema oscuro', icon: Moon },
+  oscuro: { next: 'amoled', label: 'Tema AMOLED', icon: MoonStar },
+  amoled: { next: 'claro', label: 'Tema claro', icon: Sun },
+};
+
+function ThemeCycleButton({ theme, onChange }: { theme: AdminTheme; onChange: (next: AdminTheme) => void }) {
+  const { next, label, icon: Icon } = NEXT_THEME[theme];
+  return <Button variant="ghost" onClick={() => onChange(next)} aria-label={`Cambiar a ${label.toLowerCase().replace('amoled', 'AMOLED')}`}>
+    <Icon aria-hidden="true" />{label}
+  </Button>;
 }
 
 function AppIdentityHeader({ title, subtitle, dark, opener, open, onOpen }: {
