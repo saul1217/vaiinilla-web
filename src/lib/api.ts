@@ -1,11 +1,23 @@
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
+import {
+  clearMixedPaymentAttempt,
+  isCompleteScope,
+  listPendingMixedPaymentAttempts,
+  mixedPaymentLockName,
+  mixedPaymentUnavailableKey,
+  readMixedPaymentAttempt,
+  writeMixedPaymentAttempt,
+  type MixedPaymentAttempt,
+  type MixedPaymentScope,
+} from './mixed-payment-attempts';
 import type {
   ApiEnvelope,
   ApiErrorEnvelope,
   AccountDeletion,
   CashSession,
   CashPaymentResult,
+  MixedPaymentResult,
   StaffOrderInput,
   StaffOrderResult,
   CashbackRule,
@@ -99,6 +111,71 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   idempotencyKey?: string;
 }
 
+const mixedPaymentLocks = new Map<string, Promise<void>>();
+
+async function withMixedPaymentLock<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (locks) return locks.request(key, run);
+
+  const previous = mixedPaymentLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const queued = previous.then(() => current);
+  mixedPaymentLocks.set(key, queued);
+  await previous;
+  try {
+    return await run();
+  } finally {
+    release();
+    if (mixedPaymentLocks.get(key) === queued) mixedPaymentLocks.delete(key);
+  }
+}
+
+/** Negocio y usuario de la sesión que cobra; el entorno lo pone el cliente (apiUrl). */
+export interface MixedPaymentOwner {
+  establecimientoId: string;
+  usuarioId: string;
+}
+
+function mixedPaymentScope(owner: MixedPaymentOwner): MixedPaymentScope {
+  const scope = { apiUrl, establecimientoId: owner.establecimientoId, usuarioId: owner.usuarioId };
+  if (!isCompleteScope(scope)) throw new Error('No se pudo identificar la sesión de Caja. Vuelve a entrar antes de cobrar.');
+  return scope;
+}
+
+function sameMixedPaymentBody(a: MixedPaymentAttempt['body'], b: MixedPaymentAttempt['body']): boolean {
+  return a.metodo_pago === b.metodo_pago && a.monto === b.monto && (a.monto_recibido ?? '') === (b.monto_recibido ?? '');
+}
+
+/** Manda el intento guardado con su llave. Solo se llama dentro del candado del pedido. */
+async function sendMixedPaymentAttempt(token: string, attempt: MixedPaymentAttempt): Promise<MixedPaymentResult> {
+  try {
+    const result = await request<MixedPaymentResult>(`/pedidos/${attempt.orderId}/pagos-mixtos`, {
+      method: 'POST',
+      token,
+      idempotencyKey: attempt.idempotencyKey,
+      body: attempt.body,
+    });
+    writeMixedPaymentAttempt({ ...attempt, completedRemaining: result.data.restante });
+    return result.data;
+  } catch (error) {
+    // Estos estados rechazan la solicitud sin aplicar el pago. Un 409 puede
+    // ser una repetición cuyo resultado se perdió, así que conserva la clave.
+    if (error instanceof VaiinillaApiError && [400, 404, 422].includes(error.status)) {
+      clearMixedPaymentAttempt(attempt.scope, attempt.orderId);
+    }
+    throw error;
+  }
+}
+
+/** Pago mixto con otro pago del mismo pedido aún sin confirmar: hay que reintentar ese primero. */
+export class MixedPaymentPendingError extends Error {
+  constructor() {
+    super('Este pedido tiene un pago pendiente de confirmar. Reintenta ese mismo pago antes de registrar otro.');
+    this.name = 'MixedPaymentPendingError';
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
   const { token, body, idempotent, idempotencyKey, ...requestOptions } = options;
   const headers = new Headers(options.headers);
@@ -144,6 +221,59 @@ function params(values: Record<string, string | number | undefined>): string {
 }
 
 export const api = {
+  /** Intento sin confirmar del pedido para esta sesión (entorno, negocio y usuario), si hay. */
+  pendingMixedPayment(owner: MixedPaymentOwner, orderId: string): MixedPaymentAttempt | null {
+    try {
+      const attempt = readMixedPaymentAttempt(mixedPaymentScope(owner), orderId);
+      return attempt?.completedRemaining === undefined ? attempt : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /** El backend de esta sesión (entorno, negocio y usuario) ya respondió que no tiene el pago mixto. */
+  isMixedPaymentUnavailable(owner: MixedPaymentOwner): boolean {
+    try {
+      return window.sessionStorage.getItem(mixedPaymentUnavailableKey(mixedPaymentScope(owner))) === '1';
+    } catch {
+      return false;
+    }
+  },
+
+  /** Lo recuerda en la pestaña para no volver a intentar el endpoint al cerrar y abrir el cobro. */
+  markMixedPaymentUnavailable(owner: MixedPaymentOwner): void {
+    try {
+      window.sessionStorage.setItem(mixedPaymentUnavailableKey(mixedPaymentScope(owner)), '1');
+    } catch {
+      // Sin almacenamiento solo dura lo que dure la página.
+    }
+  },
+
+  /**
+   * Reenvía, uno por uno y con su misma llave, solo los intentos sin confirmar de
+   * esta sesión. Nunca crea un intento nuevo: si otra pestaña ya lo resolvió, lo salta.
+   */
+  async recoverPendingMixedPayments(
+    token: string,
+    owner: MixedPaymentOwner,
+  ): Promise<Array<{ orderId: string; result: MixedPaymentResult }>> {
+    const scope = mixedPaymentScope(owner);
+    const recovered: Array<{ orderId: string; result: MixedPaymentResult }> = [];
+    for (const { orderId } of listPendingMixedPaymentAttempts(scope)) {
+      try {
+        const result = await withMixedPaymentLock(mixedPaymentLockName(scope, orderId), async () => {
+          const attempt = readMixedPaymentAttempt(scope, orderId);
+          if (!attempt || attempt.completedRemaining !== undefined) return null;
+          return sendMixedPaymentAttempt(token, attempt);
+        });
+        if (result) recovered.push({ orderId, result });
+      } catch {
+        // Queda guardado (salvo rechazo definitivo) y se reintenta desde el pedido o en la siguiente carga.
+      }
+    }
+    return recovered;
+  },
+
   async getLegalVersions(): Promise<LegalVersions> {
     return (await request<LegalVersions>('/publico/legal/vigente')).data;
   },
@@ -415,6 +545,50 @@ export const api = {
         },
       })
     ).data;
+  },
+
+  async payOrderMixed(
+    token: string,
+    owner: MixedPaymentOwner,
+    id: string,
+    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
+    expectedRemaining: string,
+  ): Promise<MixedPaymentResult> {
+    const scope = mixedPaymentScope(owner);
+    const requestedBody = {
+      metodo_pago: input.metodoPago,
+      monto: input.monto,
+      ...(input.metodoPago === 'efectivo' && input.montoRecibido
+        ? { monto_recibido: input.montoRecibido }
+        : {}),
+    };
+    return withMixedPaymentLock(mixedPaymentLockName(scope, id), async () => {
+      let attempt = readMixedPaymentAttempt(scope, id);
+      if (attempt?.completedRemaining !== undefined) {
+        // A stale tab must not turn its old balance into a second charge.
+        if (attempt.completedRemaining !== expectedRemaining) {
+          throw new Error('El saldo del pedido cambió en otra pestaña. Actualiza Caja antes de cobrar de nuevo.');
+        }
+        attempt = null;
+      }
+      if (attempt && !sameMixedPaymentBody(attempt.body, requestedBody)) {
+        // Otro pago del pedido (otra pestaña o una respuesta perdida) sigue sin confirmar.
+        throw new MixedPaymentPendingError();
+      }
+      if (!attempt) {
+        attempt = {
+          version: 2,
+          scope,
+          orderId: id,
+          idempotencyKey: createIdempotencyKey(),
+          body: requestedBody,
+          expectedRemaining,
+          createdAt: Date.now(),
+        };
+        writeMixedPaymentAttempt(attempt);
+      }
+      return sendMixedPaymentAttempt(token, attempt);
+    });
   },
 
   /** La llave la pone quien llama: los reintentos del mismo pedido deben reenviar la misma. */
@@ -1086,16 +1260,16 @@ export const api = {
     ).data;
   },
 
-  async cashDayCut(token: string, date?: string): Promise<Record<string, unknown>> {
-    return (await request<Record<string, unknown>>(`/sesiones-caja/cortes${params({ fecha: date })}`, { token })).data;
+  async cashDayCut(token: string, date?: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/sesiones-caja/cortes${params({ fecha: date })}`, { token, signal })).data;
   },
 
-  async cashSessionCut(token: string, sessionId: string): Promise<Record<string, unknown>> {
-    return (await request<Record<string, unknown>>(`/sesiones-caja/${encodeURIComponent(sessionId)}/corte`, { token })).data;
+  async cashSessionCut(token: string, sessionId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/sesiones-caja/${encodeURIComponent(sessionId)}/corte`, { token, signal })).data;
   },
 
-  async accountingReport(token: string, from: string, to: string): Promise<Record<string, unknown>> {
-    return (await request<Record<string, unknown>>(`/reportes/contable${params({ desde: from, hasta: to })}`, { token })).data;
+  async accountingReport(token: string, from: string, to: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/reportes/contable${params({ desde: from, hasta: to })}`, { token, signal })).data;
   },
 
   /**

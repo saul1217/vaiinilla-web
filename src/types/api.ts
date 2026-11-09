@@ -221,6 +221,14 @@ export interface CashPaymentResult {
   cambio: string;
 }
 
+/** POST /pedidos/:id/pagos-mixtos (vaiinilla_back#211). */
+export interface MixedPaymentResult {
+  pago: { metodo_pago: 'efectivo' | 'terminal'; monto: string };
+  restante: string;
+  liquidada: boolean;
+  pedido: OrderDetail;
+}
+
 /** Pedido que registra el staff (POST /pedidos con rol mesero, cajero o admin). Solo efectivo. */
 export interface StaffOrderInput {
   metodo_pago: 'efectivo';
