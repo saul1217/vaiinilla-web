@@ -75,6 +75,20 @@ function textoDelAviso(d) {
   }
 }
 
+// Marca que deja la página (src/lib/push.ts) en Cache Storage. Falla cerrado: solo
+// 'on' autoriza mostrar avisos. Marca ausente, con otro valor, ilegible o con Cache
+// Storage roto = sin sesión. Un worker nuevo arranca, por tanto, en off hasta que la
+// página con sesión válida lo encienda.
+async function haySesion() {
+  try {
+    const cache = await caches.open('vaiinilla-push-sesion');
+    const marca = await cache.match('/__push-sesion__');
+    return !!marca && (await marca.text()) === 'on';
+  } catch {
+    return false;
+  }
+}
+
 function configDesdeUrl() {
   const p = new URL(self.location.href).searchParams;
   const config = {
@@ -92,7 +106,10 @@ function configDesdeUrl() {
 function iniciar(config) {
   firebase.initializeApp(config);
 
-  firebase.messaging().onBackgroundMessage((payload) => {
+  firebase.messaging().onBackgroundMessage(async (payload) => {
+    // Sin sesión activa en este dispositivo no se muestra nada: el aviso trae datos
+    // de clientes y no debe verlo quien entre después.
+    if (!(await haySesion())) return undefined;
     const datos = payload.data || {};
     const { titulo, cuerpo } = textoDelAviso(datos);
     // Mostrar SIEMPRE una notificación: si no, Chrome pone la suya genérica

@@ -864,4 +864,23 @@ describe('Vaiinilla API client', () => {
     expect((retryResult as unknown as { cobro?: { id?: string } }).cobro?.id).toBe('charge-1');
     expect(window.localStorage.getItem('vaiinilla:offline-staff-order:retry-local-order')).toBe(keys[0]);
   });
+
+  it('consulta cortes del día y reporte contable con parámetros', async () => {
+    server.use(
+      http.get(`${baseUrl}/sesiones-caja/cortes`, ({ request }) => {
+        expect(new URL(request.url).searchParams.get('fecha')).toBe('2026-11-04');
+        return HttpResponse.json({ data: { resumen: { ventas: 100 } }, meta: {}, error: null });
+      }),
+      http.get(`${baseUrl}/reportes/contable`, ({ request }) => {
+        const url = new URL(request.url);
+        expect(url.searchParams.get('desde')).toBe('2026-11-01');
+        expect(url.searchParams.get('hasta')).toBe('2026-11-04');
+        return HttpResponse.json({ data: { resumen: { ventas: 100 } }, meta: {}, error: null });
+      }),
+      http.get(`${baseUrl}/sesiones-caja/session-id/corte`, () => HttpResponse.json({ data: { resumen: { ventas: 75 } }, meta: {}, error: null })),
+    );
+    await expect(api.cashDayCut('tenant-token', '2026-11-04')).resolves.toMatchObject({ resumen: { ventas: 100 } });
+    await expect(api.cashSessionCut('tenant-token', 'session-id')).resolves.toMatchObject({ resumen: { ventas: 75 } });
+    await expect(api.accountingReport('tenant-token', '2026-11-01', '2026-11-04')).resolves.toMatchObject({ resumen: { ventas: 100 } });
+  });
 });

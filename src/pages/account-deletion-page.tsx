@@ -112,7 +112,7 @@ export function AccountDeletionPage() {
     try {
       const firebaseToken = await authenticatedUser.getIdToken(true);
       await api.deleteOwnAccount(firebaseToken, deletionKey.current);
-      clearAll();
+      await clearAll();
       await signOut().catch(() => undefined);
       setAuthenticatedUser(null);
       setConfirmation('');
