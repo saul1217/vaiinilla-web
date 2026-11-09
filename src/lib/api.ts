@@ -68,6 +68,7 @@ import type {
   StoreAssistantMessage,
   StoreAssistantReply,
   InventoryMovementInput,
+  InventoryOverview,
   InventoryProduct,
   InventorySupply,
   InventorySupplyInput,
@@ -1095,6 +1096,19 @@ export const api = {
 
   async accountingReport(token: string, from: string, to: string): Promise<Record<string, unknown>> {
     return (await request<Record<string, unknown>>(`/reportes/contable${params({ desde: from, hasta: to })}`, { token })).data;
+  },
+
+  /**
+   * Pantalla de inventario: insumos con existencia y, desde la migración 205, `permisos`
+   * (`puede_editar` de esta sesión y `cocina_edita` del negocio). Un backend anterior no los manda.
+   */
+  async inventoryOverview(token: string): Promise<InventoryOverview> {
+    return (await request<InventoryOverview>('/inventario/insumos', { token })).data;
+  },
+
+  /** Solo admin: deja o no a Cocina editar el inventario (`cocina_edita_inventario`, migración 205). */
+  async setInventoryKitchenPermission(token: string, allow: boolean): Promise<{ cocina_edita: boolean }> {
+    return (await request<{ cocina_edita: boolean }>('/inventario/permisos', { method: 'PATCH', token, body: { cocina_edita: allow } })).data;
   },
 
   async configurePlatformStripe(

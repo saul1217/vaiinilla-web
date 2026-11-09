@@ -24,9 +24,9 @@ import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
-import { CASHBACK_ENABLED } from '../lib/features';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
 import { IA_CONFIG_ENABLED } from '../lib/features';
+import { CASHBACK_ENABLED, INVENTARIO_ENABLED } from '../lib/features';
 
 const paymentLabels = {
   efectivo: 'Efectivo',
@@ -325,6 +325,7 @@ export function TenantDashboardPage() {
             </Link>
           </li>
           {IA_CONFIG_ENABLED && <li><Link to="/app/asistente-configuracion"><ShieldCheck aria-hidden="true" /><span>Asistente de configuración</span><ChevronRight aria-hidden="true" /></Link></li>}
+          {INVENTARIO_ENABLED && <li><Link to="/app/inventario"><PackageCheck aria-hidden="true" /><span>Inventario y recetas</span><ChevronRight aria-hidden="true" /></Link></li>}
           <li>
             <Link to="/app/pedidos">
               <ClipboardList aria-hidden="true" />

@@ -536,6 +536,25 @@ export interface InventorySupply {
   activo?: boolean;
 }
 
+/** Permisos de inventario de la sesión (migración 205). */
+export interface InventoryPermissions {
+  puede_editar: boolean;
+  cocina_edita: boolean;
+}
+
+/** Insumo con existencia, como lo lista GET /inventario/insumos. */
+export interface InventoryStock extends InventorySupply {
+  existencia?: number | null;
+  minimo?: number | null;
+  bajo_minimo?: boolean;
+}
+
+/** GET /inventario/insumos completo; `permisos` falta si el backend no tiene la 205. */
+export interface InventoryOverview {
+  insumos: InventoryStock[];
+  permisos?: InventoryPermissions;
+}
+
 export interface InventorySupplyInput {
   nombre: string;
   unidad: InventoryUnit;
