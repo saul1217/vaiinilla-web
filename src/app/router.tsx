@@ -6,11 +6,13 @@ import { Spinner } from '../components/brand-mark';
 import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/features';
+import { CORTES_REPORTE_ENABLED } from '../lib/features';
 
 const AuthPage = lazy(() => import('../pages/auth-page').then((module) => ({ default: module.AuthPage })));
 const AccessSelectionPage = lazy(() => import('../pages/access-selection-page').then((module) => ({ default: module.AccessSelectionPage })));
 const TenantDashboardPage = lazy(() => import('../pages/tenant-dashboard-page').then((module) => ({ default: module.TenantDashboardPage })));
 const InventarioPage = lazy(() => import('../pages/inventario-page').then((module) => ({ default: module.InventarioPage })));
+const CortesReportePage = lazy(() => import('../pages/cortes-reporte-page').then((module) => ({ default: module.CortesReportePage })));
 const InvitationsPage = lazy(() => import('../pages/invitations-page').then((module) => ({ default: module.InvitationsPage })));
 const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({ default: module.OrdersPage })));
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
@@ -64,6 +66,7 @@ function TenantArea() {
               <OrdersPage />
             </RoleGuard>
           </Route>
+          {CORTES_REPORTE_ENABLED && <Route path="/app/cortes"><RoleGuard allowed={['admin']}><CortesReportePage /></RoleGuard></Route>}
           <Route path="/app/menu">
             <RoleGuard allowed={['admin']}>
               <MenuPage />

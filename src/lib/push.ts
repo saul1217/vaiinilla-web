@@ -8,7 +8,7 @@
 // abierta y esto cubre el resto (pestaña en segundo plano, navegador cerrado,
 // teléfono bloqueado), que es donde `new Notification()` no alcanza en móviles.
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getMessaging, getToken, isSupported } from 'firebase/messaging';
+import { deleteToken, getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { api } from './api';
 
 const firebaseConfig = {
@@ -52,22 +52,73 @@ function rutaDelWorker(): string {
 
 const PREFERENCIA = 'vaiinilla_push_activo';
 
+// Marca compartida con el service worker (Cache Storage es visible para ambos). El
+// worker no puede leer la sesión en memoria, así que la página le deja dicho si hay
+// sesión. El worker falla cerrado: solo muestra avisos si la marca vale exactamente
+// 'on'; ausente, 'off', ilegible o con Cache Storage roto se trata como sin sesión.
+const CACHE_SESION = 'vaiinilla-push-sesion';
+const CLAVE_SESION = '/__push-sesion__';
+
+async function marcarSesionPush(activa: boolean): Promise<void> {
+  try {
+    if (typeof caches === 'undefined') return;
+    const cache = await caches.open(CACHE_SESION);
+    await cache.put(CLAVE_SESION, new Response(activa ? 'on' : 'off'));
+  } catch {
+    // Sin Cache Storage queda la baja del token. El worker ya falla cerrado: sin
+    // marca 'on' legible no muestra nada.
+  }
+}
+
+/** Usuario de la sesión abierta en esta pestaña; la preferencia solo vale para él. */
+let uidSesion: string | null = null;
+
 /**
  * Preferencia del usuario, separada del permiso del navegador: puede tener el
  * permiso concedido y aun así querer las notificaciones apagadas (su día libre, o
  * trabaja con el panel a la vista y no quiere el doble aviso).
+ *
+ * Vive en el localStorage del NAVEGADOR, así que se guarda ligada al uid ('si:<uid>'):
+ * si otra persona abre sesión en este navegador, la preferencia heredada no cuenta.
+ * El valor antiguo 'si' (sin uid) tampoco cuenta; hay que volver a activar.
  */
-export function pushPreferido(): boolean {
+export function pushPreferido(uid: string | null = uidSesion): boolean {
+  if (!uid) return false;
   try {
-    return window.localStorage.getItem(PREFERENCIA) === 'si';
+    return window.localStorage.getItem(PREFERENCIA) === `si:${uid}`;
   } catch {
     return false;
   }
 }
 
-function guardarPreferencia(activo: boolean): void {
+export interface SesionPush {
+  token: string;
+  uid: string;
+}
+
+/**
+ * Alinea la marca del worker con la sesión real cada vez que la app carga o la sesión
+ * cambia, sin depender de que se haya hecho logout.
+ *
+ * La marca SIEMPRE baja a 'off' primero. Con sesión y preferencia propia (mismo uid) se
+ * vuelve a registrar el token con la credencial ACTUAL (POST /devices, que en el back
+ * reasigna el token a este usuario) y solo si el registro sale bien y `vigente()` sigue
+ * siendo true (la sesión no cambió mientras tanto) la marca pasa a 'on'. Si el registro
+ * falla, la preferencia es de otro uid o la sesión cambió, se queda en 'off'. Nunca lanza.
+ */
+export async function syncPushSession(
+  sesion: SesionPush | null,
+  vigente: () => boolean = () => true,
+): Promise<void> {
+  uidSesion = sesion?.uid ?? null;
+  await marcarSesionPush(false);
+  if (!sesion || !pushPreferido(sesion.uid)) return;
+  await enablePush(sesion.token, { uid: sesion.uid, vigente, sinPedirPermiso: true });
+}
+
+function guardarPreferencia(activo: boolean, uid: string | null): void {
   try {
-    window.localStorage.setItem(PREFERENCIA, activo ? 'si' : 'no');
+    window.localStorage.setItem(PREFERENCIA, activo && uid ? `si:${uid}` : 'no');
   } catch {
     // Sin almacenamiento la preferencia dura lo que la pestaña; no es crítico.
   }
@@ -81,13 +132,23 @@ function guardarPreferencia(activo: boolean): void {
  */
 export async function enablePush(
   sessionToken: string,
+  opciones: {
+    uid?: string | null;
+    /** false si la sesión que inició el registro ya no es la vigente. */
+    vigente?: () => boolean;
+    /** Restauración automática: sin permiso ya concedido no se pregunta nada. */
+    sinPedirPermiso?: boolean;
+  } = {},
 ): Promise<'ok' | 'denied' | 'unsupported' | 'error'> {
+  const uid = opciones.uid ?? uidSesion;
+  const vigente = opciones.vigente ?? (() => true);
   if (!pushConfigured) return 'unsupported';
   try {
     if (!(await isSupported())) return 'unsupported';
     if (typeof Notification === 'undefined') return 'unsupported';
 
     if (Notification.permission === 'denied') return 'denied';
+    if (opciones.sinPedirPermiso && Notification.permission !== 'granted') return 'denied';
     if (Notification.permission === 'default') {
       const respuesta = await Notification.requestPermission();
       if (respuesta !== 'granted') return 'denied';
@@ -102,9 +163,26 @@ export async function enablePush(
     });
     if (!token) return 'error';
 
+    if (!uid || !vigente()) return 'error';
     await api.registerDevice(sessionToken, token);
+    if (!vigente()) {
+      // La sesión cambió mientras se registraba: no se enciende nada y se suelta la
+      // fila recién creada con la credencial que la creó.
+      try {
+        await api.unregisterDevice(sessionToken, token);
+      } catch (error) {
+        console.warn('[push] no se pudo soltar un registro de sesión vencida:', error);
+      }
+      return 'error';
+    }
     tokenActual = token;
-    guardarPreferencia(true);
+    guardarPreferencia(true, uid);
+    await marcarSesionPush(true);
+    if (!vigente()) {
+      // La sesión cambió justo al escribir la marca: se vuelve a apagar.
+      await marcarSesionPush(false);
+      return 'error';
+    }
     return 'ok';
   } catch (error) {
     console.warn('[push] no se pudo activar:', error);
@@ -120,7 +198,9 @@ export async function enablePush(
  * (por ejemplo tras recargar), lo recupera del registro para poder borrarlo.
  */
 export async function disablePush(sessionToken: string): Promise<void> {
-  guardarPreferencia(false);
+  guardarPreferencia(false, null);
+  // Primero la marca local: el worker deja de mostrar avisos aunque la red falle.
+  await marcarSesionPush(false);
   let token = tokenActual;
   if (!token && pushConfigured) {
     try {
@@ -141,5 +221,47 @@ export async function disablePush(sessionToken: string): Promise<void> {
     console.warn('[push] no se pudo dar de baja el token:', error);
   } finally {
     tokenActual = null;
+  }
+  // Invalida el token en FCM: el dispositivo deja de recibir aunque la baja en el
+  // back haya fallado. Se pide uno nuevo la próxima vez que alguien active el push.
+  try {
+    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    await deleteToken(getMessaging(app));
+  } catch (error) {
+    console.warn('[push] no se pudo eliminar el token de Firebase:', error);
+  }
+}
+
+const ESPERA_BAJA_MS = 4000;
+
+/**
+ * Baja el token de ESTE dispositivo para la sesión que sale, antes de que se borre
+ * su credencial. Solo toca el token local (DELETE /devices/:token); los demás
+ * dispositivos del mismo usuario no se afectan.
+ *
+ * Nunca lanza ni espera más de unos segundos: un fallo de red se registra y el cierre
+ * de sesión continúa. Sin permiso de notificaciones concedido no hay token que dar de
+ * baja, así que no se intenta pedir ninguno.
+ */
+export async function releasePush(sessionToken: string | null | undefined): Promise<void> {
+  if (!sessionToken) return;
+  if (
+    !tokenActual &&
+    (typeof Notification === 'undefined' || Notification.permission !== 'granted')
+  ) {
+    return;
+  }
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      disablePush(sessionToken),
+      new Promise<void>((resolve) => {
+        temporizador = setTimeout(resolve, ESPERA_BAJA_MS);
+      }),
+    ]);
+  } catch (error) {
+    console.warn('[push] no se pudo dar de baja el token al cerrar sesión:', error);
+  } finally {
+    clearTimeout(temporizador);
   }
 }

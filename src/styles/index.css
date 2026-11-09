@@ -11,7 +11,7 @@
   --color-white-warm: #fbf9f2;
   --color-muted: #655f50;
   --color-lime-text: #4f6c12;
-  --font-sans: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 :root {

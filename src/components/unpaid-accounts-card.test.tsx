@@ -86,6 +86,20 @@ describe('cuentas sin cobrar', () => {
     );
   });
 
+  it.each([
+    ['número', 2, undefined],
+    ['lista', [{ id: 1, folio: 'A1', total: '10.00', restante: '10.00' }, { id: 2, folio: 'A2', total: '5.00', restante: '5.00' }], undefined],
+    ['num_pedidos', [], 2],
+  ])('cuenta los pedidos cuando pedidos es %s', async (_name, pedidos, num_pedidos) => {
+    apiMock.unpaidAccounts.mockResolvedValue({
+      total: '15.00',
+      abandonadas: 0,
+      cuentas: [{ espacio: { id: 3, nombre: 'Mesa 1', tipo: 'mesa' }, pedidos, num_pedidos, total: '15.00', desde: '2026-09-30T20:00:00Z', horas: 0, clientes: [], abandonada: false }],
+    });
+    render(<UnpaidAccountsCard />, { wrapper: Wrapper });
+    expect(await screen.findByText(/2 pedidos/)).toBeInTheDocument();
+  });
+
   it('la edad en horas', () => {
     expect(unpaidAgeLabel(0)).toBe('hace menos de 1 h');
     expect(unpaidAgeLabel(26)).toBe('hace 26 h');

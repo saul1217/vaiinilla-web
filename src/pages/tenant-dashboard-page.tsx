@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PeriodSelector, RankedBarChart, SalesTrendChart } from '../components/analytics-dashboard';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
+import { CardErrorBoundary } from '../components/card-error-boundary';
 import { UnpaidAccountsCard } from '../components/unpaid-accounts-card';
 import { Feedback } from '../components/ui';
 import { useSessions } from '../context/session-context';
@@ -25,6 +26,7 @@ import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/features';
+import { CORTES_REPORTE_ENABLED } from '../lib/features';
 
 const paymentLabels = {
   efectivo: 'Efectivo',
@@ -309,7 +311,9 @@ export function TenantDashboardPage() {
         </section>
       ) : null}
 
-      <UnpaidAccountsCard />
+      <CardErrorBoundary label="Cuentas sin cobrar">
+        <UnpaidAccountsCard />
+      </CardErrorBoundary>
 
       <nav className="dashboard-access" aria-label="Accesos">
         <ul>
@@ -351,6 +355,7 @@ export function TenantDashboardPage() {
               <ChevronRight aria-hidden="true" />
             </Link>
           </li>
+          {CORTES_REPORTE_ENABLED && <li><Link to="/app/cortes"><ReceiptText aria-hidden="true" /><span>Cortes y reporte</span><ChevronRight aria-hidden="true" /></Link></li>}
         </ul>
       </nav>
     </div>
