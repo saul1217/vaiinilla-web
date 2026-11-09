@@ -12,6 +12,7 @@ import { Button, Feedback, Field } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
+import { VaiinillaApiError } from '../lib/api-error';
 import { cardPaymentsStep } from '../lib/card-payments';
 import {
   BUSINESS_TYPE_LABELS,
@@ -59,6 +60,9 @@ export function StoreFlowPage() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowSettings | null>(null);
   const [saved, setSaved] = useState(false);
+  const [transitionType, setTransitionType] = useState('');
+  const [transitionPreflight, setTransitionPreflight] = useState<import('../types/api').ConfigurationTransitionPreflight | null>(null);
+  const [transitionUnavailable, setTransitionUnavailable] = useState(false);
   const [editor, setEditor] = useState<StoreFlowEditor>(null);
   const opener = useRef<HTMLElement>(null);
   const openEditor = (next: Exclude<StoreFlowEditor, null>, event: React.MouseEvent<HTMLButtonElement>) => {
@@ -93,14 +97,32 @@ export function StoreFlowPage() {
   const current = query.data ? toSettings(query.data) : null;
   const settings = draft ?? current;
   const save = useMutation({
-    mutationFn: (input: FlowSettings) =>
-      api.saveBusinessSettings(token, { ...input, franjas_pedido: sortFranjas(input.franjas_pedido) }),
+    mutationFn: (input: FlowSettings) => {
+      const flow = { ...input };
+      delete (flow as Partial<FlowSettings>).tipo;
+      return api.saveBusinessSettings(token, { ...flow, franjas_pedido: sortFranjas(input.franjas_pedido) });
+    },
     onSuccess: (data) => {
       // Mostrar ya lo guardado: si no, la página enseña un instante los datos viejos hasta recargar.
       queryClient.setQueryData(['business-settings', scopeId], data);
       setDraft(null);
       setSaved(true);
       void queryClient.invalidateQueries({ queryKey: ['business-settings', scopeId] });
+    },
+  });
+  const transitionCheck = useMutation({
+    mutationFn: () => api.preflightBusinessTransition(token, { cambios: { tipo: transitionType } }),
+    onSuccess: (result) => { setTransitionPreflight(result); setTransitionUnavailable(false); },
+    onError: (error) => { setTransitionPreflight(null); setTransitionUnavailable(error instanceof VaiinillaApiError && error.status === 404); },
+  });
+  const transitionApply = useMutation({
+    mutationFn: () => {
+      if (!transitionPreflight) throw new Error('Primero revisa la transición.');
+      return api.applyBusinessTransition(token, { version_esperada: transitionPreflight.version_actual, cambios: { tipo: transitionType } });
+    },
+    onSuccess: async () => {
+      setTransitionPreflight(null);
+      await queryClient.invalidateQueries({ queryKey: ['business-settings', scopeId] });
     },
   });
 
@@ -133,10 +155,64 @@ export function StoreFlowPage() {
       )}
       {unknownType && (
         <Feedback tone="error">
-          Tu negocio tiene un tipo que esta pantalla no conoce ({query.data?.tipo}). Elige una plantilla para continuar.
+          Tu negocio tiene un tipo desconocido ({query.data?.tipo}). Se aplica modo seguro: no se anuncian capacidades nuevas ni se ofrecen transiciones.
         </Feedback>
       )}
       {query.isLoading && <div className="table-loading">Consultando tu negocio…</div>}
+      {query.data && (
+        <section className="panel-card grid gap-3 p-5" aria-label="Contrato de capacidades v1">
+          <h2 className="text-lg font-extrabold text-ink">Capacidades efectivas · contrato v1</h2>
+          {query.data.contrato_v1 ? (
+            <>
+              {!query.data.contrato_v1.tipo_comercial_conocido && (
+                <Feedback tone="error">Tipo no reconocido: UNKNOWN_TYPE_FAILSAFE. Capacidades nuevas desactivadas.</Feedback>
+              )}
+              <ul className="grid gap-2 text-sm text-muted sm:grid-cols-2">
+                {Object.entries(query.data.contrato_v1.capacidades).map(([name, capability]) => (
+                  <li key={name} className="flex justify-between gap-3">
+                    <span>{name}</span><strong>{capability.enabled ? 'Disponible' : 'No disponible'}</strong>
+                  </li>
+                ))}
+              </ul>
+              {query.data.contrato_v1.capacidades.transicion_segura_hito2?.enabled === false && (
+                <p className="text-sm text-muted">HITO2_NOT_IMPLEMENTED: el cambio de tipo no está habilitado en este hito.</p>
+              )}
+              {query.data.contrato_v1.ocultacion_producto.saldo_wallet?.visible === false && query.data.contrato_v1.ocultacion_producto.cashback?.visible === false && (
+                <p className="text-sm text-muted">Saldo Vaiinilla y cashback permanecen ocultos.</p>
+              )}
+            </>
+          ) : (
+            <Feedback tone="info">El servidor no envió contrato_v1; fallback seguro: todas las capacidades nuevas se consideran desactivadas.</Feedback>
+          )}
+          {query.data.catalogo_tipos ? (
+            query.data.catalogo_tipos.tipos.length ? (
+              <p className="text-sm text-muted">Catálogo v{query.data.catalogo_tipos.version}: {query.data.catalogo_tipos.tipos.length} tipos.</p>
+            ) : <Feedback tone="info">Catálogo de tipos vacío; no se ofrecen tipos nuevos.</Feedback>
+          ) : <Feedback tone="info">Catálogo de tipos no disponible; no se ofrecen tipos nuevos.</Feedback>}
+          {current && query.data.catalogo_tipos && (
+            <div className="grid gap-3 border-t border-ink/10 pt-4">
+              <h3 className="font-bold text-ink">Cambiar tipo de establecimiento</h3>
+              <p className="text-sm text-muted">La revisión es de solo lectura. El cambio requiere preflight permitido y conserva la configuración actual.</p>
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="grid min-w-56 gap-1 text-sm">Nuevo tipo
+                  <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={transitionType} onChange={(event) => { setTransitionType(event.target.value); setTransitionPreflight(null); }}>
+                    <option value="">Selecciona un tipo</option>
+                    {query.data.catalogo_tipos.tipos.filter((option) => option.seleccion_permitida && option.tipo !== current.tipo).map((option) => <option key={option.tipo} value={option.tipo}>{option.etiqueta}</option>)}
+                  </select>
+                </label>
+                <Button disabled={!transitionType || transitionCheck.isPending} onClick={() => transitionCheck.mutate()}>{transitionCheck.isPending ? 'Revisando…' : 'Revisar transición'}</Button>
+                {transitionPreflight?.permitido && <Button disabled={transitionApply.isPending} onClick={() => transitionApply.mutate()}>{transitionApply.isPending ? 'Aplicando…' : 'Aplicar cambio'}</Button>}
+              </div>
+              {transitionUnavailable && <Feedback tone="info">La transición no está disponible en este servidor (404). Actualiza el backend con los endpoints del contrato Hito 2.</Feedback>}
+              {transitionCheck.isError && !transitionUnavailable && <Feedback tone="error">{errorMessage(transitionCheck.error)}</Feedback>}
+              {transitionPreflight && <div className="grid gap-2 text-sm"><Feedback tone={transitionPreflight.permitido ? 'success' : 'error'}>{transitionPreflight.permitido ? 'Transición permitida.' : 'Transición bloqueada.'} Versión actual: {transitionPreflight.version_actual}. {transitionPreflight.reason_codes.join(', ')}</Feedback>{transitionPreflight.bloqueos.map((block, index) => <p key={`${block.code}-${index}`} className="text-muted">{block.code}: {block.message}</p>)}<details><summary className="cursor-pointer font-semibold">Capacidades resultantes</summary><pre className="mt-2 overflow-auto rounded-xl bg-cream p-3 text-xs">{JSON.stringify(transitionPreflight.capacidades_resultantes, null, 2)}</pre></details></div>}
+              {transitionApply.isError && !(transitionApply.error instanceof VaiinillaApiError && transitionApply.error.status === 404) && <Feedback tone="error">{transitionApply.error instanceof VaiinillaApiError && transitionApply.error.code === 'CONFIG_VERSION_CONFLICT' ? 'La configuración cambió desde la revisión. Recarga la configuración e inténtalo de nuevo.' : transitionApply.error instanceof VaiinillaApiError && transitionApply.error.code === 'CONFIG_TRANSITION_BLOCKED' ? `El servidor bloqueó el cambio: ${JSON.stringify(transitionApply.error.details ?? transitionPreflight?.bloqueos ?? [])}` : errorMessage(transitionApply.error)}</Feedback>}
+              {transitionApply.isError && transitionApply.error instanceof VaiinillaApiError && transitionApply.error.code === 'CONFIG_VERSION_CONFLICT' && <Button onClick={() => { setTransitionPreflight(null); void query.refetch(); }}>Recargar configuración</Button>}
+              {transitionApply.isError && transitionApply.error instanceof VaiinillaApiError && transitionApply.error.status === 404 && <Feedback tone="info">La aplicación de transiciones no está disponible en este servidor (404).</Feedback>}
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="store-flow-cards" aria-label="Configuración de mi tienda">
         <article className="panel-card store-flow-summary">
@@ -238,7 +314,7 @@ export function StoreFlowPage() {
         description="Ajusta el flujo y guarda cuando esté listo."
         returnFocusRef={opener}
       >
-        {(settings || unknownType) && (
+        {settings && (
           <>
             <section className="panel-card p-5 sm:p-6" aria-labelledby="flow-templates-title">
               <h2 id="flow-templates-title" className="text-xl font-extrabold text-ink">
@@ -250,24 +326,26 @@ export function StoreFlowPage() {
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {FLOW_TEMPLATES.map((option) => {
                   const selected = template?.id === option.id;
+                  const typeLocked = option.settings.tipo !== current?.tipo;
                   return (
                     <button
                       key={option.id}
                       type="button"
                       aria-pressed={selected}
+                      disabled={typeLocked}
                       onClick={() => {
                         setSaved(false);
                         setDraft({ ...option.settings });
                       }}
                       className={`flex flex-col gap-1 rounded-2xl border p-4 text-left transition ${
-                        selected ? 'border-ink bg-lime' : 'border-ink/15 bg-cream hover:border-ink/40'
+                        selected ? 'border-ink bg-lime' : typeLocked ? 'cursor-not-allowed border-ink/10 bg-cream opacity-50' : 'border-ink/15 bg-cream hover:border-ink/40'
                       }`}
                     >
                       <span className="flex items-center justify-between gap-2 text-sm font-extrabold text-ink">
                         {option.label}
                         {selected && <Check aria-hidden="true" className="size-4" />}
                       </span>
-                      <span className="text-xs leading-5 text-muted">{option.description}</span>
+                      <span className="text-xs leading-5 text-muted">{typeLocked ? 'Para cambiar de tipo, usa el preflight de transición.' : option.description}</span>
                     </button>
                   );
                 })}
