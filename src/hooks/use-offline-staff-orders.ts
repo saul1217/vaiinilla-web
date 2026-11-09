@@ -76,7 +76,8 @@ export function useOfflineStaffOrders({ enabled, token, scope, onEvent, store: i
     }
     try {
       const snapshot = queue.snapshot();
-      setState((previous) => ({ ...previous, pending: pendingOf(snapshot), problems: problemsOf(snapshot), storageError: null }));
+      // Una lectura que sí funciona no borra el aviso: la falla pudo ser al escribir.
+      setState((previous) => ({ ...previous, pending: pendingOf(snapshot), problems: problemsOf(snapshot) }));
     } catch (error) {
       const message = error instanceof DurableStorageError ? error.message : STORAGE_UNAVAILABLE_MESSAGE;
       setState((previous) => ({ ...previous, storageError: message }));
@@ -139,6 +140,7 @@ export function useOfflineStaffOrders({ enabled, token, scope, onEvent, store: i
       if (!queue) throw new Error('La operación sin internet no está disponible en esta sesión.');
       try {
         const order = queue.enqueue(entry);
+        setState((previous) => ({ ...previous, storageError: null }));
         refresh();
         return order;
       } catch (error) {
