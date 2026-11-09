@@ -460,11 +460,15 @@ export interface StoreVideo {
 }
 
 /** Cómo funciona el negocio (guía "Flujo de mi tienda"). Solo la administración. */
+export type AssistantMode = 'ambos' | 'personal' | 'ninguno';
+
 export interface BusinessSettings {
   tipo: string;
   pausa_sin_conexion?: boolean;
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
+  /** Disponibilidad del asistente; null cuando la migración de IA aún no está instalada. */
+  asistente_modo: AssistantMode | null;
   /** Si el negocio permite recargas y compras con saldo / wallet. */
   permite_saldo?: boolean;
   gracia_liberacion_min: number;
@@ -487,8 +491,99 @@ export interface BusinessSettings {
 export type StoreImageKind = 'logo' | 'foto';
 
 export type BusinessSettingsInput = Partial<
-  Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url' | 'imagen_url' | 'logo_url'>
->;
+  Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url' | 'imagen_url' | 'logo_url' | 'asistente_modo'>
+> & { asistente_modo?: AssistantMode };
+
+/** Un mensaje de la plática con el asistente de la tienda (POST /establecimiento/asistente). */
+export interface StoreAssistantMessage {
+  rol: 'dueno' | 'asistente';
+  texto: string;
+}
+
+/** Un Excel (.xlsx) que el dueño mandó en la plática; viaja completo en cada mensaje. */
+export interface StoreAssistantFile {
+  /** excel1, excel2 o excel3: es el token que va en el texto como [excel1]. */
+  id: string;
+  nombre: string;
+  /** El .xlsx en base64. */
+  contenido: string;
+}
+
+/**
+ * Lo que propone el asistente. `cambios` va con PATCH /establecimiento/configuracion; las demás
+ * secciones (mesas, menú, personal, inventario, reservas…) tienen cada una su ruta y hoy las
+ * aplican las apps de Android e iOS.
+ */
+export interface StoreAssistantProposal {
+  cambios?: BusinessSettingsInput;
+  motivos?: Record<string, string>;
+  [seccion: string]: unknown;
+}
+
+export interface StoreAssistantReply {
+  mensaje: string;
+  opciones?: string[];
+  propuesta?: StoreAssistantProposal | null;
+  /** La propuesta va por partes: al aceptarla, «Sigue con lo demás» trae el resto. */
+  sigue?: boolean;
+  /** Mensajes que caben todavía en la plática (el tope es 60). */
+  quedan_mensajes?: number;
+}
+
+export type InventoryUnit = 'pieza' | 'ml' | 'l' | 'g' | 'kg' | 'oz' | 'botella' | 'porcion';
+
+/** Un insumo del inventario (GET /inventario/insumos); solo lo que usa la web. */
+export interface InventorySupply {
+  id: number;
+  nombre: string;
+  unidad: InventoryUnit;
+  activo?: boolean;
+}
+
+export interface InventorySupplyInput {
+  nombre: string;
+  unidad: InventoryUnit;
+  minimo: number;
+  costo_unitario?: number;
+  existencia_inicial?: number;
+}
+
+export interface InventoryMovementInput {
+  /** UUID; el mismo en un reintento para que el servidor no lo registre dos veces. */
+  id: string;
+  insumo_id: number;
+  tipo: 'entrada' | 'merma' | 'conteo';
+  cantidad: number;
+  costo_unitario?: number;
+  nota?: string;
+}
+
+export interface InventoryProduct {
+  id: number;
+  nombre: string;
+}
+
+/** Una línea de la receta de un producto (GET /inventario/productos/{id}/receta). */
+export interface RecipeLine {
+  insumo_id: number;
+  cantidad: number;
+  opcion_id: number | null;
+}
+
+export interface RecipeLineInput {
+  insumo_id: number;
+  cantidad: number;
+  opcion_id: number | null;
+}
+
+/** POST /reservas desde administración: una renta apartada a nombre de alguien. */
+export interface StaffBookingInput {
+  espacio_id: number;
+  inicio: string;
+  duracion_min: number;
+  nombre_cliente?: string;
+  jugadores?: number;
+}
 
 /** Una cuenta abierta (pagar al final) que nadie ha cobrado. */
 export interface UnpaidAccount {
