@@ -30,7 +30,7 @@ import { AccountAbonoForm } from '../components/account-abono-form';
 import { WaiterBoard } from '../components/waiter-board';
 import { useStaffTheme } from '../lib/staff-ui';
 import { apiUrl } from '../lib/api';
-import { SIN_INTERNET_ENABLED } from '../lib/features';
+import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
 import { environmentOf, type FlushEvent, type OfflineStaffOrder, type OfflineStaffScope } from '../lib/offline-staff-orders';
 import { useOfflineStaffOrders } from '../hooks/use-offline-staff-orders';
 import { OfflineStaffOrdersPanel } from '../components/offline-staff-orders-panel';

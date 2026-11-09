@@ -6,7 +6,7 @@ import { Spinner } from '../components/brand-mark';
 import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
-import { SIN_INTERNET_ENABLED } from '../lib/features';
+import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
 import { IA_CONFIG_ENABLED } from '../lib/features';
 
 const AuthPage = lazy(() => import('../pages/auth-page').then((module) => ({ default: module.AuthPage })));

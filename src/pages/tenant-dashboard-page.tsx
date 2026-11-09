@@ -26,7 +26,7 @@ import { errorMessage } from '../lib/api-error';
 import { defaultAnalyticsPeriod, formatAnalyticsMoney } from '../lib/analytics';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
-import { SIN_INTERNET_ENABLED } from '../lib/features';
+import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
 import { IA_CONFIG_ENABLED } from '../lib/features';
 
 const paymentLabels = {

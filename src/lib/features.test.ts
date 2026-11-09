@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CASHBACK_ENABLED, SIN_INTERNET_ENABLED } from './features';
+import { CASHBACK_ENABLED } from './features';
+import { SIN_INTERNET_ENABLED } from './sin-internet-flag';
 
 describe('feature flags del panel', () => {
   it('cashback desactivado en admin hasta reactivarlo', () => {
