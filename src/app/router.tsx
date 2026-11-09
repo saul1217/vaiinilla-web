@@ -6,6 +6,7 @@ import { Spinner } from '../components/brand-mark';
 import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
+import { useCortesScope, useCortesSessionIsolation } from '../hooks/use-cortes-session-isolation';
 
 const AuthPage = lazy(() => import('../pages/auth-page').then((module) => ({ default: module.AuthPage })));
 const AccessSelectionPage = lazy(() => import('../pages/access-selection-page').then((module) => ({ default: module.AccessSelectionPage })));
@@ -122,6 +123,8 @@ function PlatformArea() {
 
 export function AppRouter() {
   useAdminTheme();
+  // Limpia la caché de cortes al cambiar de sesión aunque la pantalla no esté abierta.
+  useCortesSessionIsolation(useCortesScope());
   return (
     <BrowserRouter>
       <Deferred>
