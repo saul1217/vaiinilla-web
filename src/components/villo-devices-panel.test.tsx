@@ -158,10 +158,10 @@ describe('Panel de dispositivos VILLO', () => {
   });
 
   it.each([
-    ['SPACE_HAS_DEVICE', 409, 'Esa mesa ya tiene un VILLO activo'],
-    ['DEVICE_VERSION_CONFLICT', 409, 'Alguien más cambió este VILLO'],
-    ['SPACE_NOT_FOUND', 404, 'Esa mesa no existe o está inactiva'],
-    ['DEVICE_REVOKED', 409, 'ya está dado de baja'],
+    ['SPACE_HAS_DEVICE', 409, /Esa mesa ya tiene un VILLO activo/],
+    ['DEVICE_VERSION_CONFLICT', 409, /Alguien más cambió este VILLO/],
+    ['SPACE_NOT_FOUND', 404, /Esa mesa no existe o está inactiva/],
+    ['DEVICE_REVOKED', 409, /ya está dado de baja/],
   ])('al editar, %s muestra un mensaje claro', async (code, status, text) => {
     server.use(
       ...baseHandlers([device()]),
@@ -172,13 +172,13 @@ describe('Panel de dispositivos VILLO', () => {
     await user.click(await screen.findByRole('button', { name: 'Editar nombre o mesa' }));
     await user.selectOptions(screen.getByLabelText('Mesa'), '2');
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
-    expect(await screen.findByText(new RegExp(text))).toBeInTheDocument();
+    expect(await screen.findByText(text)).toBeInTheDocument();
   });
 
   it.each([
-    ['VILLO_DISABLED', 403, 'no tiene VILLO activado'],
-    ['FORBIDDEN_ROLE', 403, 'Solo la administración'],
-    ['DEVICE_WITHOUT_SPACE', 409, 'Asígnale una mesa'],
+    ['VILLO_DISABLED', 403, /no tiene VILLO activado/],
+    ['FORBIDDEN_ROLE', 403, /Solo la administración/],
+    ['DEVICE_WITHOUT_SPACE', 409, /Asígnale una mesa/],
   ])('al generar token, %s muestra un mensaje claro', async (code, status, text) => {
     server.use(
       ...baseHandlers([device({ token: { emitido: false, vigente: false, emitido_en: null, expira_en: null } })]),
@@ -188,7 +188,7 @@ describe('Panel de dispositivos VILLO', () => {
     render(<VilloDevicesPanel />, { wrapper: Wrapper });
     await user.click(await screen.findByRole('button', { name: 'Generar token' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Generar token' }));
-    expect(await within(screen.getByRole('dialog')).findByText(new RegExp(text))).toBeInTheDocument();
+    expect(await within(screen.getByRole('dialog')).findByText(text)).toBeInTheDocument();
   });
 
   it('registra un VILLO con nombre y mesa', async () => {
