@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  CalendarDays,
   BadgePercent,
   Building2,
   ChefHat,
@@ -29,6 +30,7 @@ import { NavLink, useHistory, useLocation } from 'react-router-dom';
 import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
+import { AGENDA_ENABLED } from '../lib/agenda-feature';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
 import { BOWLING_ADMIN_ENABLED } from '../lib/bowling-admin-feature';
 import { clearAllPendingRecharges } from '../lib/wallet-caja';
@@ -45,6 +47,9 @@ interface NavItem {
   end?: boolean;
 }
 
+// Agenda de reservas: Administración, Caja y Mesero (los roles que el back deja crear y cancelar).
+const agendaNavigation: NavItem[] = AGENDA_ENABLED ? [{ to: '/app/agenda', label: 'Agenda de reservas', icon: CalendarDays }] : [];
+
 const adminNavigation: NavItem[] = [
   { to: '/app', label: 'Inicio', icon: LayoutDashboard, end: true },
   { to: '/app/menu', label: 'Menú', icon: NotebookTabs },
@@ -60,11 +65,13 @@ const adminNavigation: NavItem[] = [
   // Admin solo consulta el saldo; recargar es de Caja (lo resuelve la página).
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo de clientes', icon: HandCoins } satisfies NavItem] : []),
   { to: '/app/pos', label: 'Pedir', icon: WalletCards },
+  ...agendaNavigation,
 ];
 
 const posNavigation: NavItem[] = [
   { to: '/app/pos', label: 'Caja', icon: WalletCards },
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo', icon: HandCoins } satisfies NavItem] : []),
+  ...agendaNavigation,
   ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
 ];
 const kitchenNavigation: NavItem[] = [
@@ -74,6 +81,7 @@ const kitchenNavigation: NavItem[] = [
 ];
 const waiterNavigation: NavItem[] = [
   { to: '/app/pos', label: 'Mesas', icon: ConciergeBell },
+  ...agendaNavigation,
   ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
 ];
 

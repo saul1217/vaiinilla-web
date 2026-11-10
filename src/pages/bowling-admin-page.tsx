@@ -41,13 +41,13 @@ import { createIdempotencyKey } from '../lib/idempotency';
 import { parseHourlyPrice } from '../lib/hourly-price';
 import { formatMoney, normalizeMoneyInput } from '../lib/money';
 import { clock } from '../lib/space-status';
-import type { BookingAvailability, BookingCourt, ManagedSpace, SpaceAvailability, StaffBooking } from '../types/api';
+import type { CourtAvailabilityDay, CourtAvailabilityCourt, ManagedSpace, SpaceAvailability, StaffBooking } from '../types/api';
 
 type Section = 'pistas' | 'turnos' | 'configurar';
 
 /** Lo que se está rentando: la pista, si es renovación y desde cuándo. */
 interface RentDraft {
-  court: BookingCourt;
+  court: CourtAvailabilityCourt;
   renewalFrom: string | null;
 }
 
@@ -82,7 +82,7 @@ function BowlingScreen({ token, storeId, role }: { token: string; storeId: strin
     queryKey: keys.availability,
     enabled: Boolean(token),
     refetchInterval: 30_000,
-    queryFn: () => api.bookingAvailability(token),
+    queryFn: () => api.courtAvailability(token),
   });
   const bowling = isBowling(availability.data);
   const board = useQuery({
@@ -244,10 +244,10 @@ function LanesNow({
   canRent,
   onRent,
 }: {
-  availability: BookingAvailability;
+  availability: CourtAvailabilityDay;
   board: Map<number, SpaceAvailability>;
   canRent: boolean;
-  onRent: (court: BookingCourt, renewalFrom: string | null) => void;
+  onRent: (court: CourtAvailabilityCourt, renewalFrom: string | null) => void;
 }) {
   const now = new Date();
   if (availability.canchas.length === 0) {
@@ -344,7 +344,7 @@ function RentLaneDialog({
 }: {
   token: string;
   draft: RentDraft;
-  availability: BookingAvailability;
+  availability: CourtAvailabilityDay;
   onClose: () => void;
   onReserved: (created: { id: string; monto: string; inicio: string; fin: string; espacio?: { nombre: string } | null }) => void;
 }) {

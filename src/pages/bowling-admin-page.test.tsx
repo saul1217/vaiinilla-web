@@ -5,7 +5,7 @@ import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { MemoryRouter } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BookingAvailability, ManagedSpace, SpaceAvailability, StaffBooking } from '../types/api';
+import type { CourtAvailabilityDay, ManagedSpace, SpaceAvailability, StaffBooking } from '../types/api';
 import { BowlingAdminPage } from './bowling-admin-page';
 
 const baseUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
@@ -20,9 +20,9 @@ const RENTAL_ID = ['5d1c2b3a', '1f2e', '4c3d', '8b7a', '0f1e2d3c4b5a'].join('-')
 const LATER = new Date(Date.now() + 3 * 3600_000).toISOString();
 const END = new Date(Date.now() + 3600_000).toISOString();
 
-const availability = (patch: Partial<BookingAvailability> = {}): BookingAvailability => ({
+const availability = (patch: Partial<CourtAvailabilityDay> = {}): CourtAvailabilityDay => ({
   fecha: '2026-11-10', hoy: '2026-11-10', zona_horaria: 'America/Mexico_City', apertura: '12:00', cierre: '23:00',
-  abre: '2026-11-10T18:00:00Z', cierra: '2026-11-11T05:00:00Z', bloque_min: 30, duraciones_min: [60, 120, 180],
+  abre: '2026-11-10T18:00:00Z', cierra: '2026-11-11T05:00:00Z', bloque_min: 30, duraciones_min: [60, 120, 180], dias_adelanto: 7,
   tipo_establecimiento: 'boliche', cerrado: false, ahora: new Date().toISOString(),
   canchas: [
     { espacio: { id: 1, nombre: 'Pista 1', tipo: 'cancha' }, precio_hora: '300.00', rentable: true, capacidad: 6, duraciones_min: [60, 120], ocupado: [] },

@@ -1,6 +1,6 @@
 import { VaiinillaApiError, errorMessage } from './api-error';
 import { calculateChange, normalizeMoneyInput } from './money';
-import type { BookingAvailability, BookingCourt, ManagedSpace, SpaceAvailability, StaffBooking } from '../types/api';
+import type { CourtAvailabilityDay, CourtAvailabilityCourt, ManagedSpace, SpaceAvailability, StaffBooking } from '../types/api';
 
 /*
  * Reglas del boliche, las mismas que la app de Android: VenueContext (BOWLING: «pista», pide jugadores,
@@ -24,7 +24,7 @@ export const bowlingKeys = (storeId: string) => ({
   lanes: ['boliche', storeId, 'pistas'] as const,
 });
 
-export function isBowling(availability: Pick<BookingAvailability, 'tipo_establecimiento'> | null | undefined): boolean {
+export function isBowling(availability: Pick<CourtAvailabilityDay, 'tipo_establecimiento'> | null | undefined): boolean {
   return availability?.tipo_establecimiento === BOWLING_TYPE;
 }
 
@@ -40,7 +40,7 @@ export function canRentLanes(role: string): boolean {
 // region Jugadores y capacidad
 
 /** Tope del selector de jugadores: la capacidad de la pista o el del servidor. */
-export function maxPlayers(court: Pick<BookingCourt, 'capacidad'> | null | undefined): number {
+export function maxPlayers(court: Pick<CourtAvailabilityCourt, 'capacidad'> | null | undefined): number {
   const capacity = court?.capacidad;
   return capacity && capacity > 0 ? Math.min(capacity, MAX_CAPACITY) : DEFAULT_MAX_PLAYERS;
 }
@@ -84,7 +84,7 @@ export function durationLabel(minutes: number): string {
 }
 
 /** Duraciones que se ofrecen en una pista: las suyas, o las del negocio si el servidor no las manda. */
-export function laneDurations(court: Pick<BookingCourt, 'duraciones_min'>, availability: Pick<BookingAvailability, 'duraciones_min'>): number[] {
+export function laneDurations(court: Pick<CourtAvailabilityCourt, 'duraciones_min'>, availability: Pick<CourtAvailabilityDay, 'duraciones_min'>): number[] {
   const own = court.duraciones_min?.length ? court.duraciones_min : availability.duraciones_min ?? [];
   return [...new Set(own)].filter((value) => Number.isInteger(value) && value > 0).sort((a, b) => a - b);
 }
@@ -112,7 +112,7 @@ export interface LaneStatus {
  * El fin del turno lo da `fin_previsto` del tablero de espacios si lo hay: con él se renueva.
  */
 export function laneStatus(
-  court: BookingCourt,
+  court: CourtAvailabilityCourt,
   now: Date,
   board?: Pick<SpaceAvailability, 'estado' | 'fin_previsto'> | null,
 ): LaneStatus {

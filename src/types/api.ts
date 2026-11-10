@@ -783,10 +783,53 @@ export interface StaffBooking {
   version?: number;
   /** Cómo pagó el cliente, si el backend lo manda. */
   metodo_pago?: string | null;
-  /** Jugadores anotados (boliche) y nombre de la renta de mostrador. */
-  jugadores?: number | null;
+  /** Nombre que puso el personal o el cliente al apartar (lo manda el back en develop). */
   nombre_cliente?: string | null;
   duracion_min?: number;
+  /** Pedido de renta; en una pendiente significa que quedó por cobrar (efectivo) o con pago en curso. */
+  pedido_id?: string | null;
+  /** `cliente` o `mostrador`. */
+  canal?: string | null;
+  jugadores?: number | null;
+}
+
+/** Un intervalo tomado de una cancha en GET /reservas/disponibilidad. */
+export interface CourtBusyInterval {
+  inicio: string;
+  fin: string;
+  /** `reserva`, `turno` o `cerrado`. */
+  motivo: string;
+}
+
+export interface CourtAvailabilityCourt {
+  espacio: { id: number; nombre: string; tipo?: string | null };
+  precio_hora: string | null;
+  rentable: boolean;
+  /** Duraciones que respeta el mínimo de la cancha; vacía o ausente con un back anterior. */
+  duraciones_min?: number[];
+  /** Cuántos juegan como máximo (boliche); null o ausente = el tope del servidor (30). */
+  capacidad?: number | null;
+  ocupado: CourtBusyInterval[];
+}
+
+/** Horario reservable de un día y lo ocupado de cada cancha (GET /reservas/disponibilidad). */
+export interface CourtAvailabilityDay {
+  fecha: string;
+  hoy: string;
+  zona_horaria: string;
+  apertura: string;
+  cierre: string;
+  abre: string;
+  cierra: string;
+  bloque_min: number;
+  duraciones_min: number[];
+  dias_adelanto: number;
+  /** «boliche» nombra pistas; lo demás, canchas. Un backend anterior no lo manda. */
+  tipo_establecimiento?: string | null;
+  cerrado?: boolean;
+  apartado_min?: number;
+  ahora: string;
+  canchas: CourtAvailabilityCourt[];
 }
 
 export interface BookingRefundInput {
@@ -816,36 +859,6 @@ export interface BookingRefund {
 export interface CounterRentalPayment {
   reserva: CounterRental;
   cobro: { monto_recibido: string; cambio: string } | null;
-}
-
-/** Una pista o cancha en GET /reservas/disponibilidad. */
-export interface BookingCourt {
-  espacio: { id: number; nombre: string; tipo: string };
-  precio_hora: string | null;
-  rentable: boolean;
-  /** Cuántos juegan como máximo; null = el tope del servidor (30). */
-  capacidad: number | null;
-  /** Duraciones que se pueden rentar en esta pista. */
-  duraciones_min: number[];
-  ocupado: { inicio: string; fin: string; motivo: string }[];
-}
-
-/** GET /reservas/disponibilidad: horario del día y lo ocupado de cada pista. */
-export interface BookingAvailability {
-  fecha: string;
-  hoy: string;
-  zona_horaria: string;
-  apertura: string;
-  cierre: string;
-  abre: string;
-  cierra: string;
-  bloque_min: number;
-  duraciones_min: number[];
-  /** «boliche» nombra pistas; lo demás, canchas. Un backend anterior no lo manda. */
-  tipo_establecimiento?: string | null;
-  cerrado?: boolean;
-  ahora: string;
-  canchas: BookingCourt[];
 }
 
 export interface BookingSettings {

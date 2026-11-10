@@ -25,9 +25,9 @@ import {
   rentalPrice,
   stepPlayers,
 } from './bowling-admin';
-import type { BookingCourt, ManagedSpace, StaffBooking } from '../types/api';
+import type { CourtAvailabilityCourt, ManagedSpace, StaffBooking } from '../types/api';
 
-const court = (patch: Partial<BookingCourt> = {}): BookingCourt => ({
+const court = (patch: Partial<CourtAvailabilityCourt> = {}): CourtAvailabilityCourt => ({
   espacio: { id: 1, nombre: 'Pista 1', tipo: 'cancha' },
   precio_hora: '300.00',
   rentable: true,
