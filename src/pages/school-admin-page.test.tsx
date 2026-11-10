@@ -189,6 +189,57 @@ describe('SchoolAdminPage', () => {
     expect(screen.getByText('Grupo 3°B')).toBeInTheDocument();
   });
 
+  it('al achicar el padrón confirma con el recuento y solo después llama a la API', async () => {
+    const calls: unknown[] = [];
+    server.use(
+      settingsHandler(),
+      http.get(`${baseUrl}/padron`, () => ok({ total: 3, alumnos: [
+        { matricula: 'A-001', nombre: 'Ana', grupo: '3°B' },
+        { matricula: 'A-002', nombre: 'Beto', grupo: '3°B' },
+        { matricula: 'A-003', nombre: 'Caro', grupo: '3°B' },
+      ] })),
+      http.put(`${baseUrl}/padron`, async ({ request }) => {
+        calls.push(await request.json());
+        return ok({ total: 2 });
+      }),
+    );
+    renderPage('padron');
+    await userEvent.click(await screen.findByRole('button', { name: 'Cambiar lista' }));
+    const dialog = await screen.findByRole('dialog');
+    // Se quedan A-001, se van A-002 y A-003, entra A-009.
+    await userEvent.type(within(dialog).getByLabelText('Alumnos'), 'a-001, Ana, 3°B{enter}A-009, Dani, 3°B');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar padrón' }));
+    const confirm = within(dialog).getByRole('group', { name: '¿Reemplazar el padrón?' });
+    expect(within(confirm).getByText('Se quitan 2, se agregan 1. Los hijos ya dados de alta se quedan.')).toBeInTheDocument();
+    expect(calls).toHaveLength(0);
+    // Con «No» no se guarda y la lista pegada sigue ahí.
+    await userEvent.click(within(confirm).getByRole('button', { name: 'No' }));
+    expect(within(dialog).queryByRole('group', { name: '¿Reemplazar el padrón?' })).not.toBeInTheDocument();
+    expect(calls).toHaveLength(0);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar padrón' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Sí, reemplazar' }));
+    expect(await screen.findByText('Padrón guardado: 2 alumnos')).toBeInTheDocument();
+    expect(calls).toEqual([{ alumnos: [{ matricula: 'A-001', nombre: 'Ana', grupo: '3°B' }, { matricula: 'A-009', nombre: 'Dani', grupo: '3°B' }] }]);
+  });
+
+  it('quita el código para unirse solo después de confirmar', async () => {
+    let body: unknown = null;
+    server.use(
+      settingsHandler(),
+      http.patch(`${baseUrl}/establecimiento/configuracion`, async ({ request }) => {
+        body = await request.json();
+        return ok(schoolSettingsFixture({ codigo_union: null, union_requiere_codigo: false }));
+      }),
+    );
+    renderPage('ajustes');
+    await userEvent.click(await screen.findByRole('button', { name: 'Quitar código' }));
+    const confirm = screen.getByRole('group', { name: '¿Quitar el código?' });
+    expect(body).toBeNull();
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Quitar' }));
+    expect(await screen.findByText('Ya no hay código para unirse')).toBeInTheDocument();
+    expect(body).toEqual({ codigo_union: null, union_requiere_codigo: false });
+  });
+
   it('aprueba un tutor y lo saca de la lista', async () => {
     let approved = '';
     server.use(
@@ -205,6 +256,10 @@ describe('SchoolAdminPage', () => {
     expect(await screen.findByText('Ana Pérez · A-001 · 3°B')).toBeInTheDocument();
     expect(await screen.findByText('No está en el padrón · Sin otro tutor · Sin cuenta propia')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Aprobar' }));
+    // Se confirma antes de aprobar.
+    const confirm = screen.getByRole('group', { name: '¿Aprobar a Laura Pérez?' });
+    expect(approved).toBe('');
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Aprobar' }));
     expect(await screen.findByText('Laura Pérez ya cuida a Ana Pérez')).toBeInTheDocument();
     expect(approved).toBe(guardianRequestFixture().tutela_id);
     expect(screen.getByText(/Nadie espera/)).toBeInTheDocument();
