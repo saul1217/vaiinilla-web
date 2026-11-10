@@ -13,6 +13,7 @@ interface ImportMetaEnv {
   /** DSN de Sentry. Sin él, Sentry no se carga. */
   readonly VITE_SENTRY_DSN?: string;
   readonly VITE_ALLOW_UNPUBLISHED_LEGAL_TESTING?: string;
+  readonly VITE_VILLO_OWNER_SESION_NORMAL?: string;
   /** Habilita pagos parciales con efectivo y terminal para pedidos sueltos en Caja. */
   readonly VITE_POS_MIXED_PAYMENTS_ENABLED?: string;
 }

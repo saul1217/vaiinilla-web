@@ -17,7 +17,10 @@ export function VilloPage() {
   const access = useQuery({
     queryKey: ['villo-owner-access', user?.uid ?? null, Boolean(platform?.token)],
     queryFn: async () => {
-      const sessionToken = user ? await user.getIdToken() : null;
+      const tryFirebaseSession =
+        import.meta.env.MODE === 'development' ||
+        import.meta.env.VITE_VILLO_OWNER_SESION_NORMAL === 'true';
+      const sessionToken = user && tryFirebaseSession ? await user.getIdToken() : null;
       try {
         await api.villoOwnerAccess(sessionToken);
         return sessionToken;

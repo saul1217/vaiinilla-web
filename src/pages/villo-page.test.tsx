@@ -5,7 +5,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useSessions } from '../context/session-context';
 import { useAuth } from '../context/auth-context';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VilloPage } from './villo-page';
 
 const baseUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
@@ -28,7 +28,9 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+beforeEach(() => vi.stubEnv('VITE_VILLO_OWNER_SESION_NORMAL', 'true'));
 afterEach(() => {
+  vi.unstubAllEnvs();
   server.resetHandlers();
   vi.mocked(useSessions).mockReturnValue({ platform: { token: 'fixture' }, clearAll: vi.fn() } as unknown as ReturnType<typeof useSessions>);
   vi.mocked(useAuth).mockReturnValue({ user: { uid: 'owner-uid', getIdToken: vi.fn().mockResolvedValue('firebase-token') } } as unknown as ReturnType<typeof useAuth>);
@@ -36,6 +38,39 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe('Sección privada /villo', () => {
+  it('usa ID token de Firebase cuando está habilitado para dev', async () => {
+    server.use(
+      http.get(`${baseUrl}/villo/owner/acceso`, ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer firebase-token');
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.get(`${baseUrl}/villo/owner/guia`, () =>
+        HttpResponse.json({ data: { markdown: '# Guía', actualizado_en: '2026-11-09T12:00:00Z' }, meta: {}, error: null }),
+      ),
+    );
+    render(<VilloPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('heading', { name: 'Villo' })).toBeInTheDocument();
+  });
+
+  it('en producción usa primero la sesión de plataforma sin pedir el ID token Firebase', async () => {
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('VITE_VILLO_OWNER_SESION_NORMAL', 'false');
+    const getIdToken = vi.fn().mockResolvedValue('firebase-token');
+    vi.mocked(useAuth).mockReturnValue({ user: { uid: 'owner-uid', getIdToken } } as unknown as ReturnType<typeof useAuth>);
+    server.use(
+      http.get(`${baseUrl}/villo/owner/acceso`, ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer fixture');
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.get(`${baseUrl}/villo/owner/guia`, () =>
+        HttpResponse.json({ data: { markdown: '# Guía', actualizado_en: '2026-11-09T12:00:00Z' }, meta: {}, error: null }),
+      ),
+    );
+    render(<VilloPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('heading', { name: 'Villo' })).toBeInTheDocument();
+    expect(getIdToken).not.toHaveBeenCalled();
+  });
+
   it('con 204 en acceso y una guía válida, renderiza el markdown', async () => {
     server.use(
       http.get(`${baseUrl}/villo/owner/acceso`, ({ request }) => {
