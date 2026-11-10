@@ -1049,3 +1049,71 @@ export interface VilloDeviceUpdateInput {
   espacio_id?: number | null;
   version_esperada?: number;
 }
+
+/** GET/PUT /hotel/configuracion (vaiinilla_back docs/hotel.md). `activo` es false si el negocio no es hotel. */
+export interface HotelSettings {
+  activo: boolean;
+  cargo_habitacion_activo: boolean;
+  tarjeta_al_pedir: boolean;
+  codigo_entrega_activo: boolean;
+  cocina_desde: string | null;
+  cocina_hasta: string | null;
+  solicitudes_activas: boolean;
+  no_molestar_activo: boolean;
+  hora_checkout: string | null;
+  salida_tardia_hora: string | null;
+  salida_tardia_precio: string | null;
+}
+
+/** Lo que acepta PUT /hotel/configuracion: todo menos `activo`; `hora_checkout` no admite null. */
+export type HotelSettingsInput = Partial<Omit<HotelSettings, 'activo' | 'hora_checkout'>> & {
+  hora_checkout?: string;
+};
+
+/** GET /hotel/resumen (admin). */
+export interface HotelSummary {
+  habitaciones: { total: number; ocupadas: number; por_limpiar: number; sin_molestar: number };
+  room_service: { pedidos_hoy: number; ventas_hoy: string | null; pedidos_a_cuartos: number; en_cocina_ahora: number };
+  solicitudes: { abiertas: number; mas_vieja_desde: string | null };
+  lo_mas_pedido: { producto: string; cantidad: number }[];
+  llegadas_hoy: number;
+  salidas_hoy: {
+    estancia_id: string;
+    huesped_nombre: string | null;
+    habitacion: { id: number; nombre: string } | null;
+    salida_prevista: string | null;
+  }[];
+  consultado_en: string | null;
+}
+
+/** Una fila de GET /habitaciones; `qr_*` solo llegan a admin. */
+export interface HotelRoom {
+  id: number;
+  nombre: string;
+  piso: number | null;
+  categoria: string | null;
+  limpieza: 'lista' | 'por_limpiar';
+  ocupada: boolean;
+  no_molestar: boolean;
+  estancia: { id: string; huesped_nombre: string | null; salida_prevista: string | null } | null;
+  solicitudes_abiertas: number;
+  pedidos_en_curso: number;
+  qr_token?: string | null;
+  qr_url?: string | null;
+}
+
+/** POST /habitaciones/lote. */
+export interface HotelRoomBatchInput {
+  prefijo: string;
+  desde: number;
+  hasta: number;
+  piso?: number | null;
+  categoria?: string | null;
+}
+
+export interface HotelRoomBatchResult {
+  solicitadas: number;
+  creadas: number;
+  convertidas: number;
+  omitidas: string[];
+}

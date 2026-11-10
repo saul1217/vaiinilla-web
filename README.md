@@ -50,6 +50,7 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 | `/app/invitaciones` | Crear, consultar, revocar y reenviar invitaciones |
 | `/app/pedidos` | Consultar pedidos activos, entregados e incidencias |
 | `/app/pos` | Abrir/cerrar Caja; para el rol Caja, cobrar efectivo y entregar con QR |
+| `/app/hotel`, `/app/hotel/habitaciones`, `/app/hotel/ajustes` | Admin de Hotel (resumen, alta de habitaciones en lote con QR y ajustes). Detrás de `HOTEL_ADMIN_ENABLED` (`src/lib/hotel-admin-feature.ts`, apagada); solo rol admin en un negocio con hotel |
 | `/invitaciones/aceptar` | Confirmar identidad y aceptar una invitación recibida por correo |
 | `/acceso/verificar` | Procesar el enlace de verificación de correo de Firebase |
 | `/acceso/recuperar` | Definir una contraseña nueva desde un enlace de recuperación |

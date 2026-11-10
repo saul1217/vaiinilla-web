@@ -4,6 +4,7 @@ import {
   BadgePercent,
   ChevronRight,
   HandCoins,
+  Hotel,
   ClipboardList,
   NotebookTabs,
   PackageCheck,
@@ -29,6 +30,8 @@ import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
 import { IA_CONFIG_ENABLED } from '../lib/features';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
+import { HOTEL_ADMIN_ENABLED } from '../lib/hotel-admin-feature';
+import { hotelKeys } from '../lib/hotel-admin';
 
 const paymentLabels = {
   efectivo: 'Efectivo',
@@ -62,6 +65,13 @@ export function TenantDashboardPage() {
     queryKey: ['invitations', 'pendiente', 'summary'],
     enabled: Boolean(token),
     queryFn: () => api.listInvitations(token, { estado: 'pendiente', limit: 50 }),
+  });
+
+  // El acceso al hotel solo sale en un negocio con hotel; con la bandera apagada no se consulta.
+  const hotelSettings = useQuery({
+    queryKey: hotelKeys(scopeId).settings,
+    enabled: HOTEL_ADMIN_ENABLED && Boolean(token),
+    queryFn: () => api.hotelSettings(token),
   });
 
   const cashSession = useQuery({
@@ -327,6 +337,7 @@ export function TenantDashboardPage() {
             </Link>
           </li>
           {IA_CONFIG_ENABLED && <li><Link to="/app/asistente-configuracion"><ShieldCheck aria-hidden="true" /><span>Asistente de configuración</span><ChevronRight aria-hidden="true" /></Link></li>}
+          {HOTEL_ADMIN_ENABLED && hotelSettings.data?.activo && <li><Link to="/app/hotel"><Hotel aria-hidden="true" /><span>Hotel</span><ChevronRight aria-hidden="true" /></Link></li>}
           {INVENTARIO_ENABLED && <li><Link to="/app/inventario"><PackageCheck aria-hidden="true" /><span>Inventario y recetas</span><ChevronRight aria-hidden="true" /></Link></li>}
           <li>
             <Link to="/app/pedidos">
