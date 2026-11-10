@@ -205,7 +205,7 @@ describe('releaseHeldRental', () => {
       .mockRejectedValueOnce(apiError(503, 'HTTP_ERROR'))
       .mockResolvedValueOnce(undefined);
     const waits: number[] = [];
-    await expect(releaseHeldRental(cancel, { wait: async (ms) => { waits.push(ms); } })).resolves.toEqual({ ok: true });
+    await expect(releaseHeldRental(cancel, { wait: (ms) => { waits.push(ms); return Promise.resolve(); } })).resolves.toEqual({ ok: true });
     expect(cancel).toHaveBeenCalledTimes(3);
     expect(waits).toEqual([300, 900]);
   });
