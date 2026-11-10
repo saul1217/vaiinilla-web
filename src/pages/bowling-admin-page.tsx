@@ -32,6 +32,8 @@ import {
   playersLabel,
   renewalStart,
   rentalChange,
+  releaseFailureMessage,
+  releaseHeldRental,
   rentalPrice,
   stepPlayers,
   type LaneBatchDraft,
@@ -58,6 +60,16 @@ interface Charge {
   amount: string;
   /** La apartó esta pantalla: si se cierra sin cobrar, se suelta el horario. */
   release: boolean;
+  /** Pista, para el aviso si no se pudo soltar. */
+  laneName: string;
+  /** Llave de la cancelación al soltar: la misma en cada reintento. */
+  releaseKey?: string;
+}
+
+/** Una renta apartada que no se pudo soltar: se avisa y se puede reintentar con la misma llave. */
+interface ReleaseFailure {
+  charge: Charge;
+  message: string;
 }
 
 export function BowlingAdminPage() {
@@ -77,6 +89,8 @@ function BowlingScreen({ token, storeId, role }: { token: string; storeId: strin
   const [rent, setRent] = useState<RentDraft | null>(null);
   const [charge, setCharge] = useState<Charge | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [releaseFailure, setReleaseFailure] = useState<ReleaseFailure | null>(null);
+  const [releasing, setReleasing] = useState(false);
 
   const availability = useQuery({
     queryKey: keys.availability,
@@ -103,11 +117,21 @@ function BowlingScreen({ token, storeId, role }: { token: string; storeId: strin
     await queryClient.invalidateQueries({ queryKey: ['boliche', storeId] });
   }
 
+  /** Suelta el horario con la llave de esa renta; si no se pudo, lo avisa en vez de callarlo. */
+  async function releaseHold(pending: Charge) {
+    setReleaseFailure(null);
+    setReleasing(true);
+    const result = await releaseHeldRental(() => api.cancelCounterRental(token, pending.id, undefined, pending.releaseKey));
+    setReleasing(false);
+    if (!result.ok) setReleaseFailure({ charge: pending, message: releaseFailureMessage(pending.laneName, result.error) });
+    await refresh();
+  }
+
   function closeCharge() {
     const pending = charge;
     setCharge(null);
     // No se cobró la renta que se acaba de apartar: se suelta el horario para que otro lo tome.
-    if (pending?.release) void api.cancelCounterRental(token, pending.id).catch(() => undefined).finally(() => void refresh());
+    if (pending?.release) void releaseHold(pending);
   }
 
   if (availability.isPending) return <LoadingState label="Cargando las pistas…" />;
@@ -160,6 +184,14 @@ function BowlingScreen({ token, storeId, role }: { token: string; storeId: strin
         ))}
       </ChipRow>
       {notice && <Feedback tone="success">{notice}</Feedback>}
+      {releaseFailure && (
+        <div className="grid gap-2">
+          <Feedback tone="error">{releaseFailure.message}</Feedback>
+          <VaiButton variant="secondary" loading={releasing} onClick={() => void releaseHold(releaseFailure.charge)}>
+            Reintentar soltar {releaseFailure.charge.laneName}
+          </VaiButton>
+        </div>
+      )}
       {data.cerrado && <Feedback tone="info">Hoy el lugar no abre: no se rentan pistas.</Feedback>}
 
       {section === 'pistas' && (
@@ -184,6 +216,7 @@ function BowlingScreen({ token, storeId, role }: { token: string; storeId: strin
               title: `Cobrar ${booking.espacio?.nombre ?? 'pista'} · ${clock(booking.inicio)} a ${clock(booking.fin)}`,
               amount: booking.monto ?? '0.00',
               release: false,
+              laneName: booking.espacio?.nombre ?? 'la pista',
             });
           }}
         />
@@ -198,11 +231,14 @@ function BowlingScreen({ token, storeId, role }: { token: string; storeId: strin
           onClose={() => setRent(null)}
           onReserved={(created) => {
             setRent(null);
+            const laneName = created.espacio?.nombre ?? rent.court.espacio.nombre;
             setCharge({
               id: created.id,
-              title: `Cobrar ${created.espacio?.nombre ?? rent.court.espacio.nombre} · ${clock(created.inicio)} a ${clock(created.fin)}`,
+              title: `Cobrar ${laneName} · ${clock(created.inicio)} a ${clock(created.fin)}`,
               amount: created.monto,
               release: true,
+              laneName,
+              releaseKey: createIdempotencyKey(),
             });
           }}
         />
@@ -357,6 +393,8 @@ function RentLaneDialog({
   const [name, setName] = useState('');
   const price = minutes ? rentalPrice(court.precio_hora, minutes) : null;
   const ready = minutes !== null && canRequestRental(players, max, renewal);
+  // Una llave por modal abierto: «Apartar» otra vez tras un error manda la misma y no aparta dos veces.
+  const [idempotencyKey] = useState(createIdempotencyKey);
 
   const reserve = useMutation({
     mutationFn: () =>
@@ -367,7 +405,7 @@ function RentLaneDialog({
         // Al renovar, sin tocar jugadores se heredan los del turno.
         ...(players > 0 ? { jugadores: players } : {}),
         ...(name.trim() ? { nombreCliente: name } : {}),
-      }),
+      }, idempotencyKey),
     onSuccess: (created) => onReserved(created),
   });
 
@@ -431,8 +469,10 @@ function ChargeDialog({
 }) {
   const [received, setReceived] = useState('');
   const change = rentalChange(received, charge.amount);
+  // Una llave por modal abierto: reintentar el cobro tras perder la respuesta no cobra dos veces.
+  const [idempotencyKey] = useState(createIdempotencyKey);
   const pay = useMutation({
-    mutationFn: () => api.payCounterRental(token, charge.id, normalizeMoneyInput(received)),
+    mutationFn: () => api.payCounterRental(token, charge.id, normalizeMoneyInput(received), idempotencyKey),
     onSuccess: async (result) => {
       const changeText = result.cobro && result.cobro.cambio !== '0.00' ? ` Cambio: ${formatMoney(result.cobro.cambio)}.` : '';
       await onPaid(`Pista rentada hasta ${clock(result.reserva.fin)}.${changeText}`);
@@ -591,13 +631,15 @@ function EditLaneDialog({
   const [active, setActive] = useState(lane.activo);
   const parsedPrice = parseHourlyPrice(price);
   const parsedCapacity = parseCapacity(capacity);
+  // Una llave por modal abierto: «Guardar» otra vez tras un error manda la misma.
+  const [idempotencyKey] = useState(createIdempotencyKey);
   const save = useMutation({
     mutationFn: () => {
       const input: Parameters<typeof api.updateSpace>[2] = {};
       if (parsedPrice !== (lane.precio_hora ?? null)) input.precio_hora = parsedPrice ?? null;
       if (parsedCapacity !== (lane.capacidad ?? null)) input.capacidad = parsedCapacity ?? null;
       if (active !== lane.activo) input.activo = active;
-      return api.updateSpace(token, lane.id, input);
+      return api.updateSpace(token, lane.id, input, idempotencyKey);
     },
     onSuccess: (saved) => onSaved(saved),
   });

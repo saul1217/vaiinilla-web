@@ -264,3 +264,59 @@ export function laneBatchInput(
 }
 
 // endregion
+
+// region Soltar el apartado
+
+/** Intentos al soltar una renta que no se cobró; todos con la misma Idempotency-Key. */
+export const RELEASE_ATTEMPTS = 3;
+/** Espera antes de cada reintento (ms): una caída corta de red no deja la pista apartada. */
+export const RELEASE_RETRY_DELAYS = [300, 900];
+
+export type ReleaseResult = { ok: true } | { ok: false; error: unknown };
+
+/** El horario ya está libre: la reserva venció, ya no existe o ya estaba cancelada. */
+function alreadyReleased(error: VaiinillaApiError): boolean {
+  if (error.code === 'RESERVATION_EXPIRED' || error.code === 'RESERVATION_NOT_FOUND') return true;
+  if (error.code !== 'RESERVATION_NOT_CANCELLABLE' || !Array.isArray(error.details)) return false;
+  const first = error.details[0] as { estado_actual?: unknown } | undefined;
+  return first?.estado_actual === 'cancelada' || first?.estado_actual === 'expirada';
+}
+
+/** Un 4xx (salvo 408 y 429) es la respuesta final del servidor: repetirlo da lo mismo. */
+function finalAnswer(error: unknown): boolean {
+  return error instanceof VaiinillaApiError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
+}
+
+/**
+ * Suelta el horario apartado que no se cobró. `cancel` debe mandar siempre la misma llave para que
+ * un reintento tras perder la respuesta no sea otra cancelación. Reintenta los errores de red y 5xx;
+ * si al final no se pudo, regresa el error para avisarle al personal en vez de callarlo.
+ */
+export async function releaseHeldRental(
+  cancel: () => Promise<unknown>,
+  { attempts = RELEASE_ATTEMPTS, delays = RELEASE_RETRY_DELAYS, wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)) } = {},
+): Promise<ReleaseResult> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) await wait(delays[Math.min(attempt - 1, delays.length - 1)] ?? 0);
+    try {
+      await cancel();
+      return { ok: true };
+    } catch (error) {
+      if (error instanceof VaiinillaApiError && alreadyReleased(error)) return { ok: true };
+      lastError = error;
+      if (finalAnswer(error)) break;
+    }
+  }
+  return { ok: false, error: lastError };
+}
+
+/** Aviso cuando no se pudo soltar: dice qué pasó y qué hacer, porque la pista sigue apartada. */
+export function releaseFailureMessage(laneName: string, error: unknown): string {
+  const reason = error instanceof VaiinillaApiError && error.code === 'RESERVATION_NOT_CANCELLABLE'
+    ? 'la renta cambió de estado (puede que ya se haya cobrado).'
+    : bowlingErrorMessage(error);
+  return `No se pudo soltar ${laneName}: ${reason} Revísala en Turnos de hoy; si sigue «Por cobrar», vuelve a intentarlo.`;
+}
+
+// endregion

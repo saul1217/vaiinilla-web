@@ -1022,6 +1022,7 @@ export const api = {
   async startCounterRental(
     token: string,
     input: { espacioId: number; duracionMin: number; inicio: string | null; jugadores?: number; nombreCliente?: string },
+    idempotencyKey?: string,
   ): Promise<CounterRental> {
     const name = input.nombreCliente?.trim();
     return (
@@ -1029,6 +1030,7 @@ export const api = {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: {
           espacio_id: input.espacioId,
           duracion_min: input.duracionMin,
@@ -1040,14 +1042,17 @@ export const api = {
     ).data;
   },
 
-
-  /** Cobra en efectivo la renta apartada: con el cobro se ocupa la cancha o se alarga su turno. */
-  async payCounterRental(token: string, rentalId: string, montoRecibido: string): Promise<CounterRentalPayment> {
+  /**
+   * Cobra en efectivo la renta apartada: con el cobro se ocupa la cancha o se alarga su turno.
+   * Un reintento del mismo cobro debe mandar la misma `idempotencyKey` para no cobrar dos veces.
+   */
+  async payCounterRental(token: string, rentalId: string, montoRecibido: string, idempotencyKey?: string): Promise<CounterRentalPayment> {
     return (
       await request<CounterRentalPayment>(`/reservas/${rentalId}/pago`, {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: { metodo_pago: 'efectivo', monto_recibido: montoRecibido },
       })
     ).data;
@@ -1055,11 +1060,12 @@ export const api = {
 
   /** Suelta el horario apartado si no se cobró. */
   /** Sin `refund` cancela una reserva por pagar; con él cancela una pagada y reembolsa de 0 al total pagado. */
-  async cancelCounterRental(token: string, rentalId: string, refund?: BookingRefundInput): Promise<void> {
+  async cancelCounterRental(token: string, rentalId: string, refund?: BookingRefundInput, idempotencyKey?: string): Promise<void> {
     await request(`/reservas/${rentalId}/cancelacion`, {
       method: 'POST',
       token,
       idempotent: true,
+      idempotencyKey,
       body: refund ? { motivo: refund.motivo, monto_reembolso: refund.monto_reembolso } : undefined,
     });
   },
