@@ -1216,8 +1216,10 @@ export interface SchoolGuardianship {
 /** GET /solicitudes-alumno: una devolución de saldo o una baja que espera a la escuela. */
 export interface SchoolStudentRequest {
   id: string;
-  tipo: 'devolucion' | 'baja_datos' | string;
-  como_devolver: 'efectivo' | 'transferencia' | string | null;
+  /** 'devolucion' o 'baja_datos'; un tipo nuevo del servidor se omite en pantalla. */
+  tipo: string;
+  /** 'efectivo' o 'transferencia'. */
+  como_devolver: string | null;
   nota: string | null;
   saldo_al_pedir: string | null;
   saldo_actual: string | null;
