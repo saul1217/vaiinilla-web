@@ -6,6 +6,7 @@ import {
   PackageCheck,
   ClipboardList,
   ConciergeBell,
+  HandCoins,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -28,6 +29,7 @@ import { NavLink, useHistory, useLocation } from 'react-router-dom';
 import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
+import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { Logo } from './brand-mark';
@@ -51,10 +53,15 @@ const adminNavigation: NavItem[] = [
   { to: '/app/flujo', label: 'Flujo de mi tienda', icon: Workflow },
   { to: '/app/espacios', label: 'Mesas y espacios', icon: Table2 },
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
+  // Admin solo consulta el saldo; recargar es de Caja (lo resuelve la página).
+  ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo de clientes', icon: HandCoins } satisfies NavItem] : []),
   { to: '/app/pos', label: 'Pedir', icon: WalletCards },
 ];
 
-const posNavigation: NavItem[] = [{ to: '/app/pos', label: 'Caja', icon: WalletCards }];
+const posNavigation: NavItem[] = [
+  { to: '/app/pos', label: 'Caja', icon: WalletCards },
+  ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo', icon: HandCoins } satisfies NavItem] : []),
+];
 const kitchenNavigation: NavItem[] = [
   { to: '/app/cocina', label: 'Cocina', icon: ChefHat },
   // Cocina ve el inventario; editarlo depende de `cocina_edita_inventario` (lo resuelve la página).
@@ -127,7 +134,8 @@ function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenC
     // Focus main even while a lazy page is loading. Its h1 will be the next reading stop.
     main.current?.focus();
   }, [location.pathname]);
-  const primary = navigation.length > 1
+  // Hasta cuatro destinos caben en la barra; con más (admin) van los cuatro de siempre y el resto a «Más».
+  const primary = navigation.length > 4
     ? ['/app', '/app/menu', '/app/pos', '/app/pedidos'].map((path) => navigation.find((item) => item.to === path)!)
     : navigation;
   const secondary = navigation.filter((item) => !primary.includes(item));
