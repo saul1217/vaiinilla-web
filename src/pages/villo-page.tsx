@@ -6,7 +6,6 @@ import { VilloDevicesPanel } from '../components/villo-devices-panel';
 import { useSessions } from '../context/session-context';
 import { useAuth } from '../context/auth-context';
 import { api } from '../lib/api';
-import { errorMessage } from '../lib/api-error';
 import { completeTotpSignIn, passwordSignIn } from '../lib/firebase';
 import { SimpleMarkdown } from '../lib/simple-markdown';
 
@@ -197,7 +196,7 @@ function VilloOwnerArea({
 }) {
   const [tab, setTab] = useState<TabKey>('guia');
   const guide = useQuery({
-    queryKey: ['villo-owner-guide', authToken ?? 'none'],
+    queryKey: ['villo-owner-guide', firebaseUser?.uid ?? null],
     queryFn: () => api.villoOwnerGuide(authToken),
     enabled: tab === 'guia',
     retry: false,
@@ -227,11 +226,11 @@ function VilloOwnerArea({
 
       {tab === 'guia' ? (
         <section id="villo-tabpanel-guia" role="tabpanel" aria-labelledby="Guía" className="prose max-w-none villo-markdown">
-          {guide.isError && <Feedback tone="error">{errorMessage(guide.error)}</Feedback>}
-          {guide.isPending ? <div className="analytics-loading" role="status">Cargando guía…</div> : guide.data ? <>
+          {guide.isError && <Feedback tone="error">No pudimos cargar la guía. Inténtalo de nuevo.</Feedback>}
+          {guide.isPending ? <div className="analytics-loading" role="status">Cargando guía…</div> : guide.data?.markdown?.trim() ? <>
             <SimpleMarkdown source={guide.data.markdown} />
             {updatedAt && <p className="mt-6 text-xs text-muted">Última actualización: {new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(updatedAt)}</p>}
-          </> : null}
+          </> : !guide.isError && <Feedback tone="error">No pudimos cargar la guía. Inténtalo de nuevo.</Feedback>}
         </section>
       ) : (
         <section id="villo-tabpanel-dispositivos" role="tabpanel" aria-labelledby="Dispositivos">

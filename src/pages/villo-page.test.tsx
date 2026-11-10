@@ -16,6 +16,7 @@ const baseUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
 const server = setupServer();
 const clearAll = vi.fn().mockResolvedValue(undefined);
 let currentUser: { uid: string; getIdToken: () => Promise<string> } | null;
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 vi.mock('../lib/firebase', () => ({ passwordSignIn: vi.fn(), completeTotpSignIn: vi.fn() }));
 vi.mock('../lib/api', async (importOriginal) => {
@@ -30,15 +31,15 @@ vi.mock('../context/session-context', () => ({
 }));
 
 function Wrapper({ children }: { children: React.ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <MemoryRouter initialEntries={['/villo']}><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
+  return <MemoryRouter initialEntries={['/villo']}><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></MemoryRouter>;
 }
 
 const ownerUser = () => ({ uid: 'owner-uid', getIdToken: vi.fn().mockResolvedValue('firebase-token') });
-const envelope = (markdown = '# Guía') => HttpResponse.json({ data: { markdown, actualizado_en: '2026-11-09T12:00:00Z' }, meta: {}, error: null });
+const envelope = (markdown = '# Guía técnica ESP32') => HttpResponse.json({ data: { markdown, actualizado_en: '2026-11-09T12:00:00Z' }, meta: { page: null, total_pages: null, total_items: null, cursor: null }, error: null });
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 beforeEach(() => {
+  queryClient.clear();
   vi.stubEnv('MODE', 'production');
   currentUser = ownerUser();
   clearAll.mockClear();
@@ -80,11 +81,27 @@ describe('Sección privada /villo', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
     await waitFor(() => expect(vi.mocked(api.villoOwnerAccess)).toHaveBeenCalled());
     expect(await screen.findByRole('heading', { name: 'Villo' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Guía técnica ESP32' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Dispositivos' })).toBeInTheDocument();
     expect(vi.mocked(api.villoOwnerAccess)).toHaveBeenCalledWith('firebase-token');
     expect(passwordSignIn).toHaveBeenCalledWith('bimbose714@example.com', 'correct-horse-battery', true);
     expect(clearAll).toHaveBeenCalled();
+    const guideQuery = queryClient.getQueryCache().findAll({ queryKey: ['villo-owner-guide'] })[0];
+    expect(guideQuery?.queryKey).toEqual(['villo-owner-guide', 'owner-uid']);
+    expect(JSON.stringify(guideQuery?.queryKey)).not.toContain('firebase-token');
+  });
+
+  it('muestra un mensaje genérico si falla la carga de la guía', async () => {
+    server.use(http.get(`${baseUrl}/villo/owner/guia`, () => HttpResponse.json({ data: null, meta: {}, error: { code: 'INTERNAL_ERROR', message: 'detalle interno' } }, { status: 500 })));
+    render(<VilloPage />, { wrapper: Wrapper });
+    expect(await screen.findByText('No pudimos cargar la guía. Inténtalo de nuevo.')).toBeInTheDocument();
+    expect(screen.queryByText('detalle interno')).not.toBeInTheDocument();
+  });
+
+  it('muestra un mensaje genérico si la guía viene vacía', async () => {
+    server.use(http.get(`${baseUrl}/villo/owner/guia`, () => envelope('   ')));
+    render(<VilloPage />, { wrapper: Wrapper });
+    expect(await screen.findByText('No pudimos cargar la guía. Inténtalo de nuevo.')).toBeInTheDocument();
   });
 
   it('login OK más 404 muestra el mensaje sin acceso', async () => {
@@ -120,7 +137,7 @@ describe('Sección privada /villo', () => {
     expect(await screen.findByLabelText('Código de tu aplicación autenticadora')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Código de tu aplicación autenticadora'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verificar código' }));
-    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Guía técnica ESP32' })).toBeInTheDocument();
     expect(completeTotpSignIn).toHaveBeenCalledWith(expect.anything(), '123456');
   });
 
@@ -128,10 +145,10 @@ describe('Sección privada /villo', () => {
     const persistentUser = ownerUser();
     currentUser = persistentUser;
     const first = render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Guía técnica ESP32' })).toBeInTheDocument();
     first.unmount();
     render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Guía técnica ESP32' })).toBeInTheDocument();
     expect(api.villoOwnerAccess).toHaveBeenCalledWith('firebase-token');
   });
 });
