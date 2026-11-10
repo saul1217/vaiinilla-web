@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { User } from 'firebase/auth';
 import { Bell, Copy, KeyRound, Plus, Radio, RefreshCw } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../context/auth-context';
@@ -42,8 +43,9 @@ const RENEW_ADVANCE_MS = 60_000;
  * les saca el token y los da de baja. Usa un token de contexto del negocio que escoja (solo los
  * accesos con rol admin), en memoria y sin tocar la sesión de trabajo de /app.
  */
-export function VilloDevicesPanel() {
-  const { user } = useAuth();
+export function VilloDevicesPanel({ userOverride }: { userOverride?: User | null } = {}) {
+  const { user: authUser } = useAuth();
+  const user = userOverride === undefined ? authUser : userOverride;
   const [membershipId, setMembershipId] = useState('');
 
   const accesses = useQuery({

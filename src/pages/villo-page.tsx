@@ -105,6 +105,7 @@ export function VilloPage() {
   return (
     <VilloOwnerArea
       authToken={access.data}
+      firebaseUser={activeUser}
       onSignOut={closeVilloSession}
       showSignOut={gateEnabled}
     />
@@ -179,10 +180,12 @@ function VilloLogin({
 
 function VilloOwnerArea({
   authToken,
+  firebaseUser,
   onSignOut,
   showSignOut,
 }: {
   authToken: string | null | undefined;
+  firebaseUser: User | null;
   onSignOut: () => Promise<void>;
   showSignOut: boolean;
 }) {
@@ -226,7 +229,7 @@ function VilloOwnerArea({
         </section>
       ) : (
         <section id="villo-tabpanel-dispositivos" role="tabpanel" aria-labelledby="Dispositivos">
-          <VilloDevicesPanel />
+          <VilloDevicesPanel userOverride={firebaseUser} />
         </section>
       )}
     </div>
