@@ -91,6 +91,12 @@ import type {
   VilloDeviceAlert,
   VilloDeviceTokenIssued,
   VilloDeviceUpdateInput,
+  HotelRoom,
+  HotelRoomBatchInput,
+  HotelRoomBatchResult,
+  HotelSettings,
+  HotelSettingsInput,
+  HotelSummary,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -1391,6 +1397,42 @@ export const api = {
     return (
       await request<VilloDeviceAlert[]>(`/villo/dispositivos/${encodeURIComponent(id)}/alertas`, {
         token,
+      })
+    ).data;
+  },
+
+  /** Ajustes del hotel (cualquier rol). `activo: false` si el negocio no es hotel. */
+  async hotelSettings(token: string): Promise<HotelSettings> {
+    return (await request<HotelSettings>('/hotel/configuracion', { token })).data;
+  },
+
+  /** Admin, solo en un hotel. Se mezcla con lo guardado; esta ruta no pide Idempotency-Key. */
+  async saveHotelSettings(token: string, input: HotelSettingsInput): Promise<HotelSettings> {
+    return (await request<HotelSettings>('/hotel/configuracion', { method: 'PUT', token, body: input })).data;
+  },
+
+  /** Resumen del día del hotel (admin). */
+  async hotelSummary(token: string): Promise<HotelSummary> {
+    return (await request<HotelSummary>('/hotel/resumen', { token })).data;
+  },
+
+  /** Habitaciones del hotel; con rol admin trae `qr_url`. */
+  async hotelRooms(token: string): Promise<HotelRoom[]> {
+    return (await request<HotelRoom[]>('/habitaciones', { token })).data;
+  },
+
+  /** Alta en lote (admin, solo hotel). La llave la pone quien llama para reintentar el mismo lote. */
+  async createHotelRooms(
+    token: string,
+    input: HotelRoomBatchInput,
+    idempotencyKey: string,
+  ): Promise<HotelRoomBatchResult> {
+    return (
+      await request<HotelRoomBatchResult>('/habitaciones/lote', {
+        method: 'POST',
+        token,
+        body: input,
+        idempotencyKey,
       })
     ).data;
   },
