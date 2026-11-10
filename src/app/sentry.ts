@@ -18,13 +18,21 @@ function scrubHeaders(headers: Record<string, string> | undefined) {
 
 const FILTERED = '[Filtered]';
 /** Claves cuyo valor siempre se oculta, sin importar qué traiga. */
-const SENSITIVE_KEYS = new Set(['token', 'access_token']);
+const SENSITIVE_KEYS = new Set([
+  'token',
+  'access_token',
+  'refresh_token',
+  'id_token',
+  'password',
+  'secret',
+  'cookie',
+]);
 /** JWT dentro de un texto: el encabezado en base64url de `{"` siempre empieza con eyJ. */
 const JWT_IN_TEXT = /eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g;
 /** Valor completo con forma de JWT aunque no empiece con eyJ (segmentos largos para no tocar dominios ni versiones). */
 const JWT_WHOLE = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/;
-/** `"token": "..."` o `"access_token": "..."` dentro de un texto que no es JSON completo. */
-const TOKEN_IN_JSON_TEXT = /("(?:access_)?token"\s*:\s*")(?:[^"\\]|\\.)*"/gi;
+/** `"token": "..."` (o cualquier otra clave sensible) dentro de un texto que no es JSON completo. */
+const TOKEN_IN_JSON_TEXT = new RegExp(`("(?:${[...SENSITIVE_KEYS].join('|')})"\\s*:\\s*")(?:[^"\\\\]|\\\\.)*"`, 'gi');
 /** Token de dispositivo VILLO dentro de un texto (p. ej. `Bearer villo_...`): 'villo_' + 43 caracteres base64url. */
 const VILLO_IN_TEXT = /villo_[A-Za-z0-9_-]{43}/g;
 const MAX_DEPTH = 12;
@@ -75,11 +83,67 @@ export function redactDeep<T>(value: T, depth = 0, seen: WeakSet<object> = new W
   return value;
 }
 
+/** Valor de un parámetro de query: se oculta si la clave es sensible; si no, se limpia como texto (villo_, JWT, correos). */
+function redactQueryValue(key: string, value: unknown): unknown {
+  let name = key;
+  try {
+    name = decodeURIComponent(key);
+  } catch {
+    // Clave mal codificada: se compara tal cual.
+  }
+  if (isSensitiveKey(name.trim()) && value !== null && value !== undefined && value !== '') return FILTERED;
+  return typeof value === 'string' ? redactString(value) : redactDeep(value);
+}
+
+type QueryParams = NonNullable<NonNullable<Sentry.ErrorEvent['request']>['query_string']>;
+
+/**
+ * Redacta `query_string` en sus tres formas (cadena `a=1&b=2`, objeto `{a: '1'}` o lista de pares
+ * `[['a', '1']]`) con las mismas reglas de claves sensibles y valores villo_* o con forma de JWT.
+ */
+export function redactQueryString(query: QueryParams): QueryParams {
+  if (typeof query === 'string') {
+    const hasMark = query.startsWith('?');
+    const body = hasMark ? query.slice(1) : query;
+    const pairs = body.split('&').map((pair) => {
+      const eq = pair.indexOf('=');
+      if (eq === -1) return redactString(pair);
+      const key = pair.slice(0, eq);
+      return `${key}=${redactQueryValue(key, pair.slice(eq + 1)) as string}`;
+    });
+    // scrubUrl cubre además los parámetros que ya se tapaban en URLs (nuevo, key, code, email...).
+    const out = scrubUrl(`?${pairs.join('&')}`);
+    return hasMark ? out : out.slice(1);
+  }
+  if (Array.isArray(query)) {
+    return query.map((pair) => {
+      if (!Array.isArray(pair) || pair.length < 2) return redactDeep(pair);
+      const [key, value] = pair;
+      return [key, redactQueryValue(String(key), scrubQueryParam(String(key), value))];
+    }) as QueryParams;
+  }
+  if (query && typeof query === 'object') {
+    const record = query as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      record[key] = redactQueryValue(key, scrubQueryParam(key, record[key]));
+    }
+  }
+  return query;
+}
+
+/** Aplica a un par suelto las reglas de parámetros de URL (nuevo, key, code, email...) que ya usa scrubUrl. */
+function scrubQueryParam(key: string, value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  // Solo los parámetros de URL; los correos del valor los limpia después redactString.
+  const prefix = `?${key}=`;
+  return `${prefix}${value}`.replace(SENSITIVE_PARAMS, '$1[Filtered]').slice(prefix.length);
+}
+
 export function beforeSend(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
   if (event.request) {
     if (event.request.url) event.request.url = scrubUrl(event.request.url);
-    if (typeof event.request.query_string === 'string') {
-      event.request.query_string = scrubUrl(`?${event.request.query_string}`).slice(1);
+    if (event.request.query_string) {
+      event.request.query_string = redactQueryString(event.request.query_string);
     }
     delete event.request.cookies;
     // El cuerpo de la petición puede traer contraseñas o datos personales que no son tokens: no se envía.
