@@ -6,9 +6,11 @@ import {
   bookableDates,
   canCancel,
   canMove,
+  cancelErrorMessage,
   freeStarts,
   moveBooking,
   needsRefund,
+  refundSummary,
   type MoveDeps,
 } from './agenda';
 import type { CourtAvailabilityCourt, CourtAvailabilityDay, StaffBooking } from '../types/api';
@@ -143,5 +145,37 @@ describe('moveBooking', () => {
     await expect(moveBooking(value, booking(), target)).rejects.toThrow('por cobrar en Caja');
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(cancel).toHaveBeenCalledWith('r-2');
+  });
+
+  it('suelta la nueva con `release` (su propia llave) y no con la cancelación de la original', async () => {
+    const cancel = vi.fn(() => Promise.reject(new Error('500')));
+    const release = vi.fn(() => Promise.resolve());
+    const { value } = deps({ cancel, release });
+    await expect(moveBooking(value, booking(), target)).rejects.toThrow('sigue en su horario original');
+    expect(cancel).toHaveBeenCalledExactlyOnceWith('r-1');
+    expect(release).toHaveBeenCalledExactlyOnceWith('r-2');
+  });
+});
+
+describe('reembolso al cancelar', () => {
+  const refund = { id: 'rb', metodo: 'efectivo', monto: '150.00', monto_pagado: '450.00', salida: 'caja', creado_en: '2099-01-01T00:00:00.000Z' };
+
+  it('describe la vía según la salida y el método que respondió el back', () => {
+    expect(refundSummary(refund)).toEqual({
+      amount: '$150.00 MXN de $450.00 MXN pagados (efectivo)',
+      route: 'Sale en efectivo de la caja abierta: entrégalo al cliente.',
+    });
+    expect(refundSummary({ ...refund, monto: '0.00', salida: 'ninguna' }).route).toBe('Sin reembolso: solo quedó el registro con el motivo.');
+    expect(refundSummary({ ...refund, metodo: 'saldo', salida: 'cartera', saldo_nuevo: '80.00' }).route).toBe('Regresó a la cartera del cliente. Su saldo ahora es $80.00 MXN.');
+    expect(refundSummary({ ...refund, salida: 'devolucion_pendiente' }).route).toMatch(/No había caja abierta/);
+    expect(refundSummary({ ...refund, metodo: 'tarjeta', salida: 'devolucion_pendiente' }).route).toBe('Quedó como devolución pendiente: Caja la confirma en Devoluciones.');
+  });
+
+  it('traduce los errores de cancelar y toma el tope de REFUND_AMOUNT_EXCEEDS_PAID', () => {
+    expect(cancelErrorMessage('REFUND_AMOUNT_EXCEEDS_PAID', [{ monto_pagado: '400.00' }])).toBe('El reembolso no puede ser mayor a lo pagado ($400.00 MXN).');
+    expect(cancelErrorMessage('REFUND_AMOUNT_EXCEEDS_PAID', undefined)).toBe('El reembolso no puede ser mayor a lo pagado.');
+    expect(cancelErrorMessage('RESERVATION_NOT_CANCELLABLE', [{ estado_actual: 'cancelada' }])).toMatch(/ya estaba cancelada/);
+    expect(cancelErrorMessage('REFUND_ALREADY_DONE', undefined)).toMatch(/ya se reembolsó/);
+    expect(cancelErrorMessage('SLOT_TAKEN', undefined)).toBeNull();
   });
 });
