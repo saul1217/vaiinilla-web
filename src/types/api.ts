@@ -222,6 +222,45 @@ export interface CashPaymentResult {
   cambio: string;
 }
 
+/**
+ * Pedido a domicilio o encargo (vaiinilla_back docs/reposteria-domicilio.md). Suma dos estados
+ * que el resto de la web no conoce (`por_aceptar` y `en_camino`); por eso no se agregan a
+ * OrderStatus, que tiene mapas exhaustivos en otras pantallas.
+ */
+export type HomeOrderStatus = OrderStatus | 'por_aceptar' | 'en_camino';
+
+export interface HomeOrderDelivery {
+  direccion: string;
+  referencia: string | null;
+  telefono: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+export interface HomeOrder extends Omit<OrderDetail, 'estado' | 'destino'> {
+  estado: HomeOrderStatus;
+  destino: OrderDestination | 'a_domicilio';
+  fecha_entrega?: string | null;
+  franja_entrega?: string | null;
+  /** Solo a domicilio y nunca para Cocina. */
+  entrega?: HomeOrderDelivery | null;
+  costo_envio?: string;
+  anticipo?: string | null;
+  /** Lo que falta cobrar en la puerta; "0.00" si nada. */
+  por_cobrar_al_entregar?: string;
+  cobrado_al_entregar?: { metodo: 'efectivo' | 'transferencia'; en: string } | null;
+  aceptar_antes_de?: string | null;
+  pagar_antes_de?: string | null;
+  repartidor_nombre?: string | null;
+  en_camino_en?: string | null;
+}
+
+/** GET /establecimiento/agenda: los pedidos de cada día de entrega. */
+export interface HomeAgendaDay {
+  fecha: string;
+  pedidos: HomeOrder[];
+}
+
 /** POST /pedidos/:id/pagos-mixtos (vaiinilla_back#211). */
 export interface MixedPaymentResult {
   pago: { metodo_pago: 'efectivo' | 'terminal'; monto: string };

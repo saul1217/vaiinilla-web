@@ -19,6 +19,7 @@ import {
   Moon,
   MoonStar,
   Table2,
+  Truck,
   Workflow,
   UserPlus,
   WalletCards,
@@ -32,6 +33,7 @@ import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { AGENDA_ENABLED } from '../lib/agenda-feature';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
+import { REPARTO_ENABLED } from '../lib/reparto-feature';
 import { clearAllPendingRecharges } from '../lib/wallet-caja';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
@@ -61,6 +63,7 @@ const adminNavigation: NavItem[] = [
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
   // Admin solo consulta el saldo; recargar es de Caja (lo resuelve la página).
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo de clientes', icon: HandCoins } satisfies NavItem] : []),
+  ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto y encargos', icon: Truck } satisfies NavItem] : []),
   { to: '/app/pos', label: 'Pedir', icon: WalletCards },
   ...agendaNavigation,
 ];
@@ -68,6 +71,7 @@ const adminNavigation: NavItem[] = [
 const posNavigation: NavItem[] = [
   { to: '/app/pos', label: 'Caja', icon: WalletCards },
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo', icon: HandCoins } satisfies NavItem] : []),
+  ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto', icon: Truck } satisfies NavItem] : []),
   ...agendaNavigation,
 ];
 const kitchenNavigation: NavItem[] = [
