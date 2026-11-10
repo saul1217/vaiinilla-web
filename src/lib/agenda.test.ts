@@ -8,11 +8,14 @@ import {
   canMove,
   cancelErrorMessage,
   freeStarts,
+  MoveBookingError,
   moveBooking,
   needsRefund,
   refundSummary,
+  releaseOrphan,
   type MoveDeps,
 } from './agenda';
+import { VaiinillaApiError } from './api-error';
 import type { CourtAvailabilityCourt, CourtAvailabilityDay, StaffBooking } from '../types/api';
 
 const court = (patch: Partial<CourtAvailabilityCourt> = {}): CourtAvailabilityCourt => ({
@@ -100,12 +103,16 @@ describe('qué se puede hacer con cada reserva', () => {
 
 describe('moveBooking', () => {
   const target = { espacio_id: 8, inicio: '2099-11-11T10:00:00.000Z', duracion_min: 180 };
+  const apiError = (status: number, code: string, details?: unknown) => new VaiinillaApiError(status, { code, message: code, details });
   const deps = (patch: Partial<MoveDeps> = {}) => {
     const calls: string[] = [];
+    let key = 0;
     const value: MoveDeps = {
       create: vi.fn(() => { calls.push('create'); return Promise.resolve({ id: 'r-2' }); }),
       markCashLater: vi.fn((id: string) => { calls.push(`cash:${id}`); return Promise.resolve(); }),
       cancel: vi.fn((id: string) => { calls.push(`cancel:${id}`); return Promise.resolve(); }),
+      newKey: () => `k${++key}`,
+      wait: vi.fn(() => Promise.resolve()),
       ...patch,
     };
     return { value, calls };
@@ -132,28 +139,87 @@ describe('moveBooking', () => {
   });
 
   it('si no se puede cancelar la original, suelta la nueva para no dejar dos', async () => {
-    const cancel = vi.fn((id: string) => (id === 'r-1' ? Promise.reject(new Error('409')) : Promise.resolve()));
+    const cancel = vi.fn((id: string) => (id === 'r-1' ? Promise.reject(apiError(409, 'RESERVATION_NOT_CANCELLABLE', [{ estado_actual: 'en_curso' }])) : Promise.resolve()));
     const { value } = deps({ cancel });
-    await expect(moveBooking(value, booking(), target)).rejects.toThrow('sigue en su horario original');
-    expect(cancel).toHaveBeenNthCalledWith(1, 'r-1');
-    expect(cancel).toHaveBeenNthCalledWith(2, 'r-2');
+    const error = await moveBooking(value, booking(), target).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(MoveBookingError);
+    expect((error as MoveBookingError).message).toBe('No se pudo soltar el horario original. La reserva sigue en su horario original.');
+    expect((error as MoveBookingError).orphan).toBeUndefined();
+    expect(cancel.mock.calls).toEqual([['r-1', 'k1'], ['r-2', 'k2']]);
+  });
+
+  it('reintenta cancelar la original con la misma llave si falla la red', async () => {
+    let failures = 1;
+    const cancel = vi.fn(() => (failures-- > 0 ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve()));
+    const { value } = deps({ cancel });
+    await expect(moveBooking(value, booking(), target)).resolves.toEqual({ id: 'r-2' });
+    expect(cancel.mock.calls).toEqual([['r-1', 'k1'], ['r-1', 'k1']]);
   });
 
   it('si no queda por cobrar, suelta la nueva y no cancela la original', async () => {
     const cancel = vi.fn(() => Promise.resolve());
-    const { value } = deps({ cancel, markCashLater: vi.fn(() => Promise.reject(new Error('500'))) });
-    await expect(moveBooking(value, booking(), target)).rejects.toThrow('por cobrar en Caja');
+    const { value } = deps({ cancel, markCashLater: vi.fn(() => Promise.reject(apiError(500, 'INTERNAL'))) });
+    await expect(moveBooking(value, booking(), target)).rejects.toThrow('No se pudo dejar el horario nuevo por cobrar en Caja. La reserva sigue en su horario original.');
     expect(cancel).toHaveBeenCalledTimes(1);
-    expect(cancel).toHaveBeenCalledWith('r-2');
+    expect(cancel).toHaveBeenCalledWith('r-2', 'k1');
   });
 
-  it('suelta la nueva con `release` (su propia llave) y no con la cancelación de la original', async () => {
-    const cancel = vi.fn(() => Promise.reject(new Error('500')));
-    const release = vi.fn(() => Promise.resolve());
-    const { value } = deps({ cancel, release });
-    await expect(moveBooking(value, booking(), target)).rejects.toThrow('sigue en su horario original');
-    expect(cancel).toHaveBeenCalledExactlyOnceWith('r-1');
-    expect(release).toHaveBeenCalledExactlyOnceWith('r-2');
+  it('el undo que falla una vez se reintenta con la misma llave y el movimiento no se da por hecho', async () => {
+    let undoFailures = 2;
+    const cancel = vi.fn((id: string) => {
+      if (id === 'r-1') return Promise.reject(apiError(409, 'RESERVATION_NOT_CANCELLABLE', [{ estado_actual: 'terminada' }]));
+      return undoFailures-- > 0 ? Promise.reject(apiError(503, 'UNAVAILABLE')) : Promise.resolve();
+    });
+    const { value } = deps({ cancel });
+    const error = await moveBooking(value, booking(), target).catch((caught: unknown) => caught) as MoveBookingError;
+    expect(error).toBeInstanceOf(MoveBookingError);
+    expect(error.orphan).toBeUndefined();
+    expect(cancel.mock.calls).toEqual([['r-1', 'k1'], ['r-2', 'k2'], ['r-2', 'k2'], ['r-2', 'k2']]);
+    expect(value.wait).toHaveBeenCalledTimes(2);
+  });
+
+  it('si el undo falla del todo, avisa que el horario nuevo quedó por cobrar en Caja y deja reintentar con la misma llave', async () => {
+    const cancel = vi.fn((id: string) => Promise.reject(id === 'r-1'
+      ? apiError(409, 'RESERVATION_NOT_CANCELLABLE', [{ estado_actual: 'en_curso' }])
+      : new TypeError('Failed to fetch')));
+    const { value } = deps({ cancel });
+    const error = await moveBooking(value, booking(), target).catch((caught: unknown) => caught) as MoveBookingError;
+    expect(error).toBeInstanceOf(MoveBookingError);
+    expect(error.orphan).toEqual({ id: 'r-2', idempotencyKey: 'k2', byCash: true });
+    expect(error.message).toMatch(/^No se movió la reserva: No se pudo soltar el horario original\./);
+    expect(error.message).toContain('el horario nuevo también quedó apartado y está por cobrar en Caja. No lo cobres');
+    expect(error.message).not.toContain('10 minutos');
+    // Tres intentos del undo con la misma llave, y ninguno se da por hecho.
+    expect(cancel.mock.calls.filter(([id]) => id === 'r-2')).toEqual([['r-2', 'k2'], ['r-2', 'k2'], ['r-2', 'k2']]);
+
+    // Reintentar después usa la misma llave: si el primer intento sí llegó, el back no cancela dos veces.
+    const retry = vi.fn(() => Promise.resolve());
+    await releaseOrphan({ cancel: retry }, error.orphan!);
+    expect(retry).toHaveBeenCalledExactlyOnceWith('r-2', 'k2');
+  });
+
+  it('si falló el efectivo y luego el undo, avisa que puede aparecer por cobrar', async () => {
+    const cancel = vi.fn(() => Promise.reject(apiError(403, 'FORBIDDEN')));
+    const { value, calls } = deps({ cancel, markCashLater: vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))) });
+    const error = await moveBooking(value, booking(), target).catch((caught: unknown) => caught) as MoveBookingError;
+    expect(error.orphan).toEqual({ id: 'r-2', idempotencyKey: 'k1', byCash: false });
+    expect(error.message).toContain('y puede aparecer por cobrar en Caja');
+    // Un 403 no se reintenta y la original nunca se cancela.
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['create']);
+  });
+
+  it('el undo da por suelta una nueva que ya estaba cancelada o vencida', async () => {
+    for (const gone of [
+      apiError(409, 'RESERVATION_NOT_CANCELLABLE', [{ estado_actual: 'cancelada' }]),
+      apiError(409, 'RESERVATION_EXPIRED', [{ estado_actual: 'expirada' }]),
+      apiError(404, 'RESERVATION_NOT_FOUND'),
+    ]) {
+      const { value } = deps({ cancel: vi.fn(() => Promise.reject(gone)), markCashLater: vi.fn(() => Promise.reject(apiError(500, 'X'))) });
+      const error = await moveBooking(value, booking(), target).catch((caught: unknown) => caught) as MoveBookingError;
+      expect(error.orphan).toBeUndefined();
+      expect(error.message).toContain('La reserva sigue en su horario original.');
+    }
   });
 });
 
