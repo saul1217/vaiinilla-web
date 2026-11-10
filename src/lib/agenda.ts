@@ -1,6 +1,8 @@
 // Cuentas puras de la agenda de reservas: días que se pueden ver, inicios libres de cada cancha,
 // duraciones que caben, qué se puede mover o cancelar, y cómo se mueve una reserva con las rutas
 // que ya tiene el back (no hay ruta de reprogramar). Mismo criterio que ReservationSlots de Android.
+import { VaiinillaApiError } from './api-error';
+import { createIdempotencyKey } from './idempotency';
 import type { CourtAvailabilityCourt, CourtAvailabilityDay, OperationalRole, StaffBooking, StaffBookingInput } from '../types/api';
 
 /** Roles que el back deja crear y cancelar reservas (reservas.routes.js), menos `cliente`. */
@@ -141,14 +143,73 @@ export interface MoveTarget {
 export interface MoveDeps {
   create: (input: StaffBookingInput) => Promise<{ id: string }>;
   markCashLater: (bookingId: string) => Promise<void>;
-  cancel: (bookingId: string) => Promise<void>;
+  /** Con la misma llave el back repite la respuesta en vez de cancelar dos veces, así que se puede reintentar. */
+  cancel: (bookingId: string, idempotencyKey: string) => Promise<void>;
+  newKey?: () => string;
+  wait?: (ms: number) => Promise<void>;
+}
+
+/** Esperas entre intentos al cancelar durante un movimiento (tres intentos en total). */
+export const CANCEL_RETRY_MS = [500, 1500];
+
+/** Un horario nuevo que no se pudo soltar: sigue apartado y puede estar por cobrar en Caja. */
+export interface OrphanHold {
+  id: string;
+  /** Llave con la que se intentó cancelar; reintentar con ella no cancela dos veces. */
+  idempotencyKey: string;
+  /** Ya se había marcado por cobrar en efectivo, así que se ve en Caja. */
+  byCash: boolean;
 }
 
 export class MoveBookingError extends Error {
-  constructor(message: string, readonly cause?: unknown) {
+  constructor(message: string, readonly cause?: unknown, readonly orphan?: OrphanHold) {
     super(message);
     this.name = 'MoveBookingError';
   }
+}
+
+/** Errores que pueden pasar solos: sin red, el back caído o la misma llave aún en proceso. */
+function isTransient(error: unknown): boolean {
+  if (!(error instanceof VaiinillaApiError)) return true;
+  if (error.status >= 500 || error.status === 408 || error.status === 429) return true;
+  return error.status === 409 && error.code === 'IDEMPOTENCY_KEY_REUSED';
+}
+
+/** La reserva ya no aparta nada (cancelada, vencida o no existe): no hay nada que soltar. */
+export function isAlreadyReleased(error: unknown): boolean {
+  if (!(error instanceof VaiinillaApiError)) return false;
+  if (error.status === 404 || error.code === 'RESERVATION_EXPIRED') return true;
+  if (error.code !== 'RESERVATION_NOT_CANCELLABLE') return false;
+  const details = Array.isArray(error.details) ? error.details : [];
+  return details.some((item) => ['cancelada', 'expirada'].includes((item as { estado_actual?: string })?.estado_actual ?? ''));
+}
+
+const defaultWait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Cancela con una sola llave y reintenta los errores pasajeros. */
+async function cancelWithRetry(deps: MoveDeps, bookingId: string, idempotencyKey: string, released = false): Promise<void> {
+  const wait = deps.wait ?? defaultWait;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await deps.cancel(bookingId, idempotencyKey);
+      return;
+    } catch (error) {
+      if (released && isAlreadyReleased(error)) return;
+      if (attempt >= CANCEL_RETRY_MS.length || !isTransient(error)) throw error;
+      await wait(CANCEL_RETRY_MS[attempt]!);
+    }
+  }
+}
+
+/** Reintenta soltar un horario nuevo que quedó apartado tras un movimiento fallido. */
+export async function releaseOrphan(deps: Pick<MoveDeps, 'cancel' | 'wait'>, orphan: OrphanHold): Promise<void> {
+  await cancelWithRetry(deps as MoveDeps, orphan.id, orphan.idempotencyKey, true);
+}
+
+/** Aviso cuando ni con reintentos se pudo soltar el horario nuevo. */
+export function orphanMessage(reason: string, orphan: OrphanHold): string {
+  const caja = orphan.byCash ? 'y está por cobrar en Caja' : 'y puede aparecer por cobrar en Caja';
+  return `No se movió la reserva: ${reason} La reserva sigue en su horario original, pero el horario nuevo también quedó apartado ${caja}. No lo cobres: suéltalo con «Soltar el horario nuevo» o cancélalo desde la agenda.`;
 }
 
 /**
@@ -156,8 +217,11 @@ export class MoveBookingError extends Error {
  * jugadores), si la original ya estaba por cobrar en efectivo deja la nueva igual, y al final
  * cancela la original. Si algo falla después de apartar, suelta la nueva para no dejar dos.
  * Apartar primero evita perder el horario original si el nuevo ya está tomado (SLOT_TAKEN).
+ * No es atómico: si tampoco se puede soltar la nueva, el error lleva `orphan` para que la pantalla
+ * lo diga y deje reintentar; la nueva marcada en efectivo no vence hasta su inicio y se vería en Caja.
  */
 export async function moveBooking(deps: MoveDeps, booking: StaffBooking, target: MoveTarget): Promise<{ id: string }> {
+  const newKey = deps.newKey ?? createIdempotencyKey;
   const name = booking.nombre_cliente?.trim() || booking.cliente?.nombre?.trim();
   const created = await deps.create({
     espacio_id: target.espacio_id,
@@ -166,26 +230,28 @@ export async function moveBooking(deps: MoveDeps, booking: StaffBooking, target:
     ...(name ? { nombre_cliente: name.slice(0, 120) } : {}),
     ...(booking.jugadores ? { jugadores: booking.jugadores } : {}),
   });
-  const undo = async () => {
+  let byCash = false;
+  const fail = async (reason: string, error: unknown): Promise<never> => {
+    const orphan: OrphanHold = { id: created.id, idempotencyKey: newKey(), byCash };
     try {
-      await deps.cancel(created.id);
+      await releaseOrphan(deps, orphan);
     } catch {
-      // Si tampoco se puede soltar, vence sola a los 10 minutos.
+      throw new MoveBookingError(orphanMessage(reason, orphan), error, orphan);
     }
+    throw new MoveBookingError(`${reason} La reserva sigue en su horario original.`, error);
   };
   if (booking.pedido_id) {
     try {
       await deps.markCashLater(created.id);
+      byCash = true;
     } catch (error) {
-      await undo();
-      throw new MoveBookingError('No se pudo dejar el horario nuevo por cobrar en Caja. La reserva sigue en su horario original.', error);
+      return fail('No se pudo dejar el horario nuevo por cobrar en Caja.', error);
     }
   }
   try {
-    await deps.cancel(booking.id);
+    await cancelWithRetry(deps, booking.id, newKey());
   } catch (error) {
-    await undo();
-    throw new MoveBookingError('No se pudo soltar el horario original. La reserva sigue en su horario original.', error);
+    return fail('No se pudo soltar el horario original.', error);
   }
   return created;
 }
