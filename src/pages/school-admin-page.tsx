@@ -39,6 +39,9 @@ import {
   requestFacts,
   reservedLabel,
   resolvedText,
+  rosterDiff,
+  rosterDiffMessage,
+  rosterNeedsConfirm,
   rosterSavedNotice,
   rulesDraft,
   rulesInput,
@@ -58,6 +61,7 @@ import {
   studentTitle,
   studentsLabel,
   weekdayShort,
+  type RosterDiff,
   type SchoolRulesDraft,
 } from '../lib/school-admin';
 import type {
@@ -248,7 +252,8 @@ function SettingsSection(props: SectionProps & { settings: BusinessSettings }) {
 function JoinCodeCard(props: SectionProps & { settings: BusinessSettings }) {
   const { settings } = props;
   const save = useSaveSettings(props);
-  const [confirmsRegenerate, setConfirmsRegenerate] = useState(false);
+  // Confirmación abierta: cambiar el código por otro o quitarlo.
+  const [confirming, setConfirming] = useState<'cambiar' | 'quitar' | null>(null);
   const busy = save.isPending;
   const requiresCode = settings.union_requiere_codigo === true;
   const code = settings.codigo_union?.trim() || null;
@@ -264,16 +269,19 @@ function JoinCodeCard(props: SectionProps & { settings: BusinessSettings }) {
     {code ? <>
       <p className="text-3xl font-black tracking-[0.3em]" aria-label={`Código para unirse: ${code.split('').join(' ')}`}>{code}</p>
       <p>Los tutores lo escriben para agregar a sus hijos. Repártelo en la circular. Al cambiarlo, el anterior deja de servir; quien ya entró se queda.</p>
-      {confirmsRegenerate
+      {confirming === 'cambiar'
         ? <InlineConfirm title="¿Cambiar el código?" message="El código de ahora deja de servir para entrar." confirmLabel="Cambiar" disabled={busy}
-          onCancel={() => setConfirmsRegenerate(false)}
-          onConfirm={() => { setConfirmsRegenerate(false); save.mutate({ input: { codigo_union: 'generar' }, success: 'Código nuevo listo', fallback: 'No se guardó.' }); }} />
-        : <div className="flex flex-wrap gap-2">
-          <VaiButton variant="secondary" disabled={busy} onClick={() => setConfirmsRegenerate(true)}>Cambiar código</VaiButton>
-          {/* Sin código no se puede exigir: el servidor generaría otro. */}
-          {!requiresCode && <VaiButton variant="coral" disabled={busy}
-            onClick={() => save.mutate({ input: { codigo_union: null, union_requiere_codigo: false }, success: 'Ya no hay código para unirse', fallback: 'No se quitó el código.' })}>Quitar código</VaiButton>}
-        </div>}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => { setConfirming(null); save.mutate({ input: { codigo_union: 'generar' }, success: 'Código nuevo listo', fallback: 'No se guardó.' }); }} />
+        : confirming === 'quitar' && !requiresCode
+          ? <InlineConfirm title="¿Quitar el código?" message="El código de ahora deja de servir. Entra cualquiera que tenga el QR de la escuela." confirmLabel="Quitar" destructive disabled={busy}
+            onCancel={() => setConfirming(null)}
+            onConfirm={() => { setConfirming(null); save.mutate({ input: { codigo_union: null, union_requiere_codigo: false }, success: 'Ya no hay código para unirse', fallback: 'No se quitó el código.' }); }} />
+          : <div className="flex flex-wrap gap-2">
+            <VaiButton variant="secondary" disabled={busy} onClick={() => setConfirming('cambiar')}>Cambiar código</VaiButton>
+            {/* Sin código no se puede exigir: el servidor generaría otro. */}
+            {!requiresCode && <VaiButton variant="coral" disabled={busy} onClick={() => setConfirming('quitar')}>Quitar código</VaiButton>}
+          </div>}
     </> : <>
       <p>Sin código, entra cualquiera que tenga el QR de la escuela.</p>
       <div><VaiButton variant="secondary" disabled={busy} loading={busy}
@@ -486,6 +494,8 @@ function RosterSection(props: SectionProps) {
   const roster = useQuery({ queryKey: keys.roster, enabled: !!token, queryFn: () => api.schoolRoster(token) });
   const [pasting, setPasting] = useState(false);
   const [confirmsRemove, setConfirmsRemove] = useState(false);
+  // La lista pegada que espera confirmación porque cambia el padrón de ahora.
+  const [pending, setPending] = useState<{ students: SchoolRosterStudent[]; diff: RosterDiff } | null>(null);
   const save = useSchoolMutation<SchoolRosterStudent[], { total: number }>({
     ...props,
     signature: (students) => `padron:${JSON.stringify(students)}`,
@@ -496,6 +506,7 @@ function RosterSection(props: SectionProps) {
       client.setQueryData(keys.roster, { total: students.length, alumnos: students });
       setPasting(false);
       setConfirmsRemove(false);
+      setPending(null);
     },
   });
 
@@ -505,6 +516,11 @@ function RosterSection(props: SectionProps) {
   }
   const students = roster.data.alumnos;
   const busy = save.isPending;
+  const submitList = (list: SchoolRosterStudent[]) => {
+    const diff = rosterDiff(students, list);
+    if (rosterNeedsConfirm(students, diff)) setPending({ students: list, diff });
+    else save.mutate(list);
+  };
   return <Card title="Padrón de alumnos">
     {students.length === 0 ? <>
       <p>Sin padrón, cualquier tutor con el código puede dar de alta la matrícula que escriba. Pega la lista de tus alumnos para que solo entren ellos.</p>
@@ -522,28 +538,31 @@ function RosterSection(props: SectionProps) {
           <VaiButton variant="coral" disabled={busy} onClick={() => setConfirmsRemove(true)}>Quitar padrón</VaiButton>
         </div>}
     </>}
-    <Modal open={pasting} onOpenChange={(open) => { if (!open && !busy) setPasting(false); }} title="Pegar lista" size="large"
+    <Modal open={pasting} onOpenChange={(open) => { if (!open && !busy) { setPasting(false); setPending(null); } }} title="Pegar lista" size="large"
       description={'Copia de tu hoja de cálculo las columnas matrícula, nombre y grupo, y pégalas aquí: una fila por alumno.'
         + (students.length > 0 ? ` Reemplaza la lista de ahora (${students.length}).` : '')}>
-      {pasting && <RosterPaste busy={busy} onSave={(list) => save.mutate(list)} />}
+      {pasting && <RosterPaste busy={busy} locked={pending !== null} onSave={submitList} />}
+      {pasting && pending && <InlineConfirm title="¿Reemplazar el padrón?" message={rosterDiffMessage(pending.diff)}
+        confirmLabel="Sí, reemplazar" destructive={pending.diff.removed > 0} disabled={busy}
+        onCancel={() => setPending(null)} onConfirm={() => save.mutate(pending.students)} />}
     </Modal>
   </Card>;
 }
 
-export function RosterPaste({ busy, onSave }: { busy: boolean; onSave: (students: SchoolRosterStudent[]) => void }) {
+export function RosterPaste({ busy, locked = false, onSave }: { busy: boolean; locked?: boolean; onSave: (students: SchoolRosterStudent[]) => void }) {
   const [text, setText] = useState('');
   const result = parseRoster(text);
-  return <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); if (canSaveRoster(result)) onSave(result.students); }}>
+  return <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); if (!locked && canSaveRoster(result)) onSave(result.students); }}>
     <label className="field">
       <span className="field__label">Alumnos</span>
-      <textarea className="field__control min-h-40 resize-y" placeholder="A-001, Ana López, 3°B" value={text} disabled={busy} onChange={(event) => setText(event.target.value)} />
+      <textarea className="field__control min-h-40 resize-y" placeholder="A-001, Ana López, 3°B" value={text} disabled={busy || locked} onChange={(event) => setText(event.target.value)} />
     </label>
     {(result.students.length > 0 || result.problems.length > 0) && <div className="grid gap-1" aria-live="polite">
       <p className="font-bold">{result.students.length === 1 ? 'Se leyó 1 alumno' : `Se leyeron ${result.students.length} alumnos`}</p>
       {result.problems.slice(0, 3).map((problem) => <p key={`${problem.line}-${problem.reason}`} style={{ color: 'var(--vai-coral-text)' }}>{problemText(problem)}</p>)}
       {result.problems.length > 3 && <p style={{ color: 'var(--vai-coral-text)' }}>y {result.problems.length - 3} líneas más con problema</p>}
     </div>}
-    <div><VaiButton variant="accent" type="submit" loading={busy} disabled={!canSaveRoster(result)}>Guardar padrón</VaiButton></div>
+    <div><VaiButton variant="accent" type="submit" loading={busy && !locked} disabled={locked || !canSaveRoster(result)}>Guardar padrón</VaiButton></div>
   </form>;
 }
 
@@ -568,7 +587,8 @@ function GuardianRequestsCard(props: SectionProps & { settings: BusinessSettings
   const hasRoster = (roster.data?.alumnos.length ?? 0) > 0;
   const approval = useSaveSettings(props);
   const needsApproval = settings.tutores_requieren_aprobacion !== false;
-  const [rejecting, setRejecting] = useState<string | null>(null);
+  // "a<id>" = confirmar aprobar; "x<id>" = confirmar rechazar.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const review = useSchoolMutation<{ request: SchoolGuardianRequest; approve: boolean }, void>({
     ...props,
     signature: ({ request, approve }) => `revisar:${request.tutela_id}:${approve}`,
@@ -576,7 +596,7 @@ function GuardianRequestsCard(props: SectionProps & { settings: BusinessSettings
     fallback: 'No se guardó la decisión.',
     success: (_, { request, approve }) => approve ? `${personName(request.tutor)} ya cuida a ${studentName(request.alumno)}` : 'Solicitud rechazada',
     onSuccess: (_, { request }) => {
-      setRejecting(null);
+      setConfirming(null);
       client.setQueryData<SchoolGuardianRequest[]>(keys.guardianRequests, (old) => old?.filter((row) => row.tutela_id !== request.tutela_id));
     },
     onError: () => void requests.refetch(),
@@ -601,13 +621,16 @@ function GuardianRequestsCard(props: SectionProps & { settings: BusinessSettings
         <p className="font-black">{studentTitle(request.alumno)}</p>
         <p>Lo pide {personName(request.tutor)}{request.tutor.email ? ` · ${request.tutor.email}` : ''}</p>
         <small style={hasRoster && !request.en_padron ? { color: 'var(--vai-coral-text)', fontWeight: 700 } : undefined}>{requestFacts(request, hasRoster)}</small>
-        {rejecting === request.tutela_id
-          ? <InlineConfirm title={`¿Rechazar a ${personName(request.tutor)}?`} message={rejectGuardianMessage(request)} confirmLabel="Rechazar" destructive disabled={busy}
-            onCancel={() => setRejecting(null)} onConfirm={() => review.mutate({ request, approve: false })} />
-          : <div className="flex flex-wrap gap-2">
-            <VaiButton variant="primary" disabled={busy} onClick={() => review.mutate({ request, approve: true })}>Aprobar</VaiButton>
-            <VaiButton variant="coral" disabled={busy} onClick={() => setRejecting(request.tutela_id)}>Rechazar</VaiButton>
-          </div>}
+        {confirming === `a${request.tutela_id}`
+          ? <InlineConfirm title={`¿Aprobar a ${personName(request.tutor)}?`} message={`Podrá ver a ${studentName(request.alumno)}, recargarle y apartarle comida.`} confirmLabel="Aprobar" disabled={busy}
+            onCancel={() => setConfirming(null)} onConfirm={() => review.mutate({ request, approve: true })} />
+          : confirming === `x${request.tutela_id}`
+            ? <InlineConfirm title={`¿Rechazar a ${personName(request.tutor)}?`} message={rejectGuardianMessage(request)} confirmLabel="Rechazar" destructive disabled={busy}
+              onCancel={() => setConfirming(null)} onConfirm={() => review.mutate({ request, approve: false })} />
+            : <div className="flex flex-wrap gap-2">
+              <VaiButton variant="primary" disabled={busy} onClick={() => setConfirming(`a${request.tutela_id}`)}>Aprobar</VaiButton>
+              <VaiButton variant="coral" disabled={busy} onClick={() => setConfirming(`x${request.tutela_id}`)}>Rechazar</VaiButton>
+            </div>}
       </li>)}</ul>}
   </Card>;
 }

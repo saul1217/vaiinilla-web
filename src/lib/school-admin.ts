@@ -301,6 +301,45 @@ export function studentsLabel(count: number): string {
   return count === 1 ? '1 alumno' : `${count} alumnos`;
 }
 
+export interface RosterDiff {
+  removed: number;
+  added: number;
+  /** Misma matrícula con otro nombre o grupo. */
+  updated: number;
+}
+
+const rosterId = (student: SchoolRosterStudent) => student.matricula.trim().toUpperCase();
+
+/** Qué cambia al reemplazar el padrón de ahora por la lista nueva, por matrícula. */
+export function rosterDiff(current: SchoolRosterStudent[], next: SchoolRosterStudent[]): RosterDiff {
+  const before = new Map(current.map((student) => [rosterId(student), student]));
+  const after = new Set<string>();
+  let added = 0;
+  let updated = 0;
+  for (const student of next) {
+    const id = rosterId(student);
+    after.add(id);
+    const old = before.get(id);
+    if (!old) added += 1;
+    else if ((old.nombre ?? null) !== (student.nombre ?? null) || (old.grupo ?? null) !== (student.grupo ?? null)) updated += 1;
+  }
+  const removed = [...before.keys()].filter((id) => !after.has(id)).length;
+  return { removed, added, updated };
+}
+
+/** Se confirma antes de reemplazar un padrón que ya tiene alumnos si la lista nueva cambia algo. */
+export function rosterNeedsConfirm(current: SchoolRosterStudent[], diff: RosterDiff): boolean {
+  return current.length > 0 && (diff.removed > 0 || diff.added > 0 || diff.updated > 0);
+}
+
+/** «Se quitan 2, se agregan 1.» y, si aplica, cuántos cambian de nombre o grupo. */
+export function rosterDiffMessage(diff: RosterDiff): string {
+  let text = `Se quitan ${diff.removed}, se agregan ${diff.added}.`;
+  if (diff.updated > 0) text += diff.updated === 1 ? ' 1 cambia de nombre o grupo.' : ` ${diff.updated} cambian de nombre o grupo.`;
+  if (diff.removed > 0) text += ' Los hijos ya dados de alta se quedan.';
+  return text;
+}
+
 export function rosterSavedNotice(count: number): string {
   if (count === 0) return 'Padrón quitado';
   if (count === 1) return 'Padrón guardado: 1 alumno';

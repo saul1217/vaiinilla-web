@@ -16,6 +16,9 @@ import {
   problemText,
   requestFacts,
   resolvedText,
+  rosterDiff,
+  rosterDiffMessage,
+  rosterNeedsConfirm,
   rulesDraft,
   rulesInput,
   rulesProblem,
@@ -144,5 +147,36 @@ describe('errores de la escuela', () => {
     expect(schoolErrorMessage(new VaiinillaApiError(422, { code: 'CASH_SESSION_REQUIRED', message: 'Abre la caja para devolver efectivo: el dinero sale del cajón.' }), 'f'))
       .toBe('Abre la caja para devolver efectivo: el dinero sale del cajón.');
     expect(schoolErrorMessage(new Error('red'), 'No se guardó.')).toBe('No se guardó.');
+  });
+});
+
+describe('diferencia del padrón', () => {
+  const now = [
+    { matricula: 'A-001', nombre: 'Ana', grupo: '3°B' },
+    { matricula: 'A-002', nombre: 'Beto', grupo: '3°B' },
+    { matricula: 'A-003', nombre: 'Caro', grupo: null },
+  ];
+
+  it('cuenta por matrícula lo que se quita, se agrega y cambia', () => {
+    const diff = rosterDiff(now, [
+      { matricula: 'a-001', nombre: 'Ana', grupo: '3°B' },
+      { matricula: 'A-003', nombre: 'Caro', grupo: '2°A' },
+      { matricula: 'A-004', nombre: null, grupo: null },
+    ]);
+    expect(diff).toEqual({ removed: 1, added: 1, updated: 1 });
+    expect(rosterDiffMessage(diff)).toBe('Se quitan 1, se agregan 1. 1 cambia de nombre o grupo. Los hijos ya dados de alta se quedan.');
+    expect(rosterNeedsConfirm(now, diff)).toBe(true);
+  });
+
+  it('no confirma la primera lista ni una igual a la de ahora', () => {
+    expect(rosterNeedsConfirm([], rosterDiff([], now))).toBe(false);
+    expect(rosterNeedsConfirm(now, rosterDiff(now, [...now].reverse()))).toBe(false);
+  });
+
+  it('solo agregar también se confirma y no menciona a los hijos', () => {
+    const diff = rosterDiff(now, [...now, { matricula: 'A-010', nombre: null, grupo: null }]);
+    expect(diff).toEqual({ removed: 0, added: 1, updated: 0 });
+    expect(rosterDiffMessage(diff)).toBe('Se quitan 0, se agregan 1.');
+    expect(rosterNeedsConfirm(now, diff)).toBe(true);
   });
 });
