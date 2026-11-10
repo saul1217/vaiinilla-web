@@ -98,6 +98,8 @@ import type {
   HotelSettingsInput,
   HotelSummary,
   WalletCashRecharge,
+  HomeAgendaDay,
+  HomeOrder,
   WalletClient,
   WalletClientDetail,
   SchoolDayClosure,
@@ -1481,6 +1483,36 @@ export const api = {
       })
     ).data;
   },
+
+  // region Reparto y encargos (admin y cajero, docs/reposteria-domicilio.md del back).
+
+  /** Pedidos a domicilio y encargos por día de entrega. Rango de 0 a 60 días. */
+  async homeAgenda(token: string, from: string, to: string, signal?: AbortSignal): Promise<HomeAgendaDay[]> {
+    return (await request<HomeAgendaDay[]>(`/establecimiento/agenda${params({ desde: from, hasta: to })}`, { token, signal })).data;
+  },
+
+  /**
+   * Aceptar, rechazar, mandar, entregar o cobrar en la puerta. Responde el pedido como quedó. La
+   * llave la pone quien llama: reintentar con la misma tras perder la respuesta no lo repite.
+   */
+  async homeOrderAction(
+    token: string,
+    orderId: string,
+    path: 'aceptar' | 'rechazar' | 'en-camino' | 'entregar-domicilio' | 'cobrar-entrega',
+    body: Record<string, unknown>,
+    idempotencyKey: string,
+  ): Promise<HomeOrder> {
+    return (
+      await request<HomeOrder>(`/pedidos/${encodeURIComponent(orderId)}/${path}`, { method: 'POST', token, body, idempotencyKey })
+    ).data;
+  },
+
+  /** El negocio cancela un pedido aceptado que aún no se entrega; lo pagado se devuelve. */
+  async cancelHomeOrder(token: string, orderId: string, body: Record<string, unknown>, idempotencyKey: string): Promise<void> {
+    await request(`/pedidos/${encodeURIComponent(orderId)}/cancelaciones`, { method: 'POST', token, body, idempotencyKey });
+  },
+
+  // endregion
 
   // region Escuela (admin). Cada cambio lleva la llave que pone quien llama, para reintentar sin duplicar.
 
