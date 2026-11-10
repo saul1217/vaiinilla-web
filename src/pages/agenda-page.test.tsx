@@ -287,6 +287,7 @@ describe('AgendaPage', () => {
     renderPage();
     const dialog = await openPaidCancel(user);
     const confirm = within(dialog).getByRole('button', { name: 'Sí, cancelar reserva' });
+    expect(within(dialog).getByText(/El tope es orientativo: el servidor revisa lo que se pagó y decide el monto final/)).toBeInTheDocument();
     await fillRefund(user, dialog, '450.01');
     expect(within(dialog).getByText('El reembolso no puede ser mayor a lo pagado.')).toBeInTheDocument();
     expect(confirm).toBeDisabled();
@@ -299,14 +300,18 @@ describe('AgendaPage', () => {
     await user.click(confirm);
     expect(await within(dialog).findByText('El reembolso no puede ser mayor a lo pagado ($400.00 MXN).')).toBeInTheDocument();
     expect(bodies).toEqual([{ motivo: 'Lluvia', monto_reembolso: '450.00' }]);
+    // Ya enviado, el monto queda fijo aunque el back lo rechace: se cambia abriendo otra cancelación.
+    expect(within(dialog).getByLabelText('Monto a reembolsar')).toHaveAttribute('readonly');
   });
 
   it('reintentar la cancelación en el mismo modal manda la misma Idempotency-Key, y otro modal manda otra', async () => {
     const keys: (string | null)[] = [];
+    const bodies: unknown[] = [];
     server.use(
       ...baseHandlers([]),
-      http.post(`${baseUrl}/reservas/:id/cancelacion`, ({ params, request }) => {
+      http.post(`${baseUrl}/reservas/:id/cancelacion`, async ({ params, request }) => {
         keys.push(request.headers.get('Idempotency-Key'));
+        bodies.push(await request.json());
         if (keys.length === 1) return fail(503, 'SERVICE_UNAVAILABLE', 'El servidor no respondió.');
         if (keys.length === 2) return HttpResponse.error();
         return ok({ id: params.id, estado: 'cancelada', reembolso: cashRefund });
@@ -319,6 +324,16 @@ describe('AgendaPage', () => {
     const confirm = within(dialog).getByRole('button', { name: 'Sí, cancelar reserva' });
     await user.click(confirm);
     expect(await within(dialog).findByText('El servidor no respondió.')).toBeInTheDocument();
+    // Monto y motivo quedan fijos: escribir en ellos no cambia lo que se reenvía con la misma llave.
+    const amount = within(dialog).getByLabelText('Monto a reembolsar');
+    const reason = within(dialog).getByLabelText('Motivo (3 a 240 caracteres)');
+    expect(amount).toHaveAttribute('readonly');
+    expect(reason).toHaveAttribute('readonly');
+    expect(within(dialog).getByText(/quedan fijos para reintentar sin reembolsar dos veces/)).toBeInTheDocument();
+    await user.type(amount, '9');
+    await user.type(reason, ' y granizo');
+    expect(amount).toHaveValue('200.00');
+    expect(reason).toHaveValue('Lluvia');
     await user.click(confirm);
     await waitFor(() => expect(keys).toHaveLength(2));
     await waitFor(() => expect(confirm).toBeEnabled());
@@ -332,6 +347,8 @@ describe('AgendaPage', () => {
     expect(keys[1]).toBe(keys[0]);
     expect(keys[2]).toMatch(/^[0-9a-f-]{36}$/);
     expect(keys[2]).not.toBe(keys[0]);
+    expect(bodies[1]).toEqual(bodies[0]);
+    expect(bodies[0]).toEqual({ motivo: 'Lluvia', monto_reembolso: '200.00' });
   });
 
   it('con 409 de reserva ya cancelada lo dice y actualiza la agenda', async () => {

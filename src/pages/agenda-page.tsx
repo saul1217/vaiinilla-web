@@ -38,7 +38,7 @@ import { VaiinillaApiError, errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
 import { formatMoney, moneyToCents, normalizeMoneyInput } from '../lib/money';
 import { tenantHomePath } from '../lib/tenant-route';
-import type { BookingCancelRefund, CourtAvailabilityDay, StaffBooking } from '../types/api';
+import type { BookingCancelRefund, BookingRefundInput, CourtAvailabilityDay, StaffBooking } from '../types/api';
 
 const BADGE: Record<string, string> = {
   pendiente_pago: 'pendiente',
@@ -391,10 +391,19 @@ function CancelModal({ token, booking, timeZone, onClose, onDone, onRefunded, on
     ? 'Escribe un monto válido, de 0 al total pagado.'
     : paidCents !== null && refundCents > paidCents ? 'El reembolso no puede ser mayor a lo pagado.' : null;
   const reasonLength = reason.trim().length;
-  const valid = !paid || (reasonLength >= 3 && reasonLength <= 240 && !refundError);
+  // Lo que se mandó la primera vez queda fijo: el back compara monto y motivo en el hash de la
+  // llave, y reenviar otros con la misma daría IDEMPOTENCY_KEY_REUSED. Para cambiarlos se cierra
+  // el modal y se abre otro (llave nueva).
+  const [sent, setSent] = useState<{ body: BookingRefundInput | undefined } | null>(null);
+  const frozen = sent !== null;
+  const valid = frozen || !paid || (reasonLength >= 3 && reasonLength <= 240 && !refundError);
+  const submit = () => {
+    const body = sent ? sent.body : paid ? { motivo: reason.trim(), monto_reembolso: normalizeMoneyInput(refundAmount) } : undefined;
+    if (!sent) setSent({ body });
+    cancel.mutate(body);
+  };
   const cancel = useMutation({
-    mutationFn: () => api.cancelCounterRental(token, booking.id,
-      paid ? { motivo: reason.trim(), monto_reembolso: normalizeMoneyInput(refundAmount) } : undefined, idempotencyKey),
+    mutationFn: (body: BookingRefundInput | undefined) => api.cancelCounterRental(token, booking.id, body, idempotencyKey),
     onSuccess: async (result) => {
       const refund = result?.reembolso ?? null;
       if (!paid && !refund) return onDone('Reserva cancelada. El horario quedó libre.');
@@ -421,15 +430,19 @@ function CancelModal({ token, booking, timeZone, onClose, onDone, onRefunded, on
     title={paid ? 'Cancelar reserva pagada' : 'Cancelar reserva'}
     description={`¿Cancelar la reserva de ${bookingName(booking)} en ${booking.espacio?.nombre ?? 'la cancha'}, de ${clockIn(booking.inicio, timeZone)} a ${clockIn(booking.fin, timeZone)}? El horario queda libre${paid ? '. Elige cuánto se reembolsa (de $0 a lo pagado) y escribe el motivo.' : '.'}`}>
     {paid && <div className="mb-3 grid gap-3">
-      <Field label="Monto a reembolsar" name="agenda-refund-amount" inputMode="decimal" value={refundAmount}
-        onChange={(event) => setRefundAmount(event.target.value)} error={refundError ?? undefined}
+      <Field label="Monto a reembolsar" name="agenda-refund-amount" inputMode="decimal"
+        value={frozen ? sent.body?.monto_reembolso ?? refundAmount : refundAmount} readOnly={frozen}
+        onChange={(event) => setRefundAmount(event.target.value)} error={frozen ? undefined : refundError ?? undefined}
         hint={booking.monto ? `Pagado: ${formatMoney(booking.monto)}. Puedes reembolsar $0.` : undefined} />
-      <Field label="Motivo (3 a 240 caracteres)" name="agenda-refund-reason" maxLength={240} value={reason}
+      <p className="text-xs text-muted">El tope es orientativo: el servidor revisa lo que se pagó y decide el monto final del reembolso, que verás al terminar.</p>
+      <Field label="Motivo (3 a 240 caracteres)" name="agenda-refund-reason" maxLength={240}
+        value={frozen ? sent.body?.motivo ?? reason : reason} readOnly={frozen}
         onChange={(event) => setReason(event.target.value)} />
+      {frozen && <p className="text-xs text-muted">El monto y el motivo ya se enviaron y quedan fijos para reintentar sin reembolsar dos veces. Para cambiarlos, cierra y vuelve a abrir la cancelación.</p>}
     </div>}
     {cancel.isError && <Feedback tone="error">{actionError(cancel.error)}</Feedback>}
     <div className="flex flex-wrap gap-2">
-      <VaiButton variant="coral" loading={cancel.isPending} disabled={!valid} onClick={() => cancel.mutate()}>Sí, cancelar reserva</VaiButton>
+      <VaiButton variant="coral" loading={cancel.isPending} disabled={!valid} onClick={submit}>Sí, cancelar reserva</VaiButton>
       <VaiButton variant="quiet" onClick={onClose}>No, conservar</VaiButton>
     </div>
   </Modal>;
