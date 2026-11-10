@@ -98,3 +98,75 @@ describe('sentry: redacción de tokens en breadcrumbs y cuerpos JSON', () => {
     expect(beforeSend(event)).toEqual({ message: 'Error de red', extra: { pedido: { id: 1, mesa: '4' } } });
   });
 });
+
+describe('sentry: claves sensibles nuevas y query_string en sus tres formas', () => {
+  it('redacta refresh_token, id_token, password, secret y cookie en cualquier nivel', () => {
+    const b = beforeBreadcrumb({
+      category: 'fetch',
+      message: '{"refresh_token":"r1", "otro":1',
+      data: {
+        refresh_token: 'r1',
+        ID_TOKEN: 'i1',
+        sesion: { password: 'p1', secret: 's1', cookie: 'c1', nombre: 'Ana' },
+        body: JSON.stringify({ password: 'p2', mesa: 2 }),
+      },
+    });
+    expect(b?.message).toBe('{"refresh_token":"[Filtered]", "otro":1');
+    expect(b?.data).toEqual({
+      refresh_token: '[Filtered]',
+      ID_TOKEN: '[Filtered]',
+      sesion: { password: '[Filtered]', secret: '[Filtered]', cookie: '[Filtered]', nombre: 'Ana' },
+      body: JSON.stringify({ password: '[Filtered]', mesa: 2 }),
+    });
+  });
+
+  const evento = (query_string: unknown) =>
+    beforeSend({ request: { url: 'https://x.app/a', query_string } } as unknown as ErrorEvent).request?.query_string;
+
+  it('redacta query_string como cadena', () => {
+    expect(
+      evento(`password=p&secret=s&refresh_token=r&id_token=i&cookie=c&d=${VILLO}&j=${JWT}&mesa=4&nuevo=1`),
+    ).toBe(
+      'password=[Filtered]&secret=[Filtered]&refresh_token=[Filtered]&id_token=[Filtered]&cookie=[Filtered]' +
+        '&d=[Filtered]&j=[Filtered]&mesa=4&nuevo=[Filtered]',
+    );
+    expect(evento('token=abc&b=1')).toBe('token=[Filtered]&b=1');
+  });
+
+  it('redacta query_string como objeto', () => {
+    expect(
+      evento({ password: 'p', Secret: 's', cookie: 'c', d: VILLO, j: JWT, mesa: '4', token: 't', nuevo: '1' }),
+    ).toEqual({
+      password: '[Filtered]',
+      Secret: '[Filtered]',
+      cookie: '[Filtered]',
+      d: '[Filtered]',
+      j: '[Filtered]',
+      mesa: '4',
+      token: '[Filtered]',
+      nuevo: '[Filtered]',
+    });
+  });
+
+  it('redacta query_string como lista de pares [clave, valor]', () => {
+    expect(
+      evento([
+        ['refresh_token', 'r'],
+        ['id_token', 'i'],
+        ['password', 'p'],
+        ['d', VILLO],
+        ['j', JWT],
+        ['mesa', '4'],
+        ['correo', 'a@b.com'],
+      ]),
+    ).toEqual([
+      ['refresh_token', '[Filtered]'],
+      ['id_token', '[Filtered]'],
+      ['password', '[Filtered]'],
+      ['d', '[Filtered]'],
+      ['j', '[Filtered]'],
+      ['mesa', '4'],
+      ['correo', '[email]'],
+    ]);
+  });
+});
