@@ -97,6 +97,9 @@ import type {
   HotelSettings,
   HotelSettingsInput,
   HotelSummary,
+  WalletCashRecharge,
+  WalletClient,
+  WalletClientDetail,
   SchoolDayClosure,
   SchoolGuardianRequest,
   SchoolGuardianship,
@@ -1441,6 +1444,39 @@ export const api = {
         method: 'POST',
         token,
         body: input,
+        idempotencyKey,
+      })
+    ).data;
+  },
+
+  /** Busca clientes del negocio por nombre o identificador (cajero o admin). `q` de 2 a 80 letras. */
+  async searchWalletClients(token: string, query: string, signal?: AbortSignal): Promise<WalletClient[]> {
+    return (await request<WalletClient[]>(`/wallets/clientes${params({ q: query.trim() })}`, { token, signal })).data;
+  },
+
+  /** Saldo y movimientos de un cliente (cajero o admin). `cursor` sale de `meta.cursor` de la página anterior. */
+  async walletClientDetail(
+    token: string,
+    userId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ): Promise<{ data: WalletClientDetail; cursor: string | null }> {
+    const response = await request<WalletClientDetail>(
+      `/wallets/${encodeURIComponent(userId)}${params({ limit: options.limit, cursor: options.cursor })}`,
+      { token },
+    );
+    return { data: response.data, cursor: response.meta?.cursor || null };
+  },
+
+  /**
+   * Recarga en efectivo (solo cajero, con Caja abierta). La llave la pone quien llama y la guarda
+   * antes de mandar: si se pierde la respuesta, reintentar con la misma no abona dos veces.
+   */
+  async rechargeWalletCash(token: string, userId: string, amount: string, idempotencyKey: string): Promise<WalletCashRecharge> {
+    return (
+      await request<WalletCashRecharge>(`/wallets/${encodeURIComponent(userId)}/recargas-efectivo`, {
+        method: 'POST',
+        token,
+        body: { monto: amount },
         idempotencyKey,
       })
     ).data;
