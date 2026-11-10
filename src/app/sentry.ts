@@ -1,11 +1,19 @@
 import * as Sentry from '@sentry/react';
 
 const SENSITIVE_PARAMS = /([?&#;](?:token|nuevo|access_token|id_token|refresh_token|apiKey|key|email|code)=)[^&#\s"']*/gi;
+/**
+ * `?q=` de búsquedas (p. ej. /solicitudes-tutela/tutores?q=...) puede traer el nombre o la matrícula de un
+ * menor. Se tapa hasta el siguiente `&` o `#` (o comilla o salto de línea), incluidos espacios sin codificar.
+ */
+const SEARCH_PARAM = /([?&#;]q=)[^&#"'\r\n]*/gi;
 const EMAIL = /[^\s@"'<>]+@[^\s@"'<>]+\.[^\s@"'<>]+/g;
 
-/** Quita tokens, `?nuevo=` y correos de una URL o texto. */
+/** Quita tokens, `?nuevo=`, `?q=` y correos de una URL o texto. */
 export function scrubUrl(value: string): string {
-  return value.replace(SENSITIVE_PARAMS, '$1[Filtered]').replace(EMAIL, '[email]');
+  return value
+    .replace(SENSITIVE_PARAMS, '$1[Filtered]')
+    .replace(SEARCH_PARAM, '$1[Filtered]')
+    .replace(EMAIL, '[email]');
 }
 
 function scrubHeaders(headers: Record<string, string> | undefined) {
@@ -36,6 +44,8 @@ const TOKEN_IN_JSON_TEXT = new RegExp(`("(?:${[...SENSITIVE_KEYS].join('|')})"\\
 /** Token de dispositivo VILLO dentro de un texto (p. ej. `Bearer villo_...`): 'villo_' + 43 caracteres base64url. */
 const VILLO_IN_TEXT = /villo_[A-Za-z0-9_-]{43}/g;
 const MAX_DEPTH = 12;
+/** Parámetros de query que solo se tapan en URLs y `query_string` (no como claves de objetos JSON). */
+const SENSITIVE_QUERY_KEYS = new Set(['q']);
 
 function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEYS.has(key.toLowerCase());
@@ -91,7 +101,8 @@ function redactQueryValue(key: string, value: unknown): unknown {
   } catch {
     // Clave mal codificada: se compara tal cual.
   }
-  if (isSensitiveKey(name.trim()) && value !== null && value !== undefined && value !== '') return FILTERED;
+  const normalized = name.trim();
+  if ((isSensitiveKey(normalized) || SENSITIVE_QUERY_KEYS.has(normalized.toLowerCase())) && value !== null && value !== undefined && value !== '') return FILTERED;
   return typeof value === 'string' ? redactString(value) : redactDeep(value);
 }
 
