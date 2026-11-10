@@ -77,6 +77,20 @@ export function rechargeAmount(text: string): string | null {
   return `${BigInt(pesos)}.${centavos.padEnd(2, '0')}`;
 }
 
+/**
+ * Tope operativo de una recarga en efectivo desde Caja. El servidor no fija uno (solo el formato
+ * de MONTO_RE) y Android tampoco: se elige $10000.00 MXN para frenar un dedazo de ceros sin
+ * estorbar recargas reales en mostrador.
+ */
+export const MAX_CASH_RECHARGE = '10000.00';
+const MAX_CASH_RECHARGE_CENTS = moneyToCents(MAX_CASH_RECHARGE)!;
+
+/** True si el monto ya validado pasa del tope operativo de Caja. */
+export function exceedsCashRechargeMax(amount: string): boolean {
+  const cents = moneyToCents(amount);
+  return cents !== null && cents > MAX_CASH_RECHARGE_CENTS;
+}
+
 /** «Recargar $100.00 MXN en efectivo»: a quién va lo dice la tarjeta del cliente, cuánto lo repite el botón. */
 export function rechargeLabel(amount: string | null): string {
   return amount ? `Recargar ${formatMoney(amount)} en efectivo` : 'Recargar en efectivo';
@@ -162,12 +176,13 @@ export function keepPendingAfter(error: unknown): boolean {
  * Una recarga confirmada se guarda aquí ANTES del POST, con su Idempotency-Key, como
  * PendingWalletReloadStore de Android. Si se pierde la respuesta o se cierra la pestaña, el
  * siguiente intento reusa la llave y el servidor responde la misma recarga en vez de abonar dos
- * veces. La llave del back vale por negocio y usuario, así que el registro también.
+ * veces. La llave del back vale por negocio y usuario, así que el registro también; además va
+ * por membresía y se borra al cerrar sesión o cambiar de acceso. No guarda el nombre del cliente
+ * (dato personal): solo su id.
  */
 export interface PendingRecharge {
   version: 1;
   userId: string;
-  userName: string | null;
   amount: string;
   idempotencyKey: string;
   createdAt: number;
@@ -177,6 +192,7 @@ export interface PendingRechargeScope {
   apiUrl: string;
   establecimientoId: string;
   usuarioId: string;
+  membresiaId: string;
 }
 
 const PENDING_PREFIX = 'vaiinilla:wallet-recharge:v1:';
@@ -185,7 +201,7 @@ export const PENDING_RECHARGE_TTL_MS = 12 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function pendingRechargeKey(scope: PendingRechargeScope): string {
-  return `${PENDING_PREFIX}${[scope.apiUrl, scope.establecimientoId, scope.usuarioId].map(encodeURIComponent).join('|')}`;
+  return `${PENDING_PREFIX}${[scope.apiUrl, scope.establecimientoId, scope.usuarioId, scope.membresiaId].map(encodeURIComponent).join('|')}`;
 }
 
 function storage(): Storage | null {
@@ -221,7 +237,8 @@ export function readPendingRecharge(scope: PendingRechargeScope, now: number = D
     if (parsed !== null) store.removeItem(key);
     return null;
   }
-  return { ...(record as PendingRecharge), userName: typeof record.userName === 'string' ? record.userName : null };
+  const { userId, amount, idempotencyKey, createdAt } = record as PendingRecharge;
+  return { version: 1, userId, amount, idempotencyKey, createdAt };
 }
 
 export function writePendingRecharge(scope: PendingRechargeScope, record: PendingRecharge): void {
@@ -230,6 +247,22 @@ export function writePendingRecharge(scope: PendingRechargeScope, record: Pendin
 
 export function clearPendingRecharge(scope: PendingRechargeScope): void {
   storage()?.removeItem(pendingRechargeKey(scope));
+}
+
+/** Borra las recargas pendientes de todos los accesos: se llama al cerrar sesión o cambiar de acceso. */
+export function clearAllPendingRecharges(): void {
+  const store = storage();
+  if (!store) return;
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < store.length; index += 1) {
+      const key = store.key(index);
+      if (key?.startsWith(PENDING_PREFIX)) keys.push(key);
+    }
+    keys.forEach((key) => store.removeItem(key));
+  } catch {
+    // Sin almacenamiento no hay nada que borrar.
+  }
 }
 
 // endregion

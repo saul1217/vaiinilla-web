@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { VaiinillaApiError } from './api-error';
 import { WALLET_CAJA_ENABLED } from './wallet-caja-feature';
 import {
+  MAX_CASH_RECHARGE,
   PENDING_RECHARGE_TTL_MS,
   canRecharge,
+  clearAllPendingRecharges,
   clearPendingRecharge,
+  exceedsCashRechargeMax,
   clientDetail,
   keepPendingAfter,
   lastOrderLabel,
@@ -21,11 +24,10 @@ import {
 } from './wallet-caja';
 import type { WalletClient, WalletClientMovement } from '../types/api';
 
-const scope = { apiUrl: 'https://api.test/api/v1', establecimientoId: 'store-1', usuarioId: 'cajero-1' };
+const scope = { apiUrl: 'https://api.test/api/v1', establecimientoId: 'store-1', usuarioId: 'cajero-1', membresiaId: 'm-1' };
 const record = (patch: Partial<PendingRecharge> = {}): PendingRecharge => ({
   version: 1,
   userId: 'cliente-1',
-  userName: 'Ana Pérez',
   amount: '100.00',
   idempotencyKey: '11111111-2222-4333-8444-555555555555',
   createdAt: Date.now(),
@@ -107,6 +109,15 @@ describe('movimientos', () => {
   });
 });
 
+describe('tope operativo de la recarga en efectivo', () => {
+  it('acepta hasta $10000.00 y rechaza lo que pase', () => {
+    expect(MAX_CASH_RECHARGE).toBe('10000.00');
+    expect(exceedsCashRechargeMax('10000.00')).toBe(false);
+    expect(exceedsCashRechargeMax('10000.01')).toBe(true);
+    expect(exceedsCashRechargeMax('99999999.00')).toBe(true);
+  });
+});
+
 describe('errores de la recarga', () => {
   const apiError = (status: number, code: string) => new VaiinillaApiError(status, { code, message: code });
 
@@ -126,13 +137,29 @@ describe('errores de la recarga', () => {
 });
 
 describe('recarga pendiente', () => {
-  it('se guarda por backend, negocio y cajero', () => {
+  it('se guarda por backend, negocio, cajero y membresía, sin el nombre del cliente', () => {
     writePendingRecharge(scope, record());
+    expect(pendingRechargeKey(scope)).toBe('vaiinilla:wallet-recharge:v1:https%3A%2F%2Fapi.test%2Fapi%2Fv1|store-1|cajero-1|m-1');
+    expect(window.localStorage.getItem(pendingRechargeKey(scope))).not.toMatch(/Ana|userName/);
     expect(readPendingRecharge(scope)).toMatchObject({ userId: 'cliente-1', amount: '100.00' });
     expect(readPendingRecharge({ ...scope, usuarioId: 'otro-cajero' })).toBeNull();
+    expect(readPendingRecharge({ ...scope, membresiaId: 'm-2' })).toBeNull();
     expect(readPendingRecharge({ ...scope, establecimientoId: 'otra-tienda' })).toBeNull();
     clearPendingRecharge(scope);
     expect(readPendingRecharge(scope)).toBeNull();
+  });
+
+  it('no devuelve el nombre aunque un registro anterior lo traiga', () => {
+    window.localStorage.setItem(pendingRechargeKey(scope), JSON.stringify({ ...record(), userName: 'Ana Pérez' }));
+    expect(readPendingRecharge(scope)).not.toHaveProperty('userName');
+  });
+
+  it('clearAllPendingRecharges borra las de todos los accesos y deja lo demás', () => {
+    writePendingRecharge(scope, record());
+    writePendingRecharge({ ...scope, establecimientoId: 'otra-tienda', membresiaId: 'm-2' }, record());
+    window.localStorage.setItem('vaiinilla:admin-theme', 'dark');
+    clearAllPendingRecharges();
+    expect(Object.keys(window.localStorage)).toEqual(['vaiinilla:admin-theme']);
   });
 
   it('descarta registros viejos o dañados', () => {

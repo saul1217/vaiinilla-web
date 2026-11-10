@@ -10,12 +10,14 @@ import { VaiinillaApiError, errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
 import { centsToMoney, formatMoney, moneyToCents } from '../lib/money';
 import {
+  MAX_CASH_RECHARGE,
   QUICK_AMOUNTS,
   WALLET_SEARCH_DEBOUNCE_MS,
   WALLET_SEARCH_MIN,
   canRecharge,
   clearPendingRecharge,
   clientDetail,
+  exceedsCashRechargeMax,
   isDebit,
   keepPendingAfter,
   movementAmountLabel,
@@ -47,7 +49,7 @@ export function WalletCajaPage() {
   const { establecimiento_id: storeId, usuario_id: userId, membresia_id: membershipId, rol } = tenant.context;
   // Remontar al cambiar de negocio o membresía descarta la búsqueda y el cliente de la sesión anterior.
   return <WalletCajaScreen key={`${storeId}:${membershipId}`} token={tenant.token} role={rol}
-    scope={{ apiUrl, establecimientoId: storeId, usuarioId: userId }} />;
+    scope={{ apiUrl, establecimientoId: storeId, usuarioId: userId, membresiaId: membershipId }} />;
 }
 
 function WalletCajaScreen({ token, role, scope }: { token: string; role: string; scope: PendingRechargeScope }) {
@@ -60,6 +62,8 @@ function WalletCajaScreen({ token, role, scope }: { token: string; role: string;
   const [query, setQuery] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedClient | null>(null);
   const [pending, setPending] = useState<PendingRecharge | null>(() => (cashier ? readPendingRecharge(scope) : null));
+  // El nombre del cliente solo vive en memoria: la recarga guardada en el navegador lleva su id, no datos personales.
+  const [pendingName, setPendingName] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<(WalletCashRecharge & { name: string }) | null>(null);
   const [rechargeError, setRechargeError] = useState<string | null>(null);
 
@@ -84,41 +88,45 @@ function WalletCajaScreen({ token, role, scope }: { token: string; role: string;
 
   const sending = useRef(false);
   const recharge = useMutation({
-    mutationFn: async (record: PendingRecharge) => {
+    mutationFn: async ({ record }: { record: PendingRecharge; name: string | null }) => {
       // Se guarda antes de mandar: si la pestaña se cierra a medias, al volver sale como pendiente.
       writePendingRecharge(scope, record);
       return api.rechargeWalletCash(token, record.userId, record.amount, record.idempotencyKey);
     },
-    onSuccess: (result, record) => {
+    onSuccess: (result, { name }) => {
       clearPendingRecharge(scope);
       setPending(null);
+      setPendingName(null);
       setRechargeError(null);
-      setReceipt({ ...result, name: record.userName ?? 'el cliente' });
+      setReceipt({ ...result, name: name ?? 'el cliente' });
       void queryClient.invalidateQueries({ queryKey: keys.all });
     },
-    onError: (error, record) => {
+    onError: (error, { record, name }) => {
       if (keepPendingAfter(error)) {
         setPending(record);
+        setPendingName(name);
       } else {
         clearPendingRecharge(scope);
         setPending(null);
+        setPendingName(null);
       }
       setRechargeError(rechargeErrorMessage(error));
     },
     onSettled: () => { sending.current = false; },
   });
 
-  const send = (record: PendingRecharge) => {
+  const send = (record: PendingRecharge, name: string | null) => {
     if (sending.current) return;
     sending.current = true;
     setReceipt(null);
     setRechargeError(null);
-    recharge.mutate(record);
+    recharge.mutate({ record, name });
   };
 
   const discardPending = () => {
     clearPendingRecharge(scope);
     setPending(null);
+    setPendingName(null);
     setRechargeError(null);
     if (pending) void queryClient.invalidateQueries({ queryKey: keys.detail(pending.userId) });
   };
@@ -137,12 +145,12 @@ function WalletCajaScreen({ token, role, scope }: { token: string; role: string;
         : 'Busca al cliente y consulta su saldo y movimientos. Las recargas se hacen desde Caja.'} />
 
     {pending && <Feedback tone="info">
-      <p className="font-semibold">Recarga sin confirmar: {formatMoney(pending.amount)} para {pending.userName ?? 'un cliente'}.</p>
+      <p className="font-semibold">Recarga sin confirmar: {formatMoney(pending.amount)} para {pendingName ?? 'un cliente'}.</p>
       <p>No sabemos si entró. Reintenta con el mismo botón: si ya se había abonado, no se cobra dos veces.</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <VaiButton variant="accent" loading={recharge.isPending} onClick={() => send(pending)}>Reintentar recarga</VaiButton>
+        <VaiButton variant="accent" loading={recharge.isPending} onClick={() => send(pending, pendingName)}>Reintentar recarga</VaiButton>
         <VaiButton variant="secondary" disabled={recharge.isPending}
-          onClick={() => { setSelected({ userId: pending.userId, name: pending.userName ?? 'Cliente' }); }}>Ver su saldo</VaiButton>
+          onClick={() => { setSelected({ userId: pending.userId, name: pendingName ?? 'Cliente' }); }}>Ver su saldo</VaiButton>
         <VaiButton variant="quiet" disabled={recharge.isPending} onClick={discardPending}>Descartar</VaiButton>
       </div>
     </Feedback>}
@@ -168,11 +176,10 @@ function WalletCajaScreen({ token, role, scope }: { token: string; role: string;
       sending={recharge.isPending} onRecharge={(amount, name) => send({
         version: 1,
         userId: selected.userId,
-        userName: name,
         amount,
         idempotencyKey: createIdempotencyKey(),
         createdAt: Date.now(),
-      })} />}
+      }, name)} />}
   </main>;
 }
 
@@ -299,8 +306,10 @@ function RechargeForm({ name, balance, blocked, sending, onConfirm }: {
 }) {
   const [text, setText] = useState('');
   const [confirming, setConfirming] = useState(false);
-  const amount = rechargeAmount(text);
-  const invalid = text.trim() !== '' && amount === null;
+  const parsed = rechargeAmount(text);
+  const overMax = parsed !== null && exceedsCashRechargeMax(parsed);
+  const amount = overMax ? null : parsed;
+  const invalid = text.trim() !== '' && parsed === null;
   const balanceCents = moneyToCents(balance);
   const after = amount && balanceCents !== null ? centsToMoney(balanceCents + moneyToCents(amount)!) : null;
 
@@ -312,7 +321,9 @@ function RechargeForm({ name, balance, blocked, sending, onConfirm }: {
     </ChipRow>
     <div className="mt-3">
       <Field label="Monto" inputMode="decimal" autoComplete="off" value={text} onChange={(event) => setText(event.target.value)}
-        error={invalid ? 'Escribe un monto mayor a 0, con hasta 2 decimales.' : undefined}
+        error={invalid
+          ? 'Escribe un monto mayor a 0, con hasta 2 decimales.'
+          : overMax ? `El máximo por recarga en efectivo es ${formatMoney(MAX_CASH_RECHARGE)}.` : undefined}
         hint={blocked ?? undefined} />
     </div>
     <div className="mt-3">

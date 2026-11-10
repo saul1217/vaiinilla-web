@@ -128,8 +128,8 @@ describe('WalletCajaPage', () => {
 
   it('la recarga pendiente sobrevive a recargar la página', async () => {
     window.localStorage.setItem(
-      `vaiinilla:wallet-recharge:v1:${encodeURIComponent(baseUrl)}|store-1|cajero-1`,
-      JSON.stringify({ version: 1, userId: CLIENT_ID, userName: 'Ana Pérez', amount: '200.00', idempotencyKey: '11111111-2222-4333-8444-555555555555', createdAt: Date.now() }),
+      `vaiinilla:wallet-recharge:v1:${encodeURIComponent(baseUrl)}|store-1|cajero-1|m-1`,
+      JSON.stringify({ version: 1, userId: CLIENT_ID, amount: '200.00', idempotencyKey: '11111111-2222-4333-8444-555555555555', createdAt: Date.now() }),
     );
     let key: string | null = null;
     server.use(...handlers(), http.post(`${baseUrl}/wallets/${CLIENT_ID}/recargas-efectivo`, ({ request }) => {
@@ -138,8 +138,10 @@ describe('WalletCajaPage', () => {
     }));
     const user = userEvent.setup();
     renderPage();
-    await user.click(await screen.findByRole('button', { name: 'Reintentar recarga' }));
-    expect(await screen.findByText(/Recarga de \$200.00 MXN para Ana Pérez/)).toBeInTheDocument();
+    // Tras recargar la página no hay nombre: el navegador no lo guarda.
+    expect(await screen.findByText('Recarga sin confirmar: $200.00 MXN para un cliente.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reintentar recarga' }));
+    expect(await screen.findByText(/Recarga de \$200.00 MXN para el cliente/)).toBeInTheDocument();
     expect(key).toBe('11111111-2222-4333-8444-555555555555');
   });
 
@@ -153,6 +155,19 @@ describe('WalletCajaPage', () => {
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /Sí, recargar/ }));
     expect(await screen.findByText('No hay una sesión de Caja abierta. Abre Caja antes de recargar.')).toBeInTheDocument();
     expect(screen.queryByText(/Recarga sin confirmar/)).not.toBeInTheDocument();
+  });
+
+  it('no deja recargar más del tope operativo y lo dice', async () => {
+    server.use(...handlers());
+    const user = userEvent.setup();
+    renderPage();
+    await openClient(user);
+    await user.type(screen.getByRole('textbox', { name: 'Monto' }), '10000.01');
+    expect(screen.getByText('El máximo por recarga en efectivo es $10000.00 MXN.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Recargar en efectivo' })).toBeDisabled();
+    await user.clear(screen.getByRole('textbox', { name: 'Monto' }));
+    await user.type(screen.getByRole('textbox', { name: 'Monto' }), '10000');
+    expect(screen.getByRole('button', { name: 'Recargar $10000.00 MXN en efectivo' })).toBeEnabled();
   });
 
   it('con Caja cerrada avisa y no deja recargar', async () => {

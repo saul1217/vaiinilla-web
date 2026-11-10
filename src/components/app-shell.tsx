@@ -30,6 +30,7 @@ import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-t
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
+import { clearAllPendingRecharges } from '../lib/wallet-caja';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { Logo } from './brand-mark';
@@ -84,11 +85,14 @@ export function TenantShell({ children }: { children: ReactNode }) {
   const items = navigationForRole(tenant.context.rol);
 
   async function switchContext() {
+    // Las recargas en efectivo sin confirmar no se quedan en el navegador al cambiar de acceso.
+    clearAllPendingRecharges();
     await clearTenant();
     history.replace('/accesos');
   }
 
   async function exit() {
+    clearAllPendingRecharges();
     await clearAll();
     await signOut();
     history.replace('/acceso');
