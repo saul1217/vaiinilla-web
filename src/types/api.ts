@@ -450,6 +450,8 @@ export interface ManagedSpace {
   descripcion?: string | null;
   imagen_url?: string | null;
   caracteristicas?: string[];
+  /** Cuántos caben (en un boliche, jugadores por pista, de 1 a 99); null = sin tope propio. Un backend anterior no lo manda. */
+  capacidad?: number | null;
 }
 
 export interface SpaceUpdateInput {
@@ -457,6 +459,8 @@ export interface SpaceUpdateInput {
   tipo?: SpaceType;
   activo?: boolean;
   precio_hora?: string | null;
+  /** De 1 a 99, o null para quitarla. */
+  capacidad?: number | null;
   descripcion?: string | null;
   caracteristicas?: string[];
 }
@@ -760,6 +764,9 @@ export interface CounterRental {
   monto: string;
   estado: string;
   version: number;
+  /** Jugadores de la renta (obligatorios en un boliche); un backend anterior no lo manda. */
+  jugadores?: number | null;
+  nombre_cliente?: string | null;
 }
 
 /** Reserva de cancha del día vista por caja (GET /reservas?fecha=). Algunos campos los completa el backend (vaiinilla_back#112). */
@@ -776,6 +783,10 @@ export interface StaffBooking {
   version?: number;
   /** Cómo pagó el cliente, si el backend lo manda. */
   metodo_pago?: string | null;
+  /** Jugadores anotados (boliche) y nombre de la renta de mostrador. */
+  jugadores?: number | null;
+  nombre_cliente?: string | null;
+  duracion_min?: number;
 }
 
 export interface BookingRefundInput {
@@ -805,6 +816,36 @@ export interface BookingRefund {
 export interface CounterRentalPayment {
   reserva: CounterRental;
   cobro: { monto_recibido: string; cambio: string } | null;
+}
+
+/** Una pista o cancha en GET /reservas/disponibilidad. */
+export interface BookingCourt {
+  espacio: { id: number; nombre: string; tipo: string };
+  precio_hora: string | null;
+  rentable: boolean;
+  /** Cuántos juegan como máximo; null = el tope del servidor (30). */
+  capacidad: number | null;
+  /** Duraciones que se pueden rentar en esta pista. */
+  duraciones_min: number[];
+  ocupado: { inicio: string; fin: string; motivo: string }[];
+}
+
+/** GET /reservas/disponibilidad: horario del día y lo ocupado de cada pista. */
+export interface BookingAvailability {
+  fecha: string;
+  hoy: string;
+  zona_horaria: string;
+  apertura: string;
+  cierre: string;
+  abre: string;
+  cierra: string;
+  bloque_min: number;
+  duraciones_min: number[];
+  /** «boliche» nombra pistas; lo demás, canchas. Un backend anterior no lo manda. */
+  tipo_establecimiento?: string | null;
+  cerrado?: boolean;
+  ahora: string;
+  canchas: BookingCourt[];
 }
 
 export interface BookingSettings {
