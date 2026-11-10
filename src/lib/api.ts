@@ -50,6 +50,7 @@ import type {
   TenantContextResponse,
   TenantAnalytics,
   BookingSettings,
+  CourtAvailabilityDay,
   BookingSettingsInput,
   ManagedSpace,
   BusinessSettings,
@@ -1055,6 +1056,12 @@ export const api = {
   /** Reporte de reembolsos de reservas de cancha (solo Administración del negocio). */
   async listBookingRefunds(token: string): Promise<BookingRefund[]> {
     return (await request<BookingRefund[]>('/reservas/reembolsos', { token })).data;
+  },
+
+  /** Horario reservable y lo ocupado de cada cancha en un día; sin `date` el back usa hoy. */
+  async courtAvailability(token: string, date?: string): Promise<CourtAvailabilityDay> {
+    const query = date ? `?fecha=${encodeURIComponent(date)}` : '';
+    return (await request<CourtAvailabilityDay>(`/reservas/disponibilidad${query}`, { token })).data;
   },
 
   /** Reservas de cancha del día (de clientes y de mostrador). `date` = YYYY-MM-DD. */

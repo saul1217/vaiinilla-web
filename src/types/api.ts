@@ -776,6 +776,49 @@ export interface StaffBooking {
   version?: number;
   /** Cómo pagó el cliente, si el backend lo manda. */
   metodo_pago?: string | null;
+  /** Nombre que puso el personal o el cliente al apartar (lo manda el back en develop). */
+  nombre_cliente?: string | null;
+  duracion_min?: number;
+  /** Pedido de renta; en una pendiente significa que quedó por cobrar (efectivo) o con pago en curso. */
+  pedido_id?: string | null;
+  /** `cliente` o `mostrador`. */
+  canal?: string | null;
+  jugadores?: number | null;
+}
+
+/** Un intervalo tomado de una cancha en GET /reservas/disponibilidad. */
+export interface CourtBusyInterval {
+  inicio: string;
+  fin: string;
+  /** `reserva`, `turno` o `cerrado`. */
+  motivo: string;
+}
+
+export interface CourtAvailabilityCourt {
+  espacio: { id: number; nombre: string; tipo?: string | null };
+  precio_hora: string | null;
+  rentable: boolean;
+  /** Duraciones que respeta el mínimo de la cancha; vacía o ausente con un back anterior. */
+  duraciones_min?: number[];
+  ocupado: CourtBusyInterval[];
+}
+
+/** Horario reservable de un día y lo ocupado de cada cancha (GET /reservas/disponibilidad). */
+export interface CourtAvailabilityDay {
+  fecha: string;
+  hoy: string;
+  zona_horaria: string;
+  apertura: string;
+  cierre: string;
+  abre: string;
+  cierra: string;
+  bloque_min: number;
+  duraciones_min: number[];
+  dias_adelanto: number;
+  cerrado?: boolean;
+  apartado_min?: number;
+  ahora: string;
+  canchas: CourtAvailabilityCourt[];
 }
 
 export interface BookingRefundInput {
