@@ -21,14 +21,15 @@ export function VilloPage() {
         import.meta.env.MODE === 'development' ||
         import.meta.env.VITE_VILLO_OWNER_SESION_NORMAL === 'true';
       const sessionToken = user && tryFirebaseSession ? await user.getIdToken() : null;
+      const initialToken = tryFirebaseSession ? sessionToken : (platform?.token ?? null);
       try {
-        await api.villoOwnerAccess(sessionToken);
-        return sessionToken;
+        await api.villoOwnerAccess(initialToken);
+        return initialToken;
       } catch (sessionError) {
         // El backend decide si la sesión Firebase está habilitada en development.
         // El token TOTP de plataforma sigue siendo válido para producción.
         const platformToken = platform?.token ?? null;
-        if (!platformToken || platformToken === sessionToken) throw sessionError;
+        if (!platformToken || platformToken === initialToken) throw sessionError;
         await api.villoOwnerAccess(platformToken);
         return platformToken;
       }
