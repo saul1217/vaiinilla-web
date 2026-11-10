@@ -33,7 +33,7 @@ it('muestra el acceso a Hotel en un negocio con hotel', async () => {
   expect(apiMock.hotelSettings).toHaveBeenCalledWith('token');
 });
 
-it('no muestra el acceso a Hotel si el negocio no es hotel o falla la consulta', async () => {
+it('no muestra el acceso a Hotel si el negocio no es hotel', async () => {
   apiMock.hotelSettings.mockResolvedValue(settingsFixture({ activo: false }));
   setup();
   await waitFor(() => expect(apiMock.hotelSettings).toHaveBeenCalled());
