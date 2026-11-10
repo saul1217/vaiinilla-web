@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TenantShell } from './app-shell';
 
 // Con la bandera de saldo en Caja prendida: Caja recarga desde «Saldo», admin solo lo consulta.
@@ -42,5 +42,34 @@ describe('navegación con saldo en Caja prendido', () => {
       expect(screen.queryByRole('link', { name: /Saldo/ })).not.toBeInTheDocument();
       unmount();
     }
+  });
+});
+
+describe('recargas pendientes al salir', () => {
+  const PENDING = 'vaiinilla:wallet-recharge:v1:';
+  const seed = () => {
+    window.localStorage.setItem(`${PENDING}api|store-1|cajero-1|m-1`, '{"version":1}');
+    window.localStorage.setItem(`${PENDING}api|store-2|cajero-1|m-2`, '{"version":1}');
+    window.localStorage.setItem('otra-clave', 'se queda');
+  };
+  const pendingKeys = () => Object.keys(window.localStorage).filter((key) => key.startsWith(PENDING));
+
+  afterEach(() => window.localStorage.clear());
+
+  it('cerrar sesión borra todas las recargas pendientes del navegador', async () => {
+    session.role = 'cajero';
+    seed();
+    renderShell();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cerrar sesión' })[0]!);
+    await waitFor(() => expect(pendingKeys()).toHaveLength(0));
+    expect(window.localStorage.getItem('otra-clave')).toBe('se queda');
+  });
+
+  it('cambiar de acceso también las borra', async () => {
+    session.role = 'cajero';
+    seed();
+    renderShell();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cambiar acceso' })[0]!);
+    await waitFor(() => expect(pendingKeys()).toHaveLength(0));
   });
 });
