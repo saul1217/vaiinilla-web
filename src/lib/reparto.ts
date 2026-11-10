@@ -56,7 +56,10 @@ export function dayLabel(day: string, today: string): string {
   if (day === today) return 'Hoy';
   if (day === addDays(today, 1)) return 'Mañana';
   const [year, month, date] = day.split('-').map(Number);
-  return shortDay.format(new Date(Date.UTC(year!, month! - 1, date))).replace(/\./g, '').replace(/,/g, '');
+  // Por partes: según la versión de ICU sale «sáb, 14 nov» o «sáb 14 de nov».
+  const parts = shortDay.formatToParts(new Date(Date.UTC(year!, month! - 1, date)));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value.replace(/\./g, '') ?? '';
+  return `${part('weekday')} ${part('day')} ${part('month')}`;
 }
 
 /** «Hoy · 10:00–12:00»: el día y la franja de un pedido; null si no trae día. */
