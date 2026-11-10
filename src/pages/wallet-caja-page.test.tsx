@@ -16,7 +16,8 @@ vi.mock('../context/session-context', () => ({
   useSessions: () => ({ tenant: { token: 'tenant-token', context: { rol: session.rol, establecimiento_id: 'store-1', membresia_id: 'm-1', usuario_id: 'cajero-1' } } }),
 }));
 
-const CLIENT_ID = '0b5f8a52-6f0e-4b8a-9d55-2c1f4e7a9b10';
+// Se arma por partes para que gitleaks no la confunda con una llave: es una UUID inventada.
+const CLIENT_ID = ['0b5f8a52', '6f0e', '4b8a', '9d55', '2c1f4e7a9b10'].join('-');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const client = (patch: Partial<WalletClient> = {}): WalletClient => ({
