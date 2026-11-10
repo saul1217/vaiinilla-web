@@ -170,3 +170,87 @@ describe('sentry: claves sensibles nuevas y query_string en sus tres formas', ()
     ]);
   });
 });
+
+describe('sentry: parámetro de búsqueda q (nombre o matrícula de un menor)', () => {
+  const URL_TUTORES = 'https://api.x.app/solicitudes-tutela/tutores?q=Juan%20P%C3%A9rez&page=2&limit=20';
+  const URL_TAPADA = 'https://api.x.app/solicitudes-tutela/tutores?q=[Filtered]&page=2&limit=20';
+
+  it('tapa q en request.url y deja los demás parámetros', () => {
+    const e = beforeSend({ request: { url: URL_TUTORES } } as unknown as ErrorEvent);
+    expect(e.request?.url).toBe(URL_TAPADA);
+    expect(scrubUrl('/solicitudes-tutela/tutores?page=1&q=A12345')).toBe('/solicitudes-tutela/tutores?page=1&q=[Filtered]');
+  });
+
+  it('no toca parámetros que solo terminan en q (faq, seq) ni otros que empiezan con q', () => {
+    expect(scrubUrl('/a?faq=1&seq=2&qr=3')).toBe('/a?faq=1&seq=2&qr=3');
+  });
+
+  it('tapa q aunque traiga espacios sin codificar o venga en mayúscula', () => {
+    expect(scrubUrl('/tutores?q=Juan Pérez López&page=2')).toBe('/tutores?q=[Filtered]&page=2');
+    expect(scrubUrl('/tutores?Q=A12345#top')).toBe('/tutores?Q=[Filtered]#top');
+  });
+
+  it('tapa q en breadcrumbs de fetch, xhr y navegación', () => {
+    const fetch = beforeBreadcrumb({
+      category: 'fetch',
+      data: { method: 'GET', url: URL_TUTORES, status_code: 200 },
+    });
+    expect(fetch?.data).toEqual({ method: 'GET', url: URL_TAPADA, status_code: 200 });
+
+    const xhr = beforeBreadcrumb({ category: 'xhr', data: { method: 'GET', url: '/solicitudes-tutela/tutores?q=A12345' } });
+    expect(xhr?.data?.url).toBe('/solicitudes-tutela/tutores?q=[Filtered]');
+
+    const nav = beforeBreadcrumb({
+      category: 'navigation',
+      data: { from: '/app/escuela/tutores?q=Ana', to: '/app/escuela/padron?q=A12345&grupo=3B' },
+    });
+    expect(nav?.data).toEqual({ from: '/app/escuela/tutores?q=[Filtered]', to: '/app/escuela/padron?q=[Filtered]&grupo=3B' });
+
+    const msg = beforeBreadcrumb({ category: 'console', message: 'GET /solicitudes-tutela/tutores?q=Ana&page=1 falló' });
+    expect(msg?.message).toBe('GET /solicitudes-tutela/tutores?q=[Filtered]&page=1 falló');
+  });
+
+  it('tapa q en los breadcrumbs que ya vienen dentro del evento', () => {
+    const e = beforeSend({
+      breadcrumbs: [{ category: 'fetch', data: { url: URL_TUTORES } }],
+    } as unknown as ErrorEvent);
+    expect(e.breadcrumbs?.[0]?.data?.url).toBe(URL_TAPADA);
+  });
+
+  const evento = (query_string: unknown) =>
+    beforeSend({ request: { url: 'https://x.app/a', query_string } } as unknown as ErrorEvent).request?.query_string;
+
+  it('tapa q en query_string como cadena, con y sin ?', () => {
+    expect(evento('q=Juan%20P%C3%A9rez&page=2')).toBe('q=[Filtered]&page=2');
+    expect(evento('?page=2&q=A12345')).toBe('?page=2&q=[Filtered]');
+    expect(evento('q=Juan Pérez&page=2')).toBe('q=[Filtered]&page=2');
+    expect(evento('faq=1&seq=2')).toBe('faq=1&seq=2');
+  });
+
+  it('tapa q en query_string como objeto, con el valor ya decodificado', () => {
+    expect(evento({ q: 'Juan Pérez López', page: '2', Q: 'A12345' })).toEqual({
+      q: '[Filtered]',
+      page: '2',
+      Q: '[Filtered]',
+    });
+  });
+
+  it('tapa q en query_string como lista de pares', () => {
+    expect(
+      evento([
+        ['q', 'Juan Pérez'],
+        ['page', '2'],
+        ['q', 'A12345'],
+      ]),
+    ).toEqual([
+      ['q', '[Filtered]'],
+      ['page', '2'],
+      ['q', '[Filtered]'],
+    ]);
+  });
+
+  it('no tapa una clave q dentro de objetos JSON que no son query', () => {
+    const b = beforeBreadcrumb({ category: 'ui', data: { q: 'texto', otra: 1 } });
+    expect(b?.data).toEqual({ q: 'texto', otra: 1 });
+  });
+});
