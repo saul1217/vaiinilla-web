@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Feedback, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
+import { useAuth } from '../context/auth-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { SimpleMarkdown } from '../lib/simple-markdown';
@@ -10,15 +11,24 @@ import { NotFoundPage } from './not-found-page';
 type TabKey = 'guia' | 'dispositivos';
 
 export function VilloPage() {
+  const { user } = useAuth();
   const { platform } = useSessions();
-  // Igual que el resto del panel de plataforma: usar el token del contexto de sesión.
-  const token = platform?.token ?? null;
 
   const access = useQuery({
-    queryKey: ['villo-owner-access', Boolean(token)],
+    queryKey: ['villo-owner-access', user?.uid ?? null, Boolean(platform?.token)],
     queryFn: async () => {
-      await api.villoOwnerAccess(token);
-      return true as const;
+      const sessionToken = user ? await user.getIdToken() : null;
+      try {
+        await api.villoOwnerAccess(sessionToken);
+        return sessionToken;
+      } catch (sessionError) {
+        // El backend decide si la sesión Firebase está habilitada en development.
+        // El token TOTP de plataforma sigue siendo válido para producción.
+        const platformToken = platform?.token ?? null;
+        if (!platformToken || platformToken === sessionToken) throw sessionError;
+        await api.villoOwnerAccess(platformToken);
+        return platformToken;
+      }
     },
     retry: false,
   });
@@ -36,10 +46,10 @@ export function VilloPage() {
     );
   }
 
-  return <VilloOwnerArea authToken={token} />;
+  return <VilloOwnerArea authToken={access.data} />;
 }
 
-function VilloOwnerArea({ authToken }: { authToken: string | null }) {
+function VilloOwnerArea({ authToken }: { authToken: string | null | undefined }) {
   const [tab, setTab] = useState<TabKey>('guia');
   const guide = useQuery({
     queryKey: ['villo-owner-guide', authToken ?? 'none'],
