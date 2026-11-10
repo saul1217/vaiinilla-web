@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  CalendarDays,
   BadgePercent,
   Building2,
   ChefHat,
@@ -28,6 +29,7 @@ import { NavLink, useHistory, useLocation } from 'react-router-dom';
 import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
+import { AGENDA_ENABLED } from '../lib/agenda-feature';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { Logo } from './brand-mark';
@@ -41,6 +43,9 @@ interface NavItem {
   end?: boolean;
 }
 
+// Agenda de reservas: Administración, Caja y Mesero (los roles que el back deja crear y cancelar).
+const agendaNavigation: NavItem[] = AGENDA_ENABLED ? [{ to: '/app/agenda', label: 'Agenda de reservas', icon: CalendarDays }] : [];
+
 const adminNavigation: NavItem[] = [
   { to: '/app', label: 'Inicio', icon: LayoutDashboard, end: true },
   { to: '/app/menu', label: 'Menú', icon: NotebookTabs },
@@ -52,15 +57,16 @@ const adminNavigation: NavItem[] = [
   { to: '/app/espacios', label: 'Mesas y espacios', icon: Table2 },
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
   { to: '/app/pos', label: 'Pedir', icon: WalletCards },
+  ...agendaNavigation,
 ];
 
-const posNavigation: NavItem[] = [{ to: '/app/pos', label: 'Caja', icon: WalletCards }];
+const posNavigation: NavItem[] = [{ to: '/app/pos', label: 'Caja', icon: WalletCards }, ...agendaNavigation];
 const kitchenNavigation: NavItem[] = [
   { to: '/app/cocina', label: 'Cocina', icon: ChefHat },
   // Cocina ve el inventario; editarlo depende de `cocina_edita_inventario` (lo resuelve la página).
   ...(INVENTARIO_ENABLED ? [{ to: '/app/inventario', label: 'Inventario', icon: PackageCheck } satisfies NavItem] : []),
 ];
-const waiterNavigation: NavItem[] = [{ to: '/app/pos', label: 'Mesas', icon: ConciergeBell }];
+const waiterNavigation: NavItem[] = [{ to: '/app/pos', label: 'Mesas', icon: ConciergeBell }, ...agendaNavigation];
 
 const platformNavigation: NavItem[] = [
   { to: '/plataforma', label: 'Resumen global', icon: ShieldCheck, end: true },
@@ -127,8 +133,9 @@ function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenC
     // Focus main even while a lazy page is loading. Its h1 will be the next reading stop.
     main.current?.focus();
   }, [location.pathname]);
-  const primary = navigation.length > 1
-    ? ['/app', '/app/menu', '/app/pos', '/app/pedidos'].map((path) => navigation.find((item) => item.to === path)!)
+  // Administración fija sus cuatro destinos abajo; los demás roles muestran todos los suyos.
+  const primary = navigation.some((item) => item.to === '/app')
+    ? ['/app', '/app/menu', '/app/pos', '/app/pedidos'].map((path) => navigation.find((item) => item.to === path)).filter((item): item is NavItem => Boolean(item))
     : navigation;
   const secondary = navigation.filter((item) => !primary.includes(item));
   const accountActions = <>

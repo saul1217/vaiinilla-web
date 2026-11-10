@@ -52,6 +52,7 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 | `/app/pos` | Abrir/cerrar Caja; para el rol Caja, cobrar efectivo y entregar con QR |
 | `/app/hotel`, `/app/hotel/habitaciones`, `/app/hotel/ajustes` | Admin de Hotel (resumen, alta de habitaciones en lote con QR y ajustes). Detrás de `HOTEL_ADMIN_ENABLED` (`src/lib/hotel-admin-feature.ts`, apagada); solo rol admin en un negocio con hotel |
 | `/app/escuela`, `/app/escuela/dias`, `/app/escuela/padron`, `/app/escuela/tutores`, `/app/escuela/devoluciones` | Admin de Escuela (código para unirse y reglas, menú y días sin servicio, padrón pegado de la hoja de cálculo, tutores y devoluciones o bajas), con paridad a Negocio › Escuela de Android. Detrás de `SCHOOL_ADMIN_ENABLED` (`src/lib/school-admin-feature.ts`, apagada); solo rol admin en un negocio con `modo_escuela` |
+| `/app/agenda` | Agenda de reservas por día y por cancha: ver, apartar (queda por cobrar en Caja), mover una reserva sin pagar a otro horario y cancelar (con reembolso si ya se pagó), con paridad a Mesas y espacios › Reservas de Android. Solo usa las rutas de `/reservas` que ya tiene el back. Detrás de `AGENDA_ENABLED` (`src/lib/agenda-feature.ts`, apagada); roles admin, cajero y mesero |
 | `/invitaciones/aceptar` | Confirmar identidad y aceptar una invitación recibida por correo |
 | `/acceso/verificar` | Procesar el enlace de verificación de correo de Firebase |
 | `/acceso/recuperar` | Definir una contraseña nueva desde un enlace de recuperación |
