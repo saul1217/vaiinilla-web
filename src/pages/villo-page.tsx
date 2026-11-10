@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Feedback, PageHeader } from '../components/ui';
+import { VilloDevicesPanel } from '../components/villo-devices-panel';
 import { useSessions } from '../context/session-context';
 import { useAuth } from '../context/auth-context';
 import { api } from '../lib/api';
@@ -127,9 +128,8 @@ function VilloOwnerArea({ authToken }: { authToken: string | null | undefined })
           id="villo-tabpanel-dispositivos"
           role="tabpanel"
           aria-labelledby="Dispositivos"
-          className="prose max-w-none"
         >
-          <p className="text-muted">Próximamente</p>
+          <VilloDevicesPanel />
         </section>
       )}
     </div>

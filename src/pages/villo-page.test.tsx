@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useSessions } from '../context/session-context';
 import { useAuth } from '../context/auth-context';
@@ -90,6 +90,19 @@ describe('Sección privada /villo', () => {
     expect(await screen.findByRole('table')).toBeInTheDocument();
   });
 
+  it('la pestaña Dispositivos monta el panel de VILLO en vez de "Próximamente"', async () => {
+    server.use(
+      http.get(`${baseUrl}/villo/owner/acceso`, () => new HttpResponse(null, { status: 204 })),
+      http.get(`${baseUrl}/villo/owner/guia`, () =>
+        HttpResponse.json({ data: { markdown: '# Guía', actualizado_en: null }, meta: {}, error: null }),
+      ),
+    );
+    render(<VilloPage />, { wrapper: Wrapper });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Dispositivos' }));
+    expect(await screen.findByText(/administrar los VILLO de tu negocio/)).toBeInTheDocument();
+    expect(screen.queryByText('Próximamente')).not.toBeInTheDocument();
+  });
+
   it('con 404 de acceso se muestra la 404 estándar', async () => {
     server.use(
       http.get(`${baseUrl}/villo/owner/acceso`, () =>
@@ -98,6 +111,8 @@ describe('Sección privada /villo', () => {
     );
     render(<VilloPage />, { wrapper: Wrapper });
     expect(await screen.findByText('Esta ruta no existe.')).toBeInTheDocument();
+    // Quien no tiene acceso no ve ni la pestaña ni el panel de dispositivos.
+    expect(screen.queryByRole('tab', { name: 'Dispositivos' })).not.toBeInTheDocument();
   });
 
   it('si la sesión normal no está habilitada, conserva el acceso de plataforma', async () => {

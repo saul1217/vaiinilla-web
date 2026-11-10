@@ -1009,3 +1009,43 @@ export interface ItemRejectionResult {
   /** Solo con metodo_reembolso = manual: la devolución que Caja debe entregar y confirmar. */
   devolucion?: PendingRefund | null;
 }
+
+/** VILLO (#237): dispositivo de voz en una mesa. El token nunca viene aquí, solo su estado. */
+export interface VilloDevice {
+  id: string;
+  nombre: string;
+  estado: 'activo' | 'revocado';
+  espacio: { id: number; nombre: string | null } | null;
+  token: {
+    emitido: boolean;
+    vigente: boolean;
+    emitido_en: string | null;
+    expira_en: string | null;
+  };
+  ultimo_uso_en: string | null;
+  ultima_alerta_en: string | null;
+  revocado_en: string | null;
+  motivo_revocacion: string | null;
+  creado_en: string;
+  version: number;
+}
+
+/** Respuesta de POST /villo/dispositivos/:id/token. El token se muestra una sola vez. */
+export interface VilloDeviceTokenIssued {
+  token: string;
+  expira_en: string;
+  dispositivo: VilloDevice;
+}
+
+export interface VilloDeviceAlert {
+  id: string;
+  /** ip_nueva o fuera_de_horario (el backend puede agregar más). */
+  tipo: string;
+  creado_en: string;
+}
+
+export interface VilloDeviceUpdateInput {
+  nombre?: string;
+  espacio_id?: number | null;
+  version_esperada?: number;
+}
