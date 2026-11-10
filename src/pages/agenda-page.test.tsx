@@ -168,6 +168,41 @@ describe('AgendaPage', () => {
     expect(calls).toEqual(['crear 2099-11-11T07:00:00.000Z 90 Ana', 'pago r-new', 'cancelar r-1']);
   });
 
+  it('si el undo falla no da el movimiento por hecho, avisa del apartado por cobrar y deja soltarlo con la misma llave', async () => {
+    const calls: string[] = [];
+    let undoUp = false;
+    server.use(
+      ...baseHandlers([]),
+      http.post(`${baseUrl}/reservas`, () => ok({ id: 'r-new' }, 201)),
+      http.post(`${baseUrl}/reservas/:id/pago`, () => ok({}, 201)),
+      http.post(`${baseUrl}/reservas/:id/cancelacion`, ({ params, request }) => {
+        const id = String(params.id);
+        calls.push(`cancelar ${id} ${request.headers.get('Idempotency-Key') ?? ''}`);
+        if (id === 'r-1') return HttpResponse.json({ data: null, meta: {}, error: { code: 'RESERVATION_NOT_CANCELLABLE', message: 'Esta reserva ya no se puede cancelar.', details: [{ estado_actual: 'en_curso' }] } }, { status: 409 });
+        if (!undoUp) return HttpResponse.json({ data: null, meta: {}, error: { code: 'UNAVAILABLE', message: 'Servicio no disponible.' } }, { status: 503 });
+        return ok({ id, estado: 'cancelada' });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const list = await screen.findByRole('list', { name: 'Reservas de Cancha 1' });
+    await user.click(within(list).getByRole('button', { name: 'Mover' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Mover reserva' });
+    await user.selectOptions(within(dialog).getByLabelText('Empieza'), '2099-11-10T09:30:00.000Z');
+    await user.click(within(dialog).getByRole('button', { name: 'Mover reserva' }));
+    expect(await within(dialog).findByText(/el horario nuevo también quedó apartado y está por cobrar en Caja\. No lo cobres/, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByText(/Reserva movida/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Mover reserva' })).not.toBeInTheDocument();
+    const undoCalls = calls.filter((call) => call.startsWith('cancelar r-new'));
+    expect(undoCalls).toHaveLength(3);
+    expect(new Set(undoCalls).size).toBe(1);
+
+    undoUp = true;
+    await user.click(within(dialog).getByRole('button', { name: 'Soltar el horario nuevo' }));
+    expect(await screen.findByText('No se movió la reserva: sigue en su horario original y el horario nuevo quedó libre.')).toBeInTheDocument();
+    expect(calls.at(-1)).toBe(undoCalls[0]);
+  }, 15000);
+
   it('si el horario nuevo ya está tomado lo dice y no cancela la original', async () => {
     const calls: string[] = [];
     server.use(

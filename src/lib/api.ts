@@ -1044,11 +1044,12 @@ export const api = {
 
   /** Suelta el horario apartado si no se cobró. */
   /** Sin `refund` cancela una reserva por pagar; con él cancela una pagada y reembolsa de 0 al total pagado. */
-  async cancelCounterRental(token: string, rentalId: string, refund?: BookingRefundInput): Promise<void> {
+  async cancelCounterRental(token: string, rentalId: string, refund?: BookingRefundInput, idempotencyKey?: string): Promise<void> {
     await request(`/reservas/${rentalId}/cancelacion`, {
       method: 'POST',
       token,
       idempotent: true,
+      idempotencyKey,
       body: refund ? { motivo: refund.motivo, monto_reembolso: refund.monto_reembolso } : undefined,
     });
   },
