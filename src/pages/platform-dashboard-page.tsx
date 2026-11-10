@@ -217,6 +217,17 @@ export function PlatformDashboardPage() {
         </span>
       </Link>
 
+      <Link to="/villo" className="platform-action-card">
+        <div>
+          <p className="eyebrow">VILLO</p>
+          <h2>Consola del dispositivo</h2>
+          <p>Abre la guía y administra los dispositivos VILLO.</p>
+        </div>
+        <span>
+          <ArrowRight aria-hidden="true" />
+        </span>
+      </Link>
+
       {report && (
         <p className="text-xs text-muted">
           Último cálculo:{' '}

@@ -1,40 +1,34 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import type { User } from 'firebase/auth';
+import type { MultiFactorResolver, User } from 'firebase/auth';
 import { Feedback, PageHeader } from '../components/ui';
 import { VilloDevicesPanel } from '../components/villo-devices-panel';
 import { useSessions } from '../context/session-context';
 import { useAuth } from '../context/auth-context';
 import { api } from '../lib/api';
-import { VaiinillaApiError, errorMessage } from '../lib/api-error';
-import { passwordSignIn } from '../lib/firebase';
+import { errorMessage } from '../lib/api-error';
+import { completeTotpSignIn, passwordSignIn } from '../lib/firebase';
 import { SimpleMarkdown } from '../lib/simple-markdown';
-import { NotFoundPage } from './not-found-page';
 
 type TabKey = 'guia' | 'dispositivos';
 
-function ownerSessionGateEnabled() {
-  return import.meta.env.MODE === 'development' ||
-    import.meta.env.VITE_VILLO_OWNER_SESION_NORMAL === 'true';
-}
-
 export function VilloPage() {
   const { user, ready, configured, signOut } = useAuth();
-  const { platform, clearAll } = useSessions();
+  const { clearAll } = useSessions();
   const queryClient = useQueryClient();
-  const gateEnabled = ownerSessionGateEnabled();
   const [loginError, setLoginError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [accessVersion, setAccessVersion] = useState(0);
-  const [loginSucceeded, setLoginSucceeded] = useState(false);
   const [signedInUser, setSignedInUser] = useState<User | null>(null);
+  const [resolver, setResolver] = useState<MultiFactorResolver | null>(null);
+  const [totpCode, setTotpCode] = useState('');
   const activeUser = signedInUser ?? user;
 
   const access = useQuery({
-    queryKey: ['villo-owner-access', activeUser?.uid ?? null, gateEnabled ? 'firebase' : Boolean(platform?.token), accessVersion],
-    enabled: ready && (!gateEnabled || Boolean(activeUser)),
+    queryKey: ['villo-owner-access', activeUser?.uid ?? null, accessVersion],
+    enabled: ready && Boolean(activeUser),
     queryFn: async () => {
-      const token = gateEnabled ? await activeUser!.getIdToken() : (platform?.token ?? null);
+      const token = await activeUser!.getIdToken();
       await api.villoOwnerAccess(token);
       return token;
     },
@@ -45,12 +39,12 @@ export function VilloPage() {
     await signOut();
     setSignedInUser(null);
     queryClient.clear();
-    setLoginSucceeded(false);
+    setResolver(null);
+    setTotpCode('');
     setAccessVersion((version) => version + 1);
   }
 
-  if (!gateEnabled && access.isError) return <NotFoundPage />;
-  if (gateEnabled && ready && (!activeUser || (access.isError && isNotFound(access.error) && !loginSucceeded))) {
+  if (ready && !activeUser) {
     return (
       <VilloLogin
         configured={configured}
@@ -64,12 +58,33 @@ export function VilloPage() {
             await clearAll();
             const result = await passwordSignIn(email.trim().toLowerCase(), password, true);
             if (result.mfaResolver) {
-              await signOut();
-              throw new Error('Sign-in was not completed.');
+              setResolver(result.mfaResolver);
+              return;
             }
             if (!result.user) throw new Error('Sign-in was not completed.');
             setSignedInUser(result.user);
-            setLoginSucceeded(true);
+            setAccessVersion((version) => version + 1);
+          } catch {
+            setLoginError(true);
+          } finally {
+            setBusy(false);
+          }
+        }}
+        resolver={resolver}
+        totpCode={totpCode}
+        onTotpCodeChange={setTotpCode}
+        onVerifyTotp={async () => {
+          if (!resolver || !/^\d{6}$/.test(totpCode)) {
+            setLoginError(true);
+            return;
+          }
+          setBusy(true);
+          setLoginError(false);
+          try {
+            const result = await completeTotpSignIn(resolver, totpCode);
+            setResolver(null);
+            setTotpCode('');
+            setSignedInUser(result);
             setAccessVersion((version) => version + 1);
           } catch {
             setLoginError(true);
@@ -81,19 +96,13 @@ export function VilloPage() {
     );
   }
 
-  if (gateEnabled && loginSucceeded && access.isError && isNotFound(access.error)) {
-    return (
-      <main className="page-stack mx-auto w-full max-w-lg">
-        <PageHeader eyebrow="Acceso privado" title="Villo" />
-        <Feedback tone="error">Esta cuenta no tiene acceso a VILLO</Feedback>
-        <button className="button button--secondary w-fit" onClick={() => void closeVilloSession()} type="button">
-          Cerrar sesión
-        </button>
-      </main>
-    );
-  }
-
-  if (access.isError) return <NotFoundPage />;
+  if (access.isError) return (
+    <main className="page-stack mx-auto w-full max-w-lg">
+      <PageHeader eyebrow="Acceso privado" title="Villo" />
+      <Feedback tone="error">Esta cuenta no tiene acceso a VILLO</Feedback>
+      <button className="button button--secondary w-fit" onClick={() => void closeVilloSession()} type="button">Cerrar sesión</button>
+    </main>
+  );
   if (access.isPending || !ready) {
     return (
       <div className="grid min-h-[50vh] place-items-center" role="status">
@@ -107,13 +116,9 @@ export function VilloPage() {
       authToken={access.data}
       firebaseUser={activeUser}
       onSignOut={closeVilloSession}
-      showSignOut={gateEnabled}
+      showSignOut
     />
   );
-}
-
-function isNotFound(error: unknown) {
-  return error instanceof VaiinillaApiError && error.status === 404;
 }
 
 function VilloLogin({
@@ -121,11 +126,19 @@ function VilloLogin({
   error,
   busy,
   onSubmit,
+  resolver,
+  totpCode,
+  onTotpCodeChange,
+  onVerifyTotp,
 }: {
   configured: boolean;
   error: boolean;
   busy: boolean;
   onSubmit: (email: string, password: string) => Promise<void>;
+  resolver: MultiFactorResolver | null;
+  totpCode: string;
+  onTotpCodeChange: (value: string) => void;
+  onVerifyTotp: () => Promise<void>;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -145,33 +158,26 @@ function VilloLogin({
         {!configured && <Feedback tone="error">El acceso no está disponible en este entorno.</Feedback>}
         {error && <Feedback tone="error">No pudimos iniciar sesión. Revisa tus datos e inténtalo de nuevo.</Feedback>}
         <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
-          <label className="grid gap-1 text-sm font-semibold text-ink">
-            Correo electrónico
-            <input
-              autoComplete="username"
-              className="field"
-              disabled={busy || !configured}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              type="email"
-              value={email}
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-semibold text-ink">
-            Contraseña
-            <input
-              autoComplete="current-password"
-              className="field"
-              disabled={busy || !configured}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              type="password"
-              value={password}
-            />
-          </label>
-          <button className="button button--primary" disabled={busy || !configured} type="submit">
-            {busy ? 'Iniciando sesión…' : 'Iniciar sesión'}
-          </button>
+          {resolver ? (
+            <label className="grid gap-1 text-sm font-semibold text-ink">
+              Código de tu aplicación autenticadora
+              <input autoComplete="one-time-code" className="field" disabled={busy} inputMode="numeric" maxLength={6} onChange={(event) => onTotpCodeChange(event.target.value)} pattern="[0-9]{6}" required value={totpCode} />
+            </label>
+          ) : (
+            <>
+              <label className="grid gap-1 text-sm font-semibold text-ink">
+                Correo electrónico
+                <input autoComplete="username" className="field" disabled={busy || !configured} onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
+              </label>
+              <label className="grid gap-1 text-sm font-semibold text-ink">
+                Contraseña
+                <input autoComplete="current-password" className="field" disabled={busy || !configured} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
+              </label>
+            </>
+          )}
+          {resolver ? (
+            <button className="button button--primary" disabled={busy || !configured} onClick={() => void onVerifyTotp()} type="button">{busy ? 'Verificando…' : 'Verificar código'}</button>
+          ) : <button className="button button--primary" disabled={busy || !configured} type="submit">{busy ? 'Iniciando sesión…' : 'Iniciar sesión'}</button>}
         </form>
       </section>
     </main>

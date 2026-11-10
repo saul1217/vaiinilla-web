@@ -8,7 +8,7 @@ import { useSessions } from '../context/session-context';
 import { useAuth } from '../context/auth-context';
 import { api } from '../lib/api';
 import { VaiinillaApiError } from '../lib/api-error';
-import { passwordSignIn } from '../lib/firebase';
+import { completeTotpSignIn, passwordSignIn } from '../lib/firebase';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VilloPage } from './villo-page';
 
@@ -17,7 +17,7 @@ const server = setupServer();
 const clearAll = vi.fn().mockResolvedValue(undefined);
 let currentUser: { uid: string; getIdToken: () => Promise<string> } | null;
 
-vi.mock('../lib/firebase', () => ({ passwordSignIn: vi.fn() }));
+vi.mock('../lib/firebase', () => ({ passwordSignIn: vi.fn(), completeTotpSignIn: vi.fn() }));
 vi.mock('../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/api')>();
   return { ...actual, api: { ...actual.api, villoOwnerAccess: vi.fn() } };
@@ -39,8 +39,7 @@ const envelope = (markdown = '# Guía') => HttpResponse.json({ data: { markdown,
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 beforeEach(() => {
-  vi.stubEnv('MODE', 'test');
-  vi.stubEnv('VITE_VILLO_OWNER_SESION_NORMAL', 'true');
+  vi.stubEnv('MODE', 'production');
   currentUser = ownerUser();
   clearAll.mockClear();
   vi.mocked(useSessions).mockReturnValue({ platform: { token: 'fixture' }, clearAll } as unknown as ReturnType<typeof useSessions>);
@@ -54,6 +53,7 @@ beforeEach(() => {
     currentUser = ownerUser();
     return Promise.resolve({ user: currentUser as unknown as NonNullable<ReturnType<typeof useAuth>['user']> });
   });
+  vi.mocked(completeTotpSignIn).mockResolvedValue(ownerUser() as unknown as NonNullable<ReturnType<typeof useAuth>['user']>);
   vi.mocked(api.villoOwnerAccess).mockResolvedValue(undefined);
   server.use(
     http.get(`${baseUrl}/sesiones/accesos`, () => HttpResponse.json({ data: [], meta: {}, error: null })),
@@ -64,17 +64,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); server.resetHandlers
 afterAll(() => server.close());
 
 describe('Sección privada /villo', () => {
-  it('con gate apagado devuelve 404 sin formulario', async () => {
-    vi.stubEnv('MODE', 'production');
-    vi.stubEnv('VITE_VILLO_OWNER_SESION_NORMAL', 'false');
-    currentUser = null;
-    vi.mocked(api.villoOwnerAccess).mockRejectedValue(new VaiinillaApiError(404, { code: 'HTTP_ERROR', message: 'not found' }));
-    render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByText('Esta ruta no existe.')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Correo electrónico')).not.toBeInTheDocument();
-  });
-
-  it('con gate encendido y sin sesión muestra el formulario propio', () => {
+  it('muestra siempre el formulario, también en producción sin sesión', () => {
     currentUser = null;
     render(<VilloPage />, { wrapper: Wrapper });
     expect(screen.getByLabelText('Correo electrónico')).toBeInTheDocument();
@@ -113,28 +103,35 @@ describe('Sección privada /villo', () => {
     await waitFor(() => expect(screen.getByLabelText('Correo electrónico')).toBeInTheDocument());
   });
 
-  it('usa ID token Firebase cuando está habilitado para dev', async () => {
-    render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByRole('heading', { name: 'Villo' })).toBeInTheDocument();
-    expect(vi.mocked(api.villoOwnerAccess)).toHaveBeenCalledWith('firebase-token');
-  });
-
-  it('en producción solo usa la sesión de plataforma', async () => {
-    vi.stubEnv('MODE', 'production');
-    vi.stubEnv('VITE_VILLO_OWNER_SESION_NORMAL', 'false');
-    const getIdToken = vi.fn().mockResolvedValue('firebase-token');
-    currentUser = { uid: 'owner-uid', getIdToken };
-    vi.mocked(api.villoOwnerAccess).mockResolvedValue(undefined);
-    render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByRole('heading', { name: 'Villo' })).toBeInTheDocument();
-    expect(vi.mocked(api.villoOwnerAccess)).toHaveBeenCalledWith('fixture');
-    expect(getIdToken).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Cerrar sesión' })).not.toBeInTheDocument();
-  });
-
-  it('con un error de acceso distinto de 404 mantiene la 404 estándar', async () => {
+  it('un error de acceso se muestra como sin acceso y sin datos', async () => {
     vi.mocked(api.villoOwnerAccess).mockRejectedValue(new Error('network'));
     render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByText('Esta ruta no existe.')).toBeInTheDocument();
+    expect(await screen.findByText('Esta cuenta no tiene acceso a VILLO')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Dispositivos' })).not.toBeInTheDocument();
+  });
+
+  it('pide TOTP cuando Firebase requiere el segundo factor', async () => {
+    currentUser = null;
+    vi.mocked(passwordSignIn).mockResolvedValue({ mfaResolver: { hints: [] } as never });
+    render(<VilloPage />, { wrapper: Wrapper });
+    fireEvent.change(screen.getByLabelText('Correo electrónico'), { target: { value: 'owner@example.com' } });
+    fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: 'correct-horse-battery' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+    expect(await screen.findByLabelText('Código de tu aplicación autenticadora')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Código de tu aplicación autenticadora'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar código' }));
+    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    expect(completeTotpSignIn).toHaveBeenCalledWith(expect.anything(), '123456');
+  });
+
+  it('la sesión persistente se reutiliza al volver a montar la página', async () => {
+    const persistentUser = ownerUser();
+    currentUser = persistentUser;
+    const first = render(<VilloPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    first.unmount();
+    render(<VilloPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    expect(api.villoOwnerAccess).toHaveBeenCalledWith('firebase-token');
   });
 });
