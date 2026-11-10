@@ -1,111 +1,137 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useSessions } from '../context/session-context';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { useAuth } from '../context/auth-context';
+import { api } from '../lib/api';
+import { VaiinillaApiError } from '../lib/api-error';
+import { completeTotpSignIn, passwordSignIn } from '../lib/firebase';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VilloPage } from './villo-page';
 
 const baseUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
 const server = setupServer();
+const clearAll = vi.fn().mockResolvedValue(undefined);
+let currentUser: { uid: string; getIdToken: () => Promise<string> } | null;
 
+vi.mock('../lib/firebase', () => ({ passwordSignIn: vi.fn(), completeTotpSignIn: vi.fn() }));
+vi.mock('../lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/api')>();
+  return { ...actual, api: { ...actual.api, villoOwnerAccess: vi.fn() } };
+});
 vi.mock('../context/auth-context', () => ({
-  useAuth: () => ({ user: null, ready: true, configured: true, signOut: vi.fn() }),
+  useAuth: vi.fn(() => ({ user: currentUser, ready: true, configured: true, signOut: vi.fn(() => { currentUser = null; return Promise.resolve(); }) })),
 }));
 vi.mock('../context/session-context', () => ({
-  useSessions: vi.fn(() => ({ platform: { token: 'fixture' }, clearAll: vi.fn() })),
+  useSessions: vi.fn(() => ({ platform: { token: 'fixture' }, clearAll })),
 }));
 
 function Wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return (
-    <MemoryRouter initialEntries={['/villo']}>
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    </MemoryRouter>
-  );
+  return <MemoryRouter initialEntries={['/villo']}><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
 }
 
+const ownerUser = () => ({ uid: 'owner-uid', getIdToken: vi.fn().mockResolvedValue('firebase-token') });
+const envelope = (markdown = '# Guía') => HttpResponse.json({ data: { markdown, actualizado_en: '2026-11-09T12:00:00Z' }, meta: {}, error: null });
+
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => {
-  server.resetHandlers();
-  vi.mocked(useSessions).mockReturnValue({ platform: { token: 'fixture' }, clearAll: vi.fn() } as unknown as ReturnType<typeof useSessions>);
+beforeEach(() => {
+  vi.stubEnv('MODE', 'production');
+  currentUser = ownerUser();
+  clearAll.mockClear();
+  vi.mocked(useSessions).mockReturnValue({ platform: { token: 'fixture' }, clearAll } as unknown as ReturnType<typeof useSessions>);
+  vi.mocked(useAuth).mockImplementation(() => ({
+    user: currentUser as unknown as ReturnType<typeof useAuth>['user'],
+    ready: true,
+    configured: true,
+    signOut: vi.fn(() => { currentUser = null; return Promise.resolve(); }),
+  }));
+  vi.mocked(passwordSignIn).mockImplementation(() => {
+    currentUser = ownerUser();
+    return Promise.resolve({ user: currentUser as unknown as NonNullable<ReturnType<typeof useAuth>['user']> });
+  });
+  vi.mocked(completeTotpSignIn).mockResolvedValue(ownerUser() as unknown as NonNullable<ReturnType<typeof useAuth>['user']>);
+  vi.mocked(api.villoOwnerAccess).mockResolvedValue(undefined);
+  server.use(
+    http.get(`${baseUrl}/sesiones/accesos`, () => HttpResponse.json({ data: [], meta: {}, error: null })),
+    http.get(`${baseUrl}/villo/owner/guia`, () => envelope()),
+  );
 });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); server.resetHandlers(); });
 afterAll(() => server.close());
 
 describe('Sección privada /villo', () => {
-  it('con 204 en acceso y una guía válida, renderiza el markdown', async () => {
-    server.use(
-      http.get(`${baseUrl}/villo/owner/acceso`, ({ request }) => {
-        expect(request.headers.get('Authorization')).toBe('Bearer fixture');
-        return new HttpResponse(null, { status: 204 });
-      }),
-      http.get(`${baseUrl}/villo/owner/guia`, () =>
-        HttpResponse.json({
-          data: { markdown: '# Guía\n\nTabla:\n\n| A | B |\n| --- | --- |\n| 1 | 2 |', actualizado_en: '2026-11-09T12:00:00Z' },
-          meta: {},
-          error: null,
-        }),
-      ),
-    );
+  it('muestra siempre el formulario, también en producción sin sesión', () => {
+    currentUser = null;
     render(<VilloPage />, { wrapper: Wrapper });
+    expect(screen.getByLabelText('Correo electrónico')).toBeInTheDocument();
+    expect(screen.getByLabelText('Contraseña')).toBeInTheDocument();
+    expect(screen.getByText(/reemplaza la sesión actual de Vaiinilla/)).toBeInTheDocument();
+  });
+
+  it('login OK más 204 muestra la guía y dispositivos', async () => {
+    currentUser = null;
+    render(<VilloPage />, { wrapper: Wrapper });
+    fireEvent.change(screen.getByLabelText('Correo electrónico'), { target: { value: 'bimbose714@example.com' } });
+    fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: 'correct-horse-battery' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+    await waitFor(() => expect(vi.mocked(api.villoOwnerAccess)).toHaveBeenCalled());
     expect(await screen.findByRole('heading', { name: 'Villo' })).toBeInTheDocument();
-    expect(await screen.findByRole('table')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Dispositivos' })).toBeInTheDocument();
+    expect(vi.mocked(api.villoOwnerAccess)).toHaveBeenCalledWith('firebase-token');
+    expect(passwordSignIn).toHaveBeenCalledWith('bimbose714@example.com', 'correct-horse-battery', true);
+    expect(clearAll).toHaveBeenCalled();
   });
 
-  it('la pestaña Dispositivos monta el panel de VILLO en vez de "Próximamente"', async () => {
-    server.use(
-      http.get(`${baseUrl}/villo/owner/acceso`, () => new HttpResponse(null, { status: 204 })),
-      http.get(`${baseUrl}/villo/owner/guia`, () =>
-        HttpResponse.json({ data: { markdown: '# Guía', actualizado_en: null }, meta: {}, error: null }),
-      ),
-    );
+  it('login OK más 404 muestra el mensaje sin acceso', async () => {
+    currentUser = null;
+    vi.mocked(api.villoOwnerAccess).mockRejectedValue(new VaiinillaApiError(404, { code: 'HTTP_ERROR', message: 'not found' }));
     render(<VilloPage />, { wrapper: Wrapper });
-    fireEvent.click(await screen.findByRole('tab', { name: 'Dispositivos' }));
-    expect(await screen.findByText(/administrar los VILLO de tu negocio/)).toBeInTheDocument();
-    expect(screen.queryByText('Próximamente')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Correo electrónico'), { target: { value: 'bimbose714@example.com' } });
+    fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: 'correct-horse-battery' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+    expect(await screen.findByText('Esta cuenta no tiene acceso a VILLO')).toBeInTheDocument();
   });
 
-  it('con 404 de acceso se muestra la 404 estándar', async () => {
-    server.use(
-      http.get(`${baseUrl}/villo/owner/acceso`, () =>
-        new HttpResponse(null, { status: 404 }),
-      ),
-    );
+  it('cerrar sesión vuelve al formulario', async () => {
     render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByText('Esta ruta no existe.')).toBeInTheDocument();
-    // Quien no tiene acceso no ve ni la pestaña ni el panel de dispositivos.
+    fireEvent.click(await screen.findByRole('button', { name: 'Cerrar sesión' }));
+    await waitFor(() => expect(screen.getByLabelText('Correo electrónico')).toBeInTheDocument());
+  });
+
+  it('un error de acceso se muestra como sin acceso y sin datos', async () => {
+    vi.mocked(api.villoOwnerAccess).mockRejectedValue(new Error('network'));
+    render(<VilloPage />, { wrapper: Wrapper });
+    expect(await screen.findByText('Esta cuenta no tiene acceso a VILLO')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Dispositivos' })).not.toBeInTheDocument();
   });
 
-  it('con estado distinto de 204 se muestra la 404 estándar', async () => {
-    server.use(
-      http.get(`${baseUrl}/villo/owner/acceso`, () =>
-        HttpResponse.json({ data: {}, meta: {}, error: null }, { status: 200 }),
-      ),
-    );
+  it('pide TOTP cuando Firebase requiere el segundo factor', async () => {
+    currentUser = null;
+    vi.mocked(passwordSignIn).mockResolvedValue({ mfaResolver: { hints: [] } as never });
     render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByText('Esta ruta no existe.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Correo electrónico'), { target: { value: 'owner@example.com' } });
+    fireEvent.change(screen.getByLabelText('Contraseña'), { target: { value: 'correct-horse-battery' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+    expect(await screen.findByLabelText('Código de tu aplicación autenticadora')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Código de tu aplicación autenticadora'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verificar código' }));
+    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    expect(completeTotpSignIn).toHaveBeenCalledWith(expect.anything(), '123456');
   });
 
-  it('con error de red se muestra la 404 estándar', async () => {
-    server.use(
-      http.get(`${baseUrl}/villo/owner/acceso`, () => HttpResponse.error()),
-    );
+  it('la sesión persistente se reutiliza al volver a montar la página', async () => {
+    const persistentUser = ownerUser();
+    currentUser = persistentUser;
+    const first = render(<VilloPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    first.unmount();
     render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByText('Esta ruta no existe.')).toBeInTheDocument();
-  });
-
-  it('sin sesión se muestra la 404 estándar', async () => {
-    vi.mocked(useSessions).mockReturnValue({ platform: null, clearAll: vi.fn() } as unknown as ReturnType<typeof useSessions>);
-    server.use(
-      http.get(`${baseUrl}/villo/owner/acceso`, ({ request }) => {
-        expect(request.headers.has('Authorization')).toBe(false);
-        return new HttpResponse(null, { status: 404 });
-      }),
-    );
-    render(<VilloPage />, { wrapper: Wrapper });
-    expect(await screen.findByText('Esta ruta no existe.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Guía' })).toBeInTheDocument();
+    expect(api.villoOwnerAccess).toHaveBeenCalledWith('firebase-token');
   });
 });
-
