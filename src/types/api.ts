@@ -1117,3 +1117,52 @@ export interface HotelRoomBatchResult {
   convertidas: number;
   omitidas: string[];
 }
+
+/** Cliente que devuelve GET /wallets/clientes (búsqueda de Caja; cajero o admin). */
+export interface WalletClient {
+  usuario_id: string;
+  nombre: string;
+  identificador_cliente: string | null;
+  correo_enmascarado: string | null;
+  ultimo_pedido_en: string | null;
+  /** Saldo antes de recargar; "0.00" si no tiene cartera en este negocio. */
+  saldo: string;
+}
+
+/** Un movimiento de la cartera de un cliente (GET /wallets/:usuarioId). `monto` lleva signo. */
+export interface WalletClientMovement {
+  id: string;
+  tipo: string;
+  descripcion: string;
+  monto: string;
+  saldo_posterior: string;
+  pedido_id: string | null;
+  pedido_folio: number | null;
+  lugar: string | null;
+  resumen_productos: string | null;
+  creado_en: string;
+}
+
+export interface WalletClientDetail {
+  cliente: { usuario_id: string; nombre: string; identificador_cliente: string | null };
+  wallet: {
+    id: string | null;
+    usuario_id: string;
+    establecimiento_id: string;
+    saldo: string;
+    actualizado_en: string | null;
+    /** Con «Pagar con saldo» apagado: el saldo se conserva, pero no se gasta ni se recarga. */
+    saldo_congelado: boolean;
+  };
+  movimientos: WalletClientMovement[];
+}
+
+/** Respuesta 201 de POST /wallets/:usuarioId/recargas-efectivo. */
+export interface WalletCashRecharge {
+  usuario_id: string;
+  saldo_anterior: string;
+  recarga: string;
+  saldo_nuevo: string;
+  movimiento_id: string;
+  sesion_caja_id: string;
+}
