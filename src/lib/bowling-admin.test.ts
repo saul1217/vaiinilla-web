@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { VaiinillaApiError } from './api-error';
 import {
   DEFAULT_MAX_PLAYERS,
@@ -20,6 +20,8 @@ import {
   maxPlayers,
   parseCapacity,
   playersLabel,
+  releaseFailureMessage,
+  releaseHeldRental,
   renewalStart,
   rentalChange,
   rentalPrice,
@@ -190,5 +192,51 @@ describe('boliche: pistas del admin', () => {
     });
     expect(laneBatchInput({ prefix: '', from: '1', to: '2', capacity: '' }).ok).toBe(false);
     expect(laneBatchInput({ prefix: 'Pista', from: '1', to: '2', capacity: '120' }).ok).toBe(false);
+  });
+});
+
+describe('releaseHeldRental', () => {
+  const noWait = () => Promise.resolve();
+  const apiError = (status: number, code: string, details?: unknown) => new VaiinillaApiError(status, { code, message: code, details });
+
+  it('reintenta la red y los 5xx con la misma llamada y termina al soltar', async () => {
+    const cancel = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(apiError(503, 'HTTP_ERROR'))
+      .mockResolvedValueOnce(undefined);
+    const waits: number[] = [];
+    await expect(releaseHeldRental(cancel, { wait: async (ms) => { waits.push(ms); } })).resolves.toEqual({ ok: true });
+    expect(cancel).toHaveBeenCalledTimes(3);
+    expect(waits).toEqual([300, 900]);
+  });
+
+  it('si nunca se pudo, regresa el último error en vez de callarlo', async () => {
+    const error = apiError(503, 'HTTP_ERROR');
+    const cancel = vi.fn().mockRejectedValue(error);
+    await expect(releaseHeldRental(cancel, { wait: noWait })).resolves.toEqual({ ok: false, error });
+    expect(cancel).toHaveBeenCalledTimes(3);
+  });
+
+  it('un 4xx es la respuesta final: no reintenta', async () => {
+    const error = apiError(409, 'RESERVATION_NOT_CANCELLABLE', [{ estado_actual: 'confirmada' }]);
+    const cancel = vi.fn().mockRejectedValue(error);
+    await expect(releaseHeldRental(cancel, { wait: noWait })).resolves.toEqual({ ok: false, error });
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('vencida, inexistente o ya cancelada cuenta como suelta', async () => {
+    for (const error of [
+      apiError(409, 'RESERVATION_EXPIRED'),
+      apiError(404, 'RESERVATION_NOT_FOUND'),
+      apiError(409, 'RESERVATION_NOT_CANCELLABLE', [{ estado_actual: 'cancelada' }]),
+    ]) {
+      await expect(releaseHeldRental(() => Promise.reject(error), { wait: noWait })).resolves.toEqual({ ok: true });
+    }
+  });
+
+  it('el aviso dice qué pista quedó apartada y qué hacer', () => {
+    expect(releaseFailureMessage('Pista 1', apiError(409, 'RESERVATION_NOT_CANCELLABLE'))).toBe(
+      'No se pudo soltar Pista 1: la renta cambió de estado (puede que ya se haya cobrado). Revísala en Turnos de hoy; si sigue «Por cobrar», vuelve a intentarlo.',
+    );
   });
 });

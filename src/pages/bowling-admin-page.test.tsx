@@ -200,6 +200,196 @@ describe('BowlingAdminPage', () => {
     await waitFor(() => expect(payments).toEqual([{ metodo_pago: 'efectivo', monto_recibido: '300.00' }]));
   });
 
+  it('reintentar apartar y cobrar manda la misma Idempotency-Key del modal', async () => {
+    const reserveKeys: (string | null)[] = [];
+    const payKeys: (string | null)[] = [];
+    server.use(
+      ...baseHandlers(),
+      http.post(`${baseUrl}/reservas`, ({ request }) => {
+        reserveKeys.push(request.headers.get('Idempotency-Key'));
+        // La primera respuesta se pierde (502): el reintento debe ser la misma operación.
+        return reserveKeys.length === 1 ? fail(502, 'HTTP_ERROR', 'Sin respuesta') : ok(rental(), 201);
+      }),
+      http.post(`${baseUrl}/reservas/${RENTAL_ID}/pago`, ({ request }) => {
+        payKeys.push(request.headers.get('Idempotency-Key'));
+        return payKeys.length === 1
+          ? fail(503, 'HTTP_ERROR', 'Sin respuesta')
+          : ok({ reserva: rental({ estado: 'confirmada' }), cobro: { monto_recibido: '300.00', cambio: '0.00' } }, 201);
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const lane1 = within(await screen.findByRole('list', { name: 'Pistas' })).getByRole('article', { name: 'Pista 1' });
+    await user.click(within(lane1).getByRole('button', { name: 'Rentar ahora' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rentar Pista 1' });
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar un jugador' }));
+    const reserve = within(dialog).getByRole('button', { name: 'Apartar · $300.00 MXN' });
+    await user.click(reserve);
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument();
+    await user.click(reserve);
+
+    const charge = await screen.findByRole('dialog', { name: /Cobrar Pista 1/ });
+    expect(reserveKeys).toHaveLength(2);
+    expect(reserveKeys[0]).toBeTruthy();
+    expect(reserveKeys[1]).toBe(reserveKeys[0]);
+
+    await user.type(within(charge).getByLabelText('Efectivo recibido'), '300');
+    const pay = within(charge).getByRole('button', { name: 'Cobrar $300.00 MXN en efectivo' });
+    await user.click(pay);
+    expect(await within(charge).findByRole('alert')).toBeInTheDocument();
+    await user.click(pay);
+    expect(await screen.findByText(/Pista rentada hasta/)).toBeInTheDocument();
+    expect(payKeys).toHaveLength(2);
+    expect(payKeys[0]).toBeTruthy();
+    expect(payKeys[1]).toBe(payKeys[0]);
+    // Cobrar es otra operación: no reutiliza la llave de apartar.
+    expect(payKeys[0]).not.toBe(reserveKeys[0]);
+  });
+
+  it('abrir otra vez el modal de renta usa una llave nueva', async () => {
+    const reserveKeys: (string | null)[] = [];
+    server.use(...baseHandlers(), http.post(`${baseUrl}/reservas`, ({ request }) => {
+      reserveKeys.push(request.headers.get('Idempotency-Key'));
+      return fail(409, 'SLOT_TAKEN');
+    }));
+    const user = userEvent.setup();
+    renderPage();
+    const lane1 = within(await screen.findByRole('list', { name: 'Pistas' })).getByRole('article', { name: 'Pista 1' });
+    for (let round = 0; round < 2; round += 1) {
+      await user.click(within(lane1).getByRole('button', { name: 'Rentar ahora' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Rentar Pista 1' });
+      await user.click(within(dialog).getByRole('button', { name: 'Agregar un jugador' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Apartar · $300.00 MXN' }));
+      expect(await within(dialog).findByText(/La pista ya está ocupada/)).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    }
+    expect(reserveKeys).toHaveLength(2);
+    expect(reserveKeys[1]).not.toBe(reserveKeys[0]);
+  });
+
+  it('si no se pudo soltar el apartado reintenta con la misma llave y avisa', async () => {
+    const cancelKeys: (string | null)[] = [];
+    let cancelOk = false;
+    server.use(
+      ...baseHandlers(),
+      http.post(`${baseUrl}/reservas`, () => ok(rental(), 201)),
+      http.post(`${baseUrl}/reservas/${RENTAL_ID}/cancelacion`, ({ request }) => {
+        cancelKeys.push(request.headers.get('Idempotency-Key'));
+        return cancelOk ? ok({ id: RENTAL_ID, estado: 'cancelada' }) : fail(503, 'HTTP_ERROR', 'Sin respuesta');
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const lane1 = within(await screen.findByRole('list', { name: 'Pistas' })).getByRole('article', { name: 'Pista 1' });
+    await user.click(within(lane1).getByRole('button', { name: 'Rentar ahora' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rentar Pista 1' });
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar un jugador' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Apartar · $300.00 MXN' }));
+    const charge = await screen.findByRole('dialog', { name: /Cobrar Pista 1/ });
+    await user.click(within(charge).getByRole('button', { name: 'No cobrar y soltar la pista' }));
+
+    expect(await screen.findByText(/No se pudo soltar Pista 1: .*Revísala en Turnos de hoy/, undefined, { timeout: 4000 })).toBeInTheDocument();
+    expect(cancelKeys).toHaveLength(3);
+    expect(new Set(cancelKeys).size).toBe(1);
+    expect(cancelKeys[0]).toBeTruthy();
+
+    // El botón de reintento manda la misma llave: si una cancelación anterior sí llegó, no es otra.
+    cancelOk = true;
+    await user.click(screen.getByRole('button', { name: 'Reintentar soltar Pista 1' }));
+    await waitFor(() => expect(screen.queryByText(/No se pudo soltar/)).not.toBeInTheDocument());
+    expect(cancelKeys).toHaveLength(4);
+    expect(cancelKeys[3]).toBe(cancelKeys[0]);
+  });
+
+  it('si el servidor dice que la renta cambió de estado, avisa sin reintentar', async () => {
+    const cancels: unknown[] = [];
+    server.use(
+      ...baseHandlers(),
+      http.post(`${baseUrl}/reservas`, () => ok(rental(), 201)),
+      http.post(`${baseUrl}/reservas/${RENTAL_ID}/cancelacion`, () => {
+        cancels.push(RENTAL_ID);
+        return HttpResponse.json({ data: null, meta: {}, error: { code: 'RESERVATION_NOT_CANCELLABLE', message: 'x', details: [{ estado_actual: 'confirmada' }] } }, { status: 409 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const lane1 = within(await screen.findByRole('list', { name: 'Pistas' })).getByRole('article', { name: 'Pista 1' });
+    await user.click(within(lane1).getByRole('button', { name: 'Rentar ahora' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rentar Pista 1' });
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar un jugador' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Apartar · $300.00 MXN' }));
+    const charge = await screen.findByRole('dialog', { name: /Cobrar Pista 1/ });
+    await user.click(within(charge).getByRole('button', { name: 'No cobrar y soltar la pista' }));
+    expect(await screen.findByText(/No se pudo soltar Pista 1: la renta cambió de estado/)).toBeInTheDocument();
+    expect(cancels).toHaveLength(1);
+  });
+
+  it('el nombre del cliente y de la pista se muestran escapados, sin interpretar HTML', async () => {
+    const evil = '<img src=x onerror="window.__xss=1"><script>window.__xss=2</script>';
+    const posts: { nombre_cliente?: string }[] = [];
+    const bookings: StaffBooking[] = [
+      { id: RENTAL_ID, espacio: { id: 1, nombre: `Pista <b>1</b>` }, inicio: LATER, fin: LATER, monto: '300.00', estado: 'pendiente_pago', nombre_cliente: evil, jugadores: 2 },
+    ];
+    server.use(...baseHandlers({ bookings }), http.post(`${baseUrl}/reservas`, async ({ request }) => {
+      posts.push(await request.json() as { nombre_cliente?: string });
+      return fail(409, 'SLOT_TAKEN');
+    }));
+    const user = userEvent.setup();
+    const { container } = renderPage();
+
+    // Lo que se escribe en «A nombre de» viaja tal cual; escaparlo es trabajo de quien lo pinta.
+    const lane1 = within(await screen.findByRole('list', { name: 'Pistas' })).getByRole('article', { name: 'Pista 1' });
+    await user.click(within(lane1).getByRole('button', { name: 'Rentar ahora' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rentar Pista 1' });
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar un jugador' }));
+    await user.click(within(dialog).getByLabelText('A nombre de (opcional)'));
+    await user.paste(evil);
+    await user.click(within(dialog).getByRole('button', { name: 'Apartar · $300.00 MXN' }));
+    await waitFor(() => expect(posts[0]?.nombre_cliente).toBe(evil));
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('button', { name: 'Turnos de hoy' }));
+    const list = await screen.findByRole('list', { name: 'Turnos de hoy' });
+    expect(within(list).getByText((_, node) => node?.tagName === 'P' && Boolean(node.textContent?.includes(evil)))).toBeInTheDocument();
+    expect(within(list).getByText(/Pista <b>1<\/b> ·/)).toBeInTheDocument();
+    expect(container.querySelector('img[src="x"], script, b')).toBeNull();
+    expect(document.querySelector('img[src="x"]')).toBeNull();
+    expect((window as unknown as { __xss?: number }).__xss).toBeUndefined();
+  });
+
+  it('reintentar guardar una pista manda la misma Idempotency-Key', async () => {
+    session.rol = 'admin';
+    const spaces: ManagedSpace[] = [{ id: 1, nombre: 'Pista 1', tipo: 'cancha', activo: true, qr_url: '', precio_hora: '300.00', capacidad: 6 }];
+    const patchKeys: (string | null)[] = [];
+    server.use(
+      ...baseHandlers(),
+      http.get(`${baseUrl}/espacios/administracion`, () => ok(spaces)),
+      http.patch(`${baseUrl}/espacios/1`, ({ request }) => {
+        patchKeys.push(request.headers.get('Idempotency-Key'));
+        return patchKeys.length === 1 ? fail(503, 'HTTP_ERROR', 'Sin respuesta') : ok({ ...spaces[0], precio_hora: '350.00' });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('list', { name: 'Pistas' });
+    await user.click(screen.getByRole('button', { name: 'Configurar pistas' }));
+    const lanes = await screen.findByRole('list', { name: 'Pistas del negocio' });
+    await user.click(within(lanes).getByRole('button', { name: 'Editar Pista 1' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Editar Pista 1' });
+    const price = within(dialog).getByLabelText('Precio por hora');
+    await user.clear(price);
+    await user.type(price, '350');
+    const save = within(dialog).getByRole('button', { name: 'Guardar' });
+    await user.click(save);
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument();
+    await user.click(save);
+    expect(await screen.findByText('Pista 1 guardada.')).toBeInTheDocument();
+    expect(patchKeys).toHaveLength(2);
+    expect(patchKeys[0]).toBeTruthy();
+    expect(patchKeys[1]).toBe(patchKeys[0]);
+  });
+
   it('el admin edita precio y capacidad de una pista y crea pistas en lote', async () => {
     session.rol = 'admin';
     const spaces: ManagedSpace[] = [
