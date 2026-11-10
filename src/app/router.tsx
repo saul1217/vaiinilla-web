@@ -7,6 +7,7 @@ import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { HOTEL_ADMIN_ENABLED } from '../lib/hotel-admin-feature';
+import { SCHOOL_ADMIN_ENABLED } from '../lib/school-admin-feature';
 import { CORTES_REPORTE_ENABLED } from '../lib/features';
 import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
 import { IA_CONFIG_ENABLED } from '../lib/features';
@@ -20,6 +21,7 @@ const SinInternetPage = lazy(() => import('../pages/sin-internet-page').then((mo
 const AssistantConfigPage = lazy(() => import('../pages/assistant-config-page').then((module) => ({ default: module.AssistantConfigPage })));
 const InventarioPage = lazy(() => import('../pages/inventario-page').then((module) => ({ default: module.InventarioPage })));
 const HotelAdminPage = lazy(() => import('../pages/hotel-admin-page').then((module) => ({ default: module.HotelAdminPage })));
+const SchoolAdminPage = lazy(() => import('../pages/school-admin-page').then((module) => ({ default: module.SchoolAdminPage })));
 const InvitationsPage = lazy(() => import('../pages/invitations-page').then((module) => ({ default: module.InvitationsPage })));
 const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({ default: module.OrdersPage })));
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
@@ -86,6 +88,11 @@ function TenantArea() {
           {HOTEL_ADMIN_ENABLED && <Route exact path="/app/hotel"><RoleGuard allowed={['admin']}><HotelAdminPage section="resumen" /></RoleGuard></Route>}
           {HOTEL_ADMIN_ENABLED && <Route exact path="/app/hotel/habitaciones"><RoleGuard allowed={['admin']}><HotelAdminPage section="habitaciones" /></RoleGuard></Route>}
           {HOTEL_ADMIN_ENABLED && <Route exact path="/app/hotel/ajustes"><RoleGuard allowed={['admin']}><HotelAdminPage section="ajustes" /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela"><RoleGuard allowed={['admin']}><SchoolAdminPage section="ajustes" /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela/dias"><RoleGuard allowed={['admin']}><SchoolAdminPage section="dias" /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela/padron"><RoleGuard allowed={['admin']}><SchoolAdminPage section="padron" /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela/tutores"><RoleGuard allowed={['admin']}><SchoolAdminPage section="tutores" /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela/devoluciones"><RoleGuard allowed={['admin']}><SchoolAdminPage section="devoluciones" /></RoleGuard></Route>}
           {CASHBACK_ENABLED && CashbackPage ? (
             <Route path="/app/cashback">
               <RoleGuard allowed={['admin']}>
