@@ -493,6 +493,19 @@ export interface BusinessSettings {
   /** Logo del negocio (carrito y seguimiento en la app). Se cambia con su propia ruta. */
   logo_url?: string | null;
   tipos_disponibles: string[];
+  /** Padres e hijos: solo con true se muestra el admin de Escuela. Un backend anterior no lo manda. */
+  modo_escuela?: boolean;
+  /** Código de 6 caracteres para unirse a la escuela; null sin código. */
+  codigo_union?: string | null;
+  union_requiere_codigo?: boolean;
+  tutores_requieren_aprobacion?: boolean;
+  /** Montos como "50.00". */
+  recarga_minima?: string | null;
+  recarga_maxima?: string | null;
+  dias_adelanto_pedido?: number;
+  /** "HH:MM" o null (sin hora). */
+  hora_corte_pedido?: string | null;
+  hora_corte_cancelacion?: string | null;
 }
 
 /** Las dos imágenes del negocio que sube su administración. */
@@ -1165,4 +1178,100 @@ export interface WalletCashRecharge {
   saldo_nuevo: string;
   movimiento_id: string;
   sesion_caja_id: string;
+}
+
+/**
+ * Lo que el admin de Escuela manda a PATCH /establecimiento/configuracion (vaiinilla_back
+ * docs/padres-hijos.md). `codigo_union`: 'generar' crea uno nuevo, null lo quita, ausente no lo toca.
+ */
+export interface SchoolSettingsInput {
+  codigo_union?: 'generar' | null;
+  union_requiere_codigo?: boolean;
+  tutores_requieren_aprobacion?: boolean;
+  recarga_minima?: string;
+  recarga_maxima?: string;
+  dias_adelanto_pedido?: number;
+  hora_corte_pedido?: string | null;
+  hora_corte_cancelacion?: string | null;
+}
+
+/** GET /menu-dias: el "hoy" de la escuela, el menú de cada fecha y los días sin servicio. */
+export interface SchoolMenuDays {
+  programacion: { hoy: string; dias_adelanto_pedido?: number };
+  dias: { fecha: string; producto_ids: number[] }[];
+  sin_servicio: { fecha: string; motivo: string }[];
+}
+
+/** PUT /menu-dias/:fecha/sin-servicio. */
+export interface SchoolDayClosure {
+  fecha: string;
+  motivo: string;
+  cancelados: number;
+  devuelto: string;
+  sin_cancelar: { pedido_id: string; code?: string }[];
+}
+
+/** GET /menu-dias/:fecha/apartados (solo lo que usa el admin). */
+export interface SchoolReservedDay {
+  fecha: string;
+  pedidos: number;
+  sin_servicio: string | null;
+  productos: { producto_id: number; nombre: string; cantidad: number; pedidos: number }[];
+}
+
+/** Un alumno del padrón. */
+export interface SchoolRosterStudent {
+  matricula: string;
+  nombre: string | null;
+  grupo: string | null;
+}
+
+/** GET /padron. */
+export interface SchoolRoster {
+  total: number;
+  alumnos: SchoolRosterStudent[];
+}
+
+export interface SchoolPerson {
+  nombre: string | null;
+  email: string | null;
+}
+
+export interface SchoolStudentRef {
+  usuario_id?: string | null;
+  nombre: string | null;
+  matricula: string | null;
+  grupo: string | null;
+  tiene_cuenta?: boolean;
+}
+
+/** GET /solicitudes-tutela: un tutor que espera a la escuela. */
+export interface SchoolGuardianRequest {
+  tutela_id: string;
+  tutor: SchoolPerson;
+  alumno: SchoolStudentRef;
+  en_padron: boolean;
+  otros_tutores: number;
+}
+
+/** GET /solicitudes-tutela/tutores: una tutela aprobada. */
+export interface SchoolGuardianship {
+  tutela_id: string;
+  principal: boolean;
+  tutor: SchoolPerson;
+  alumno: SchoolStudentRef;
+}
+
+/** GET /solicitudes-alumno: una devolución de saldo o una baja que espera a la escuela. */
+export interface SchoolStudentRequest {
+  id: string;
+  /** 'devolucion' o 'baja_datos'; un tipo nuevo del servidor se omite en pantalla. */
+  tipo: string;
+  /** 'efectivo' o 'transferencia'. */
+  como_devolver: string | null;
+  nota: string | null;
+  saldo_al_pedir: string | null;
+  saldo_actual: string | null;
+  tutor: SchoolPerson;
+  alumno: SchoolStudentRef;
 }

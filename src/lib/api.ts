@@ -100,6 +100,15 @@ import type {
   WalletCashRecharge,
   WalletClient,
   WalletClientDetail,
+  SchoolDayClosure,
+  SchoolGuardianRequest,
+  SchoolGuardianship,
+  SchoolMenuDays,
+  SchoolReservedDay,
+  SchoolRoster,
+  SchoolRosterStudent,
+  SchoolSettingsInput,
+  SchoolStudentRequest,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -1472,4 +1481,80 @@ export const api = {
       })
     ).data;
   },
+
+  // region Escuela (admin). Cada cambio lleva la llave que pone quien llama, para reintentar sin duplicar.
+
+  /** Código para unirse y reglas de la escuela; devuelve la configuración completa del negocio. */
+  async saveSchoolSettings(token: string, input: SchoolSettingsInput, idempotencyKey: string): Promise<BusinessSettings> {
+    return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input, idempotencyKey })).data;
+  },
+
+  /** Sin rango, de hoy al último día que se aparta; siempre trae el "hoy" de la escuela. */
+  async schoolMenuDays(token: string, range?: { desde: string; hasta: string }): Promise<SchoolMenuDays> {
+    return (await request<SchoolMenuDays>(`/menu-dias${range ? params(range) : ''}`, { token })).data;
+  },
+
+  /** Lista vacía: ese día se vende todo el menú. */
+  async saveSchoolMenuDay(token: string, fecha: string, productIds: number[], idempotencyKey: string): Promise<void> {
+    await request(`/menu-dias/${fecha}`, { method: 'PUT', token, body: { producto_ids: productIds }, idempotencyKey });
+  },
+
+  /** Cancela lo apartado de ese día y regresa el saldo. */
+  async closeSchoolDay(token: string, fecha: string, motivo: string, idempotencyKey: string): Promise<SchoolDayClosure> {
+    return (await request<SchoolDayClosure>(`/menu-dias/${fecha}/sin-servicio`, { method: 'PUT', token, body: { motivo }, idempotencyKey })).data;
+  },
+
+  async reopenSchoolDay(token: string, fecha: string, idempotencyKey: string): Promise<void> {
+    await request(`/menu-dias/${fecha}/sin-servicio`, { method: 'DELETE', token, idempotencyKey });
+  },
+
+  async schoolReservedDay(token: string, fecha: string): Promise<SchoolReservedDay> {
+    return (await request<SchoolReservedDay>(`/menu-dias/${fecha}/apartados`, { token })).data;
+  },
+
+  async schoolRoster(token: string): Promise<SchoolRoster> {
+    return (await request<SchoolRoster>('/padron', { token })).data;
+  },
+
+  /** Reemplaza el padrón completo; vacío lo quita. */
+  async saveSchoolRoster(token: string, alumnos: SchoolRosterStudent[], idempotencyKey: string): Promise<{ total: number }> {
+    return (await request<{ total: number }>('/padron', { method: 'PUT', token, body: { alumnos }, idempotencyKey })).data;
+  },
+
+  /** Tutores que esperan a la escuela, del más viejo al más nuevo. */
+  async schoolGuardianRequests(token: string): Promise<SchoolGuardianRequest[]> {
+    return (await request<SchoolGuardianRequest[]>('/solicitudes-tutela', { token })).data;
+  },
+
+  async reviewSchoolGuardianRequest(token: string, tutelaId: string, approve: boolean, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-tutela/${tutelaId}/${approve ? 'aprobar' : 'rechazar'}`, { method: 'POST', token, body: {}, idempotencyKey });
+  },
+
+  /** Quién cuida a los alumnos cuyo nombre o matrícula coincide. */
+  async searchSchoolGuardianships(token: string, query: string, signal?: AbortSignal): Promise<SchoolGuardianship[]> {
+    return (await request<SchoolGuardianship[]>(`/solicitudes-tutela/tutores${params({ q: query })}`, { token, signal })).data;
+  },
+
+  async removeSchoolGuardianship(token: string, tutelaId: string, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-tutela/${tutelaId}/quitar`, { method: 'POST', token, body: {}, idempotencyKey });
+  },
+
+  async makeSchoolGuardianPrincipal(token: string, tutelaId: string, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-tutela/${tutelaId}/principal`, { method: 'POST', token, body: {}, idempotencyKey });
+  },
+
+  /** Devoluciones de saldo y bajas que esperan a la escuela. */
+  async schoolStudentRequests(token: string): Promise<SchoolStudentRequest[]> {
+    return (await request<SchoolStudentRequest[]>('/solicitudes-alumno', { token })).data;
+  },
+
+  async resolveSchoolStudentRequest(token: string, id: string, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-alumno/${id}/resolver`, { method: 'POST', token, body: {}, idempotencyKey });
+  },
+
+  async rejectSchoolStudentRequest(token: string, id: string, motivo: string, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-alumno/${id}/rechazar`, { method: 'POST', token, body: { motivo }, idempotencyKey });
+  },
+
+  // endregion
 };
