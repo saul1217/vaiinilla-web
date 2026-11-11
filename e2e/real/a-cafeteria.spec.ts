@@ -105,7 +105,7 @@ test.describe('A · cafetería · Mesero', () => {
     await dialogo.getByLabel('Nombre del cliente (opcional)').fill('DEV-Ana mesa 3');
     await agregar(dialogo, 'DEV-Chilaquiles');
     await agregar(dialogo, 'DEV-Cafe americano');
-    // T3-0007: DEV-Cafe Norte no permite pagar al final, así que la opción no se ofrece.
+    // T3-0011: DEV-Cafe Norte no permite pagar al final, así que la opción no se ofrece.
     await expect(dialogo.getByLabel('Pagar al final, con la cuenta de la mesa')).toHaveCount(0);
     await expect(dialogo.getByText('$155.50 MXN')).toBeVisible();
     await dialogo.getByRole('button', { name: 'Enviar pedido' }).click();
