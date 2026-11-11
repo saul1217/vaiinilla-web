@@ -68,9 +68,19 @@ function toSettings(data: BusinessSettings): FlowSettings | null {
   };
 }
 
-/** Lo que el borrador cambia respecto a lo guardado (sin campos de solo lectura). */
+/** El borrador como cuerpo de configuración, con las franjas ordenadas. */
 function flowInput(input: FlowSettings): BusinessSettingsInput {
   return { ...input, franjas_pedido: sortFranjas(input.franjas_pedido) };
+}
+
+/** Solo los campos que el usuario cambió respecto a la base del borrador (todo, si no hay base). */
+function editedFields(input: BusinessSettingsInput, base: BusinessSettingsInput | null): BusinessSettingsInput {
+  if (!base) return input;
+  const edited: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(input)) {
+    if (JSON.stringify(value) !== JSON.stringify((base as Record<string, unknown>)[field])) edited[field] = value;
+  }
+  return edited;
 }
 
 const SPACE_DELIVERY_LABELS: Record<NonNullable<FlowSettings['entrega_en_espacio']>, string> = {
@@ -148,6 +158,9 @@ export function StoreFlowPage() {
   const scopeId = tenant?.context.establecimiento_id ?? '';
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowSettings | null>(null);
+  // Lo guardado cuando empezó el borrador: al guardar solo viaja lo que el usuario editó, para no
+  // pisar lo que otra sesión cambió mientras tanto.
+  const [draftBase, setDraftBase] = useState<FlowSettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [review, setReview] = useState<TransitionReview | null>(null);
   const [editor, setEditor] = useState<StoreFlowEditor>(null);
@@ -187,6 +200,7 @@ export function StoreFlowPage() {
     // Mostrar ya lo guardado: si no, la página enseña un instante los datos viejos hasta recargar.
     queryClient.setQueryData(['business-settings', scopeId], data);
     setDraft(null);
+    setDraftBase(null);
     setReview(null);
     setSaved(true);
     void queryClient.invalidateQueries({ queryKey: ['business-settings', scopeId] });
@@ -194,11 +208,15 @@ export function StoreFlowPage() {
   // Guardar: el tipo y los modos (campos de transición) pasan por una revisión previa que el
   // usuario confirma; lo demás va en el PATCH. Sin campos de transición, solo el PATCH.
   const save = useMutation({
-    mutationFn: async (input: FlowSettings) => {
+    mutationFn: async ({ input, base, data }: { input: FlowSettings; base: FlowSettings | null; data: BusinessSettings | undefined }) => {
       // Un backend anterior no manda entrega_en_espacio: se compara contra lo de siempre (mesa).
-      const saved = query.data ? { ...query.data, entrega_en_espacio: query.data.entrega_en_espacio ?? 'mesa' } : null;
-      const { transition, ordinary } = splitTransition(flowInput(input), saved);
-      if (!transition) return { saved: await api.saveBusinessSettings(token, ordinary) };
+      const saved = data ? { ...data, entrega_en_espacio: data.entrega_en_espacio ?? 'mesa' } : null;
+      const { transition, ordinary } = splitTransition(editedFields(flowInput(input), base ? flowInput(base) : null), saved);
+      if (!transition) {
+        return {
+          saved: Object.keys(ordinary).length ? await api.saveBusinessSettings(token, ordinary) : await api.businessSettings(token),
+        };
+      }
       const preflight = await api.preflightBusinessTransition(token, { cambios: transition });
       return { review: { transition, ordinary, preflight, key: createIdempotencyKey() } satisfies TransitionReview };
     },
@@ -225,17 +243,35 @@ export function StoreFlowPage() {
     // Si la transición entró y falló el PATCH, la recarga deja pendiente solo lo ordinario.
     onError: () => void queryClient.invalidateQueries({ queryKey: ['business-settings', scopeId] }),
   });
-  const recheck = () => {
+  const saveDraft = () => {
+    if (settings) save.mutate({ input: settings, base: draftBase, data: query.data });
+  };
+  // Volver a revisar: se relee lo guardado y el borrador se monta encima, conservando solo lo que
+  // el usuario editó; así un cambio de otra sesión no se revierte a ciegas.
+  const recheck = async () => {
     apply.reset();
-    if (settings) save.mutate(settings);
+    if (!settings) return;
+    const fresh = await query.refetch();
+    const freshSettings = fresh.data ? toSettings(fresh.data) : null;
+    const edited = editedFields(flowInput(settings), draftBase ? flowInput(draftBase) : null) as Partial<FlowSettings>;
+    const input = freshSettings ? { ...freshSettings, ...edited } : settings;
+    if (freshSettings) {
+      setDraft(input);
+      setDraftBase(freshSettings);
+    }
+    save.mutate({ input, base: freshSettings ?? draftBase, data: fresh.data ?? query.data });
+  };
+  const startDraft = (next: FlowSettings) => {
+    setSaved(false);
+    setReview(null);
+    apply.reset();
+    if (!draft) setDraftBase(current);
+    setDraft(next);
   };
 
   function change(next: Partial<FlowSettings>) {
     if (!settings) return;
-    setSaved(false);
-    setReview(null);
-    apply.reset();
-    setDraft({ ...settings, ...next });
+    startDraft({ ...settings, ...next });
   }
 
   const changed = Boolean(
@@ -393,12 +429,7 @@ export function StoreFlowPage() {
                       key={option.id}
                       type="button"
                       aria-pressed={selected}
-                      onClick={() => {
-                        setSaved(false);
-                        setReview(null);
-                        apply.reset();
-                        setDraft({ ...option.settings, entrega_en_espacio: settings?.entrega_en_espacio ?? 'mesa' });
-                      }}
+                      onClick={() => startDraft({ ...option.settings, entrega_en_espacio: settings?.entrega_en_espacio ?? 'mesa' })}
                       className={`flex flex-col gap-1 rounded-2xl border p-4 text-left transition ${
                         selected ? 'border-ink bg-lime' : 'border-ink/15 bg-cream hover:border-ink/40'
                       }`}
@@ -652,7 +683,7 @@ export function StoreFlowPage() {
                     applyError={apply.error}
                     rechecking={save.isPending}
                     onApply={() => apply.mutate(review)}
-                    onRecheck={recheck}
+                    onRecheck={() => void recheck()}
                     onCancel={() => {
                       setReview(null);
                       apply.reset();
@@ -665,12 +696,21 @@ export function StoreFlowPage() {
                     type="button"
                     loading={save.isPending}
                     disabled={!changed || !valid || Boolean(review) || apply.isPending}
-                    onClick={() => settings && save.mutate(settings)}
+                    onClick={saveDraft}
                   >
                     Guardar flujo
                   </Button>
                   {changed && (
-                    <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setDraft(null);
+                        setDraftBase(null);
+                        setReview(null);
+                        apply.reset();
+                      }}
+                    >
                       Descartar cambios
                     </Button>
                   )}
