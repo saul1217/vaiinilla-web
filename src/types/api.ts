@@ -545,13 +545,85 @@ export interface BusinessSettings {
   /** "HH:MM" o null (sin hora). */
   hora_corte_pedido?: string | null;
   hora_corte_cancelacion?: string | null;
+  /** Modo de entrega en un espacio (mesa, barra o ambas). Solo cambia por transición. */
+  entrega_en_espacio?: SpaceDeliveryMode;
+  barra_prepara?: boolean;
+  cocina_prepara_sin_cobrar?: boolean;
+  permite_pago_en_caja?: boolean;
+  catalogo_tipos?: EstablishmentTypeCatalog;
+  contrato_v1?: EffectiveBusinessContract;
+}
+
+export type SpaceDeliveryMode = 'mesa' | 'barra' | 'ambas';
+
+export interface EstablishmentTypeReason { code: string; message: string; blocking?: boolean; count?: number }
+export interface EstablishmentTypeOption {
+  tipo: string;
+  etiqueta: string;
+  seleccion_permitida: boolean;
+  reasons: EstablishmentTypeReason[];
+  actual?: boolean | null;
+}
+export interface EstablishmentTypeCatalog { version: string; tipos: EstablishmentTypeOption[] }
+
+/**
+ * Tipo y modos del negocio que el backend solo cambia por preflight + transición versionada
+ * (POST /establecimiento/configuracion/transiciones[/preflight]). Mismo listado que
+ * CAMPOS_TRANSICION en vaiinilla_back/src/services/configuracion-transiciones.service.js.
+ */
+export interface ConfigurationTransitionChanges {
+  tipo?: string;
+  entrega_en_espacio?: SpaceDeliveryMode;
+  entrega_requiere_qr?: boolean;
+  permite_pago_al_final?: boolean;
+  barra_prepara?: boolean;
+  permite_pago_en_caja?: boolean;
+  cocina_prepara_sin_cobrar?: boolean;
+}
+export interface ConfigurationTransitionInput { version_esperada: number; cambios: ConfigurationTransitionChanges }
+/** Una operación viva del negocio que bloquea la transición. Sin datos personales. */
+export interface ConfigurationTransitionOperation {
+  code: string;
+  id: string;
+  referencia: string | null;
+  estado: string | null;
+  desde: string | null;
+  panel: string | null;
+}
+export interface ConfigurationTransitionOperations {
+  items: ConfigurationTransitionOperation[];
+  pagina: number;
+  limite: number;
+  total: number;
+  hay_mas: boolean;
+}
+export interface ConfigurationTransitionPreflight {
+  permitido: boolean;
+  reason_codes: string[];
+  bloqueos: EstablishmentTypeReason[];
+  version_actual: number;
+  capacidades_resultantes: EffectiveBusinessContract | Record<string, unknown>;
+  destino?: { tipo: string; modo_operativo: Record<string, unknown> };
+  operaciones?: ConfigurationTransitionOperations;
+}
+export interface EffectiveBusinessContract {
+  version: string;
+  tipo_comercial: string | null;
+  tipo_comercial_conocido: boolean;
+  modo_operativo: Record<string, unknown>;
+  capacidades: Record<string, { enabled: boolean; reasons: EstablishmentTypeReason[] }>;
+  ocultacion_producto: {
+    saldo_wallet?: { visible: boolean; enabled: boolean; reasons: EstablishmentTypeReason[] };
+    cashback?: { visible: boolean; enabled: boolean; reasons: EstablishmentTypeReason[] };
+  };
+  restrictions: EstablishmentTypeReason[];
 }
 
 /** Las dos imágenes del negocio que sube su administración. */
 export type StoreImageKind = 'logo' | 'foto';
 
 export type BusinessSettingsInput = Partial<
-  Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url' | 'imagen_url' | 'logo_url' | 'asistente_modo'>
+  Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url' | 'imagen_url' | 'logo_url' | 'asistente_modo' | 'catalogo_tipos' | 'contrato_v1'>
 > & { asistente_modo?: AssistantMode };
 
 /** Un mensaje de la plática con el asistente de la tienda (POST /establecimiento/asistente). */
@@ -975,6 +1047,7 @@ export interface PlatformEstablishment {
   motivo_suspension: string | null;
   creado_en: string;
   stripe?: PlatformStripeSummary | null;
+  contrato_v1?: EffectiveBusinessContract;
 }
 
 export interface EstablishmentInput {
@@ -998,7 +1071,9 @@ export interface EstablishmentInput {
   tipo?: EstablishmentType;
 }
 
-export type EstablishmentType = 'cafeteria' | 'restaurante' | 'padel';
+export type EstablishmentType =
+  | 'cafeteria' | 'restaurante' | 'padel' | 'bar' | 'food_truck' | 'drive_thru'
+  | 'comedor' | 'evento' | 'reposteria' | 'boliche' | 'hotel';
 
 export interface CatalogCategory {
   id: number;

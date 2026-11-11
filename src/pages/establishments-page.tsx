@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   Building2,
@@ -89,7 +89,7 @@ const establishmentSchema = z.object({
   tiktok_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
   whatsapp_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
   sitio_web_url: z.string().trim().refine((value) => value === '' || /^https:\/\//i.test(value), 'Usa una URL HTTPS pública.'),
-  tipo: z.enum(['cafeteria', 'restaurante', 'padel']),
+  tipo: z.enum(['cafeteria', 'restaurante', 'padel', 'bar', 'food_truck', 'drive_thru', 'comedor', 'evento', 'reposteria', 'boliche', 'hotel']),
 }).superRefine((data, context) => {
   if ((data.latitud === '') !== (data.longitud === '')) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['latitud'], message: 'Captura latitud y longitud juntas.' });
@@ -106,14 +106,14 @@ type EstablishmentForm = z.infer<typeof establishmentSchema>;
 type ReasonForm = z.infer<typeof reasonSchema>;
 type EmailForm = z.infer<typeof emailSchema>;
 
-const ESTABLISHMENT_TYPES: { value: EstablishmentType; label: string }[] = [
+const LEGACY_ESTABLISHMENT_TYPES: { value: EstablishmentType; label: string }[] = [
   { value: 'cafeteria', label: 'Cafetería' },
   { value: 'restaurante', label: 'Restaurante' },
   { value: 'padel', label: 'Pádel' },
 ];
 
 function establishmentTypeLabel(tipo: EstablishmentType | undefined): string {
-  return ESTABLISHMENT_TYPES.find(({ value }) => value === (tipo ?? 'cafeteria'))?.label ?? 'Cafetería';
+  return LEGACY_ESTABLISHMENT_TYPES.find(({ value }) => value === (tipo ?? 'cafeteria'))?.label ?? tipo ?? 'Cafetería';
 }
 
 function profileInput(data: EstablishmentForm) {
@@ -300,6 +300,20 @@ export function EstablishmentsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [resumedEstablishmentId] = useState<string | null>(readStripeReturn);
 
+  const typeCatalog = useQuery({
+    queryKey: ['platform-establishment-type-catalog'],
+    enabled: Boolean(token),
+    queryFn: () => api.establishmentTypeCatalog(token),
+    retry: 1,
+  });
+  const catalogOptions = typeCatalog.data?.tipos
+      ?.filter((option) => option.seleccion_permitida)
+      .map(({ tipo, etiqueta }) => ({ value: tipo as EstablishmentType, label: etiqueta })) ?? [];
+  const availableTypeOptions = catalogOptions.length ? catalogOptions : LEGACY_ESTABLISHMENT_TYPES;
+  const typeOptions: { value: EstablishmentType; label: string }[] = selected?.tipo && !availableTypeOptions.some((option) => option.value === selected.tipo)
+    ? [...availableTypeOptions, { value: selected.tipo, label: `${selected.tipo} (tipo actual)` }]
+    : availableTypeOptions;
+
   const redirectToPlatformAccess = useCallback((establishmentId?: string) => {
     if (establishmentId) rememberStripeReturn(establishmentId);
     clearPlatform();
@@ -364,6 +378,9 @@ export function EstablishmentsPage() {
         <Feedback tone="info">Sesión recuperada. Revisa nuevamente el estado de Stripe del establecimiento seleccionado.</Feedback>
       )}
       {establishments.isError && <Feedback tone="error">{errorMessage(establishments.error)}</Feedback>}
+      {typeCatalog.isLoading && <Feedback tone="info">Cargando catálogo de tipos de establecimiento…</Feedback>}
+      {typeCatalog.isError && <Feedback tone="error">No se pudo cargar el catálogo de tipos. Se usan únicamente los tres tipos heredados como fallback seguro.</Feedback>}
+      {typeCatalog.data && typeCatalog.data.tipos.length === 0 && <Feedback tone="info">El catálogo llegó vacío; se usan únicamente los tres tipos heredados como fallback seguro.</Feedback>}
 
       <div className="establishment-toolbar">
         <form
@@ -486,6 +503,7 @@ export function EstablishmentsPage() {
         mode={formMode ?? 'create'}
         token={token}
         establishment={selected}
+        typeOptions={typeOptions}
         onOpenChange={(open) => { if (!open) { setFormMode(null); setSelected(null); } }}
         onSaved={async (mode) => {
           setFormMode(null);
@@ -676,6 +694,7 @@ function EstablishmentFormModal({
   mode,
   token,
   establishment,
+  typeOptions,
   onOpenChange,
   onSaved,
 }: {
@@ -683,6 +702,7 @@ function EstablishmentFormModal({
   mode: 'create' | 'edit';
   token: string;
   establishment: PlatformEstablishment | null;
+  typeOptions: { value: EstablishmentType; label: string }[];
   onOpenChange: (open: boolean) => void;
   onSaved: (mode: 'create' | 'edit') => Promise<void>;
 }) {
@@ -850,7 +870,9 @@ function EstablishmentFormModal({
           error={form.formState.errors.tipo?.message}
           value={useWatch({ control: form.control, name: 'tipo' })}
           onChange={(next) => form.setValue('tipo', next as EstablishmentType, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
-          options={ESTABLISHMENT_TYPES.map(({ value, label }) => ({ value, label }))}
+          disabled={mode === 'edit'}
+          hint={mode === 'edit' ? 'El tipo se cambia desde Flujo de mi tienda con una transición versionada.' : 'Catálogo oficial de plataforma; si no responde, se limita a los tipos heredados.'}
+          options={typeOptions.map(({ value, label }) => ({ value, label }))}
         />
         <CustomSelect
           label="Zona horaria"

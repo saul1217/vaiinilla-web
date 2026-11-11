@@ -37,6 +37,10 @@ import type {
   PlatformAnalytics,
   PlatformEstablishment,
   PlatformSummary,
+  EstablishmentTypeCatalog,
+  ConfigurationTransitionInput,
+  ConfigurationTransitionPreflight,
+  ConfigurationTransitionChanges,
   StripeOnboarding,
   StripePlatformConfiguration,
   LegalVersions,
@@ -200,6 +204,17 @@ export class MixedPaymentPendingError extends Error {
     super('Este pedido tiene un pago pendiente de confirmar. Reintenta ese mismo pago antes de registrar otro.');
     this.name = 'MixedPaymentPendingError';
   }
+}
+
+/** Pausa antes de la única repetición de una transición que chocó con el candado de configuración. */
+const LOCK_TIMEOUT_RETRY_MS = 250;
+
+function isLockTimeout(error: unknown): boolean {
+  return (
+    error instanceof VaiinillaApiError &&
+    error.status === 503 &&
+    (error.code === 'CONFIG_LOCK_TIMEOUT' || error.code === 'IDEMPOTENCY_LOCK_TIMEOUT')
+  );
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
@@ -795,6 +810,10 @@ export const api = {
       .data;
   },
 
+  async establishmentTypeCatalog(token: string): Promise<EstablishmentTypeCatalog> {
+    return (await request<EstablishmentTypeCatalog>('/plataforma/catalogo/tipos-establecimiento', { token })).data;
+  },
+
   async listEstablishments(
     token: string,
     options: {
@@ -1136,6 +1155,43 @@ export const api = {
 
   async saveBusinessSettings(token: string, input: BusinessSettingsInput): Promise<BusinessSettings> {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
+  },
+
+  /** Revisión de solo lectura de un cambio de tipo o modo: versión actual, bloqueos y operaciones vivas. */
+  async preflightBusinessTransition(
+    token: string,
+    input: { cambios: ConfigurationTransitionChanges; operaciones_pagina?: number; operaciones_limite?: number },
+  ): Promise<ConfigurationTransitionPreflight> {
+    return (await request<ConfigurationTransitionPreflight>('/establecimiento/configuracion/transiciones/preflight', {
+      method: 'POST',
+      token,
+      body: input,
+    })).data;
+  },
+
+  /**
+   * Aplica la transición versionada con la llave dada. Ante 503 por candado (CONFIG_LOCK_TIMEOUT o
+   * IDEMPOTENCY_LOCK_TIMEOUT) repite una sola vez, con la misma llave, tras una pausa corta.
+   */
+  async applyBusinessTransition(
+    token: string,
+    input: ConfigurationTransitionInput,
+    idempotencyKey: string,
+  ): Promise<ConfigurationTransitionPreflight> {
+    const send = async () =>
+      (await request<ConfigurationTransitionPreflight>('/establecimiento/configuracion/transiciones', {
+        method: 'POST',
+        token,
+        idempotencyKey,
+        body: input,
+      })).data;
+    try {
+      return await send();
+    } catch (error) {
+      if (!isLockTimeout(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, LOCK_TIMEOUT_RETRY_MS));
+      return send();
+    }
   },
 
   async setOfflinePause(token: string, enabled: boolean): Promise<BusinessSettings> {
