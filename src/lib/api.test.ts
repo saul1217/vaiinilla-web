@@ -47,7 +47,8 @@ afterAll(() => server.close());
 describe('Vaiinilla API client', () => {
   describe('transición de tipo o modo', () => {
     const transitionUrl = `${baseUrl}/establecimiento/configuracion/transiciones`;
-    const key = '6f0f7a8e-1b2c-4d3e-8f90-112233445566';
+    // La llave se genera en cada corrida: una UUID literal la marcaba gitleaks como secreto.
+    const key = crypto.randomUUID();
     const lockTimeout = (code = 'CONFIG_LOCK_TIMEOUT') =>
       HttpResponse.json({ data: null, meta: {}, error: { code, message: 'ocupado' } }, { status: 503 });
 
