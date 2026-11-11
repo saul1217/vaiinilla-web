@@ -766,7 +766,8 @@ function EstablishmentFormModal({
     mutationFn: (input: EstablishmentForm) =>
       mode === 'create'
         ? api.createEstablishment(token, createInput(input))
-        : api.updateEstablishment(token, establishment?.id ?? '', profileInput(input)),
+        // El tipo ya no viaja en la edición: el backend lo cambia solo con preflight y transición.
+        : api.updateEstablishment(token, establishment?.id ?? '', { ...profileInput(input), tipo: undefined }),
     onSuccess: async (saved) => {
       if (selectedImage) {
         setImageUploading(true);
@@ -871,7 +872,7 @@ function EstablishmentFormModal({
           value={useWatch({ control: form.control, name: 'tipo' })}
           onChange={(next) => form.setValue('tipo', next as EstablishmentType, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
           disabled={mode === 'edit'}
-          hint={mode === 'edit' ? 'El tipo se cambia desde Flujo de mi tienda con una transición versionada.' : 'Catálogo oficial de plataforma; si no responde, se limita a los tipos heredados.'}
+          hint={mode === 'edit' ? 'El tipo se cambia con una revisión previa (preflight y transición), no al editar los datos.' : 'Catálogo oficial de plataforma; si no responde, se limita a los tipos heredados.'}
           options={typeOptions.map(({ value, label }) => ({ value, label }))}
         />
         <CustomSelect
