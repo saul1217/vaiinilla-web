@@ -30,6 +30,8 @@ const friendlyMessages: Record<string, string> = {
   CATEGORY_NAME_CONFLICT: 'Ya existe una categoría con ese nombre.',
   CATEGORY_NOT_FOUND: 'La categoría ya no está disponible. Actualiza el menú.',
   PRODUCT_NOT_FOUND: 'El producto ya no está disponible. Actualiza el menú.',
+  PAYMENT_AT_END_NOT_ALLOWED:
+    'Este negocio no permite pagar al final. Quitamos esa opción del pedido: revísalo y vuelve a enviarlo.',
   CONFIG_VERSION_CONFLICT: 'La configuración cambió en otra sesión. Vuelve a revisar el cambio antes de aplicarlo.',
   CONFIG_TRANSITION_BLOCKED: 'El cambio está bloqueado por operaciones en curso del negocio.',
   CONFIG_LOCK_TIMEOUT: 'La configuración sigue ocupada después de un reintento. Espera unos segundos e inténtalo de nuevo.',
