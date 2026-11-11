@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { E2E_BASE_URL, E2E_PORT, LOCAL_BASE_URL } from './e2e/base-url';
+import { E2E_PORT, LOCAL_BASE_URL } from './e2e/base-url';
 
 const REAL = /[\\/]real[\\/]/;
 
@@ -12,7 +12,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: 'html',
   use: {
-    baseURL: E2E_BASE_URL,
+    baseURL: LOCAL_BASE_URL,
     trace: 'retain-on-failure',
   },
   webServer: {
