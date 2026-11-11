@@ -22,7 +22,8 @@ const accounts = {
   mesero: env.E2E_MESERO_EMAIL ?? '',
 };
 
-test.use({ baseURL: env.E2E_BASE_URL ?? 'http://127.0.0.1:5173' });
+// T3-0006: el baseURL sale de playwright.config.ts (un solo puerto); .env.e2e.local puede fijar otro servidor.
+if (env.E2E_BASE_URL) test.use({ baseURL: env.E2E_BASE_URL });
 test.skip(!password, 'Falta E2E_PASSWORD y las cuentas QA (ver .env.e2e.local).');
 // Decisión de QA del 20 oct 2026: solo Chromium de escritorio.
 test.skip(({ isMobile }) => isMobile, 'El E2E del panel corre solo en Chromium de escritorio.');

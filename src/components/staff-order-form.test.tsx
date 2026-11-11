@@ -102,12 +102,14 @@ describe('StaffOrderForm', () => {
   });
 
   it('buscar y limpiar conserva cliente, cantidad y pago diferido sin enviar', async () => {
+    apiMock.operationalSettings.mockResolvedValue({ permite_pago_al_final: true, entrega_requiere_qr: true });
     const user = userEvent.setup();
     renderForm('mesero', vi.fn(), 2);
     await user.click(await screen.findByRole('button', { name: 'Agregar' }));
     await user.type(screen.getByLabelText(/Nombre del cliente/), 'Ana');
+    // Con pago al final permitido, la mesa lo trae marcado de inicio (T3-0011 lo oculta si no se permite).
     const deferred = screen.getByLabelText('Pagar al final, con la cuenta de la mesa');
-    await user.click(deferred);
+    await waitFor(() => expect(deferred).toBeChecked());
     await user.click(screen.getByRole('button', { name: 'Agregar uno' }));
     await user.type(screen.getByRole('searchbox', { name: 'Buscar en el menú' }), 'no existe');
     expect(screen.getByText('Sin coincidencias.')).toBeVisible();
@@ -116,6 +118,20 @@ describe('StaffOrderForm', () => {
     expect(screen.getByLabelText(/Nombre del cliente/)).toHaveValue('Ana');
     expect(deferred).toBeChecked();
     expect(apiMock.createStaffOrder).not.toHaveBeenCalled();
+  });
+
+  it('T3-0011: sin pago al final en el negocio no ofrece la opción y envía pago_diferido false', async () => {
+    const user = userEvent.setup();
+    renderForm('mesero', vi.fn(), 2);
+    await waitFor(() => expect(apiMock.operationalSettings).toHaveBeenCalled());
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Pagar al final, con la cuenta de la mesa')).not.toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
+    expect(llamadas()[0]?.[1]).toMatchObject({ destino: 'en_espacio' });
+    expect(llamadas()[0]?.[1]).not.toMatchObject({ pago_diferido: true });
   });
 
   it('para llevar: envía el pedido en efectivo con la opción obligatoria ya elegida', async () => {
@@ -174,7 +190,8 @@ describe('StaffOrderForm', () => {
 
     await user.click(screen.getByRole('button', { name: 'En mesa' }));
     await user.click(await screen.findByRole('button', { name: /Mesa 2/ }));
-    expect(screen.getByLabelText(/Pagar al final/)).not.toBeChecked();
+    // T3-0011: ni marcada ni ofrecida, porque el servidor la rechazaría.
+    await waitFor(() => expect(screen.queryByLabelText(/Pagar al final/)).not.toBeInTheDocument());
   });
 
   it('aplica pagar al final cuando llegan los settings si ya eligió mesa', async () => {

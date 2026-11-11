@@ -131,6 +131,8 @@ npm run test:e2e
 
 Las pruebas E2E usan Playwright. Si es la primera ejecución, instala Chromium con `npx playwright install chromium`.
 
+`npm run test:e2e` usa un solo puerto local (`E2E_PORT`, 4173 por omisión) o el servidor de `E2E_BASE_URL`. Los escenarios reales de la tanda 3 (web + backend + Postgres desechable, sin mocks de API) corren con `E2E_BACK_DIR=<checkout del back> npm run e2e:real` y se cuadran con `npm run e2e:conteo`; ver `e2e/real/README.md`.
+
 ## Publicación
 
 `vercel.json` incluye la reescritura necesaria para que las rutas de React funcionen al recargar en Vercel. Antes del smoke real:

@@ -1,0 +1,132 @@
+{
+  "descripcion": "Manifiesto versionado de escenarios E2E reales de la tanda 3 (web + backend + Postgres, sin mocks de API). `npm run e2e:conteo` falla si no cuadra con los tests que Playwright lista.",
+  "minimos": { "A": 86, "C": 10 },
+  "escenarios": [
+    {
+      "id": "A-CAF-CAJ-01",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "cajero",
+      "tipo": "cafeteria",
+      "precondiciones": "Seed: DEV-Cafe Norte sin caja abierta.",
+      "accion_ui": "Caja entra a /app/pos, pulsa «Abrir Caja», escribe 750.50 y confirma.",
+      "esperado": "UI muestra «Cerrar caja» y el fondo $750.50. DB: una sola sesión abierta con monto_inicial 750.50.",
+      "spec": "e2e/real/a-cafeteria.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-CAJ-02",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "cajero",
+      "tipo": "cafeteria",
+      "error_humano": 7,
+      "precondiciones": "DEV-Cafe Norte con o sin caja abierta.",
+      "accion_ui": "Caja intenta abrir turno con -5, 12,50, vacío y emoji.",
+      "esperado": "UI muestra «Escribe un monto…» en cada intento (o no ofrece abrir otra si ya hay una). DB: el número de sesiones no cambia.",
+      "spec": "e2e/real/a-cafeteria.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-MES-01",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "mesero",
+      "tipo": "cafeteria",
+      "precondiciones": "Caja abierta (por UI si falta). Negocio sin pago al final.",
+      "accion_ui": "Mesero abre Mesa 3, agrega DEV-Chilaquiles y DEV-Cafe americano y envía.",
+      "esperado": "UI no ofrece «Pagar al final» (T3-0011), muestra $155.50 y la mesa deja de estar libre. DB: un pedido origen mostrador, Mesa 3, total 155.50, sin pago diferido, cashback 0.",
+      "spec": "e2e/real/a-cafeteria.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-MES-02",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "mesero",
+      "tipo": "cafeteria",
+      "error_humano": 1,
+      "precondiciones": "Caja abierta.",
+      "accion_ui": "Mesero arma un pedido en Mesa 4 y hace doble clic en «Enviar pedido».",
+      "esperado": "UI cierra el formulario una vez. DB: exactamente un pedido de 35.50 en Mesa 4.",
+      "spec": "e2e/real/a-cafeteria.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-COC-01",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "cocina",
+      "tipo": "cafeteria",
+      "precondiciones": "Caja abierta; el mesero registra por UI un pedido con DEV-Chilaquiles en Mesa 4.",
+      "accion_ui": "Cocina entra a /app/cocina.",
+      "esperado": "UI muestra la comanda con DEV-Chilaquiles y no muestra productos de caja. DB: el pedido tiene un solo ítem de estación cocina.",
+      "spec": "e2e/real/a-cafeteria.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-COC-02",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "cocina",
+      "tipo": "cafeteria",
+      "error_humano": 10,
+      "precondiciones": "Seed.",
+      "accion_ui": "Cocina abre /app/pos y /app/flujo por URL.",
+      "esperado": "UI vuelve al tablero de Cocina, sin «Nuevo pedido» ni «Guardar flujo». DB: el número de pedidos no cambia.",
+      "spec": "e2e/real/a-cafeteria.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-ADM-01",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "admin",
+      "tipo": "cafeteria",
+      "precondiciones": "Seed.",
+      "accion_ui": "Admin abre /app/flujo, sube la gracia 4 minutos, guarda y recarga.",
+      "esperado": "UI conserva el valor tras recargar. DB: solo cambia gracia_liberacion_min; tipo, pago al final y entrega_en_espacio quedan igual.",
+      "spec": "e2e/real/a-cafeteria.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-ADM-02",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "admin",
+      "tipo": "cafeteria",
+      "error_humano": 7,
+      "precondiciones": "Seed.",
+      "accion_ui": "Admin escribe -1 y vacío en la gracia.",
+      "esperado": "UI muestra «Escribe un número entero de 0 a…» y «Guardar flujo» queda deshabilitado. DB sin cambios.",
+      "spec": "e2e/real/a-cafeteria.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-ADM-03",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "admin",
+      "tipo": "cafeteria",
+      "error_humano": 10,
+      "precondiciones": "Seed con dos tenants (DEV-Cafe Norte y DEV-Cafe Sur).",
+      "accion_ui": "Admin de DEV-Cafe Sur entra, abre «Cambiar acceso», Menú y Mesas.",
+      "esperado": "UI solo lista accesos, productos y mesas de DEV-Cafe Sur. DB del tenant Norte sin cambios.",
+      "spec": "e2e/real/x-tenant.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-ADM-04",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "admin",
+      "tipo": "cafeteria",
+      "error_humano": 10,
+      "precondiciones": "Seed.",
+      "accion_ui": "Admin de negocio abre /plataforma por URL.",
+      "esperado": "UI no entra al panel de plataforma ni muestra «Establecimientos».",
+      "spec": "e2e/real/x-tenant.spec.ts",
+      "modo": "real-chromium"
+    }
+  ]
+}
