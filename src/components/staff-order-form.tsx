@@ -152,7 +152,9 @@ function StaffOrderFormBody({
   }
 
   useEffect(() => {
-    if (!configuracion || pagoAlFinalTocado.current) return;
+    if (!configuracion) return;
+    // T3-0007: si el negocio no permite pagar al final, se quita aunque el mesero ya la hubiera marcado.
+    if (pagoAlFinalTocado.current && configuracion.permite_pago_al_final) return;
     setDraft((previo) => {
       const pagoAlFinal = pagoAlFinalPorDefecto(previo.destino, configuracion.permite_pago_al_final);
       if (previo.pagoAlFinal === pagoAlFinal) return previo;
@@ -455,7 +457,8 @@ function StaffOrderFormBody({
         <legend>Cliente y pago</legend>
         <p className="staff-order__metodo">Efectivo <span>Otros métodos los paga el cliente en la app.</span></p>
 
-        {draft.destino === 'en_espacio' && (
+        {/* T3-0007: sin permite_pago_al_final el servidor rechaza el pedido; la opción no se ofrece. */}
+        {draft.destino === 'en_espacio' && configuracion?.permite_pago_al_final !== false && (
           <label className="staff-order__check">
             <input
               type="checkbox"
