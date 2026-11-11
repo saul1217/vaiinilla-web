@@ -12,6 +12,15 @@ import { Button, Feedback, Field } from '../components/ui';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
+import {
+  isNotFound,
+  isVersionConflict,
+  operationLabel,
+  reasonLabel,
+  splitTransition,
+  transitionBlockDetails,
+} from '../lib/config-transition';
+import { createIdempotencyKey } from '../lib/idempotency';
 import { cardPaymentsStep } from '../lib/card-payments';
 import {
   BUSINESS_TYPE_LABELS,
@@ -28,7 +37,13 @@ import {
   type BusinessType,
   type FlowSettings,
 } from '../lib/business-flow';
-import type { BusinessSettings } from '../types/api';
+import type {
+  BusinessSettings,
+  BusinessSettingsInput,
+  ConfigurationTransitionChanges,
+  ConfigurationTransitionOperation,
+  ConfigurationTransitionPreflight,
+} from '../types/api';
 import { StoreFlowEditButton, StoreFlowEditorSheet, type StoreFlowEditor } from '../components/store-flow-editor-sheet';
 
 function mediaSummary(settings: BusinessSettings) {
@@ -49,7 +64,82 @@ function toSettings(data: BusinessSettings): FlowSettings | null {
     permite_saldo: data.permite_saldo ?? true,
     gracia_liberacion_min: data.gracia_liberacion_min,
     franjas_pedido: data.franjas_pedido ?? [],
+    entrega_en_espacio: data.entrega_en_espacio ?? 'mesa',
   };
+}
+
+/** Lo que el borrador cambia respecto a lo guardado (sin campos de solo lectura). */
+function flowInput(input: FlowSettings): BusinessSettingsInput {
+  return { ...input, franjas_pedido: sortFranjas(input.franjas_pedido) };
+}
+
+const SPACE_DELIVERY_LABELS: Record<NonNullable<FlowSettings['entrega_en_espacio']>, string> = {
+  mesa: 'Lo lleva el mesero',
+  barra: 'Pasan por él a la barra',
+  ambas: 'El cliente elige',
+};
+
+/** Cómo se lee cada campo de transición en la revisión: «Antes → Después». */
+function transitionValue(field: string, value: unknown): string {
+  if (field === 'tipo') return BUSINESS_TYPE_LABELS[value as BusinessType] ?? String(value);
+  if (field === 'entrega_en_espacio') return SPACE_DELIVERY_LABELS[value as 'mesa'] ?? String(value);
+  if (field === 'permite_pago_al_final') return value ? 'Al final, con cuenta abierta' : 'Al pedir';
+  if (field === 'entrega_requiere_qr') return value ? 'Con QR' : 'Sin QR';
+  return value ? 'Sí' : 'No';
+}
+
+const TRANSITION_FIELD_LABELS: Record<string, string> = {
+  tipo: 'Tipo de negocio',
+  entrega_en_espacio: 'Pedido en mesa',
+  entrega_requiere_qr: 'Entrega',
+  permite_pago_al_final: 'Cuándo pagan',
+  barra_prepara: 'Barra prepara',
+  permite_pago_en_caja: 'Pago en caja',
+  cocina_prepara_sin_cobrar: 'Cocina prepara sin cobrar',
+};
+
+/** Revisión (preflight) de un guardado que cambia tipo o modos. La llave es de esta revisión. */
+interface TransitionReview {
+  transition: ConfigurationTransitionChanges;
+  ordinary: BusinessSettingsInput;
+  preflight: ConfigurationTransitionPreflight;
+  key: string;
+}
+
+function BlockList({
+  reasons,
+  operations,
+  total,
+}: {
+  reasons: string[];
+  operations: ConfigurationTransitionOperation[];
+  total: number;
+}) {
+  const shownReasons = reasons.filter((code) => code !== 'OPERATIONS_IN_FLIGHT' || operations.length === 0);
+  return (
+    <div className="grid gap-2 text-sm">
+      {shownReasons.length > 0 && (
+        <ul className="grid gap-1" aria-label="Motivos del bloqueo">
+          {shownReasons.map((code) => <li key={code}>{reasonLabel(code)}</li>)}
+        </ul>
+      )}
+      {operations.length > 0 && (
+        <>
+          <p className="font-semibold">Cierra o termina antes estas operaciones:</p>
+          <ul className="grid gap-1" aria-label="Operaciones que bloquean">
+            {operations.map((op) => (
+              <li key={`${op.code}-${op.id}`}>
+                {operationLabel(op.code)}
+                {op.referencia ? ` ${op.referencia}` : ''}
+                {op.estado ? ` · ${op.estado}` : ''}
+              </li>
+            ))}
+          </ul>
+          {total > operations.length && <p className="text-muted">Y {total - operations.length} más.</p>}
+        </>
+      )}
+    </div>
+  );
 }
 
 export function StoreFlowPage() {
@@ -59,6 +149,7 @@ export function StoreFlowPage() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowSettings | null>(null);
   const [saved, setSaved] = useState(false);
+  const [review, setReview] = useState<TransitionReview | null>(null);
   const [editor, setEditor] = useState<StoreFlowEditor>(null);
   const opener = useRef<HTMLElement>(null);
   const openEditor = (next: Exclude<StoreFlowEditor, null>, event: React.MouseEvent<HTMLButtonElement>) => {
@@ -92,25 +183,66 @@ export function StoreFlowPage() {
   });
   const current = query.data ? toSettings(query.data) : null;
   const settings = draft ?? current;
+  const showSaved = (data: BusinessSettings) => {
+    // Mostrar ya lo guardado: si no, la página enseña un instante los datos viejos hasta recargar.
+    queryClient.setQueryData(['business-settings', scopeId], data);
+    setDraft(null);
+    setReview(null);
+    setSaved(true);
+    void queryClient.invalidateQueries({ queryKey: ['business-settings', scopeId] });
+  };
+  // Guardar: el tipo y los modos (campos de transición) pasan por una revisión previa que el
+  // usuario confirma; lo demás va en el PATCH. Sin campos de transición, solo el PATCH.
   const save = useMutation({
-    mutationFn: (input: FlowSettings) =>
-      api.saveBusinessSettings(token, { ...input, franjas_pedido: sortFranjas(input.franjas_pedido) }),
-    onSuccess: (data) => {
-      // Mostrar ya lo guardado: si no, la página enseña un instante los datos viejos hasta recargar.
-      queryClient.setQueryData(['business-settings', scopeId], data);
-      setDraft(null);
-      setSaved(true);
-      void queryClient.invalidateQueries({ queryKey: ['business-settings', scopeId] });
+    mutationFn: async (input: FlowSettings) => {
+      // Un backend anterior no manda entrega_en_espacio: se compara contra lo de siempre (mesa).
+      const saved = query.data ? { ...query.data, entrega_en_espacio: query.data.entrega_en_espacio ?? 'mesa' } : null;
+      const { transition, ordinary } = splitTransition(flowInput(input), saved);
+      if (!transition) return { saved: await api.saveBusinessSettings(token, ordinary) };
+      const preflight = await api.preflightBusinessTransition(token, { cambios: transition });
+      return { review: { transition, ordinary, preflight, key: createIdempotencyKey() } satisfies TransitionReview };
+    },
+    onMutate: () => setReview(null),
+    onSuccess: (result) => {
+      if (result.saved) showSaved(result.saved);
+      else if (result.review) setReview(result.review);
     },
   });
+  // Aplica la transición revisada una vez, con la llave de la revisión (el 503 se repite una sola
+  // vez dentro de api), y después el PATCH de los ajustes ordinarios.
+  const apply = useMutation({
+    mutationFn: async (current: TransitionReview) => {
+      await api.applyBusinessTransition(
+        token,
+        { version_esperada: current.preflight.version_actual, cambios: current.transition },
+        current.key,
+      );
+      return Object.keys(current.ordinary).length
+        ? api.saveBusinessSettings(token, current.ordinary)
+        : api.businessSettings(token);
+    },
+    onSuccess: showSaved,
+    // Si la transición entró y falló el PATCH, la recarga deja pendiente solo lo ordinario.
+    onError: () => void queryClient.invalidateQueries({ queryKey: ['business-settings', scopeId] }),
+  });
+  const recheck = () => {
+    apply.reset();
+    if (settings) save.mutate(settings);
+  };
 
   function change(next: Partial<FlowSettings>) {
     if (!settings) return;
     setSaved(false);
+    setReview(null);
+    apply.reset();
     setDraft({ ...settings, ...next });
   }
 
-  const changed = Boolean(settings && current && !sameSettings(settings, current));
+  const changed = Boolean(
+    settings &&
+      current &&
+      (!sameSettings(settings, current) || (settings.entrega_en_espacio ?? 'mesa') !== (current.entrega_en_espacio ?? 'mesa')),
+  );
   const slotsError = settings && settings.franjas_pedido.length > 0 ? franjasError(settings.franjas_pedido) : null;
   const graceValid = Boolean(settings && validGrace(settings.gracia_liberacion_min));
   const valid = graceValid && !slotsError;
@@ -127,7 +259,13 @@ export function StoreFlowPage() {
         description="Elige cómo funciona tu negocio: cuándo pagan, cómo se entrega y cuánto dura un turno. Toca una tarjeta para configurarla; el flujo paso a paso por rol está en «Cómo funciona tu tienda»."
       />
       {query.isError && <Feedback tone="error">{errorMessage(query.error)}</Feedback>}
-      {save.isError && <Feedback tone="error">{errorMessage(save.error)}</Feedback>}
+      {save.isError && (
+        <Feedback tone="error">
+          {isNotFound(save.error)
+            ? 'Este servidor todavía no tiene la revisión de cambios de tipo o modo (404). Tus cambios siguen aquí; inténtalo más tarde.'
+            : errorMessage(save.error)}
+        </Feedback>
+      )}
       {saved && !save.isError && !changed && (
         <Feedback tone="success">Flujo guardado. Ya aplica a los pedidos nuevos.</Feedback>
       )}
@@ -257,7 +395,9 @@ export function StoreFlowPage() {
                       aria-pressed={selected}
                       onClick={() => {
                         setSaved(false);
-                        setDraft({ ...option.settings });
+                        setReview(null);
+                        apply.reset();
+                        setDraft({ ...option.settings, entrega_en_espacio: settings?.entrega_en_espacio ?? 'mesa' });
                       }}
                       className={`flex flex-col gap-1 rounded-2xl border p-4 text-left transition ${
                         selected ? 'border-ink bg-lime' : 'border-ink/15 bg-cream hover:border-ink/40'
@@ -346,6 +486,19 @@ export function StoreFlowPage() {
                           label: 'Entregar sin QR',
                           hint: 'Aplica también a pedidos para llevar. En mesa con sesión abierta nunca se exige QR.',
                         },
+                      ]}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <p className="field__label">¿Cómo llega un pedido hecho en mesa?</p>
+                    <Choice<NonNullable<FlowSettings['entrega_en_espacio']>>
+                      name="¿Cómo llega un pedido hecho en mesa?"
+                      value={settings.entrega_en_espacio ?? 'mesa'}
+                      onChange={(value) => change({ entrega_en_espacio: value })}
+                      options={[
+                        { value: 'mesa', label: SPACE_DELIVERY_LABELS.mesa, hint: 'El mesero lleva el pedido a la mesa.' },
+                        { value: 'barra', label: SPACE_DELIVERY_LABELS.barra, hint: 'El cliente pasa por su pedido a la barra; lo entrega Caja.' },
+                        { value: 'ambas', label: SPACE_DELIVERY_LABELS.ambas, hint: 'Al pagar, el cliente elige si se lo llevan o pasa por él.' },
                       ]}
                     />
                   </div>
@@ -491,11 +644,27 @@ export function StoreFlowPage() {
                   </ol>
                 </section>
 
+                {review && (
+                  <TransitionReviewPanel
+                    review={review}
+                    current={query.data ?? null}
+                    applying={apply.isPending}
+                    applyError={apply.error}
+                    rechecking={save.isPending}
+                    onApply={() => apply.mutate(review)}
+                    onRecheck={recheck}
+                    onCancel={() => {
+                      setReview(null);
+                      apply.reset();
+                    }}
+                  />
+                )}
+
                 <div className="flex flex-wrap items-center gap-3">
                   <Button
                     type="button"
                     loading={save.isPending}
-                    disabled={!changed || !valid}
+                    disabled={!changed || !valid || Boolean(review) || apply.isPending}
                     onClick={() => settings && save.mutate(settings)}
                   >
                     Guardar flujo
@@ -515,5 +684,104 @@ export function StoreFlowPage() {
         )}
       </StoreFlowEditorSheet>
     </div>
+  );
+}
+
+/**
+ * La revisión del cambio de tipo o modos: qué cambia, la versión revisada, si el servidor lo
+ * permite y, si no, los motivos y las operaciones vivas. Confirmar aplica una vez con la llave de
+ * esta revisión; un 409 de versión pide volver a revisar en lugar de reenviar a ciegas.
+ */
+function TransitionReviewPanel({
+  review,
+  current,
+  applying,
+  applyError,
+  rechecking,
+  onApply,
+  onRecheck,
+  onCancel,
+}: {
+  review: TransitionReview;
+  current: BusinessSettings | null;
+  applying: boolean;
+  applyError: unknown;
+  rechecking: boolean;
+  onApply: () => void;
+  onRecheck: () => void;
+  onCancel: () => void;
+}) {
+  const { preflight, transition } = review;
+  const blocked = transitionBlockDetails(applyError);
+  const versionConflict = isVersionConflict(applyError);
+  const notFound = isNotFound(applyError);
+  const needsRecheck = !preflight.permitido || Boolean(blocked) || versionConflict;
+  return (
+    <section className="panel-card grid gap-3 p-5 sm:p-6" aria-labelledby="flow-transition-title">
+      <h2 id="flow-transition-title" className="text-xl font-extrabold text-ink">
+        Revisa el cambio antes de aplicarlo
+      </h2>
+      <p className="text-sm text-muted">
+        Cambiar el tipo o la forma de operar se revisa primero con el servidor. Versión revisada: {preflight.version_actual}.
+      </p>
+      <ul className="grid gap-1 text-sm" aria-label="Cambios de tipo o modo">
+        {Object.entries(transition).map(([field, value]) => (
+          <li key={field}>
+            <strong>{TRANSITION_FIELD_LABELS[field] ?? field}:</strong>{' '}
+            {current ? `${transitionValue(field, (current as unknown as Record<string, unknown>)[field])} → ` : ''}
+            {transitionValue(field, value)}
+          </li>
+        ))}
+      </ul>
+      {Object.keys(review.ordinary).length > 0 && (
+        <p className="text-xs text-muted">Los demás ajustes del flujo se guardan junto con este cambio.</p>
+      )}
+      {preflight.permitido && !blocked && !versionConflict && (
+        <Feedback tone="success">El servidor permite el cambio. Confirma para aplicarlo.</Feedback>
+      )}
+      {!preflight.permitido && (
+        <Feedback tone="error">
+          No se puede aplicar todavía.
+          <BlockList
+            reasons={preflight.reason_codes}
+            operations={preflight.operaciones?.items ?? []}
+            total={preflight.operaciones?.total ?? 0}
+          />
+        </Feedback>
+      )}
+      {blocked && (
+        <Feedback tone="error">
+          El servidor bloqueó el cambio al aplicarlo; no se guardó nada.
+          <BlockList reasons={blocked.reason_codes} operations={blocked.operaciones} total={blocked.total} />
+        </Feedback>
+      )}
+      {versionConflict && (
+        <Feedback tone="error">
+          La configuración cambió en otra sesión desde la revisión; no se guardó nada. Vuelve a revisar el cambio.
+        </Feedback>
+      )}
+      {notFound && (
+        <Feedback tone="error">
+          Este servidor todavía no tiene el cambio de tipo o modo (404). No se guardó nada; tus cambios siguen aquí.
+        </Feedback>
+      )}
+      {Boolean(applyError) && !blocked && !versionConflict && !notFound && (
+        <Feedback tone="error">{errorMessage(applyError)}</Feedback>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        {needsRecheck ? (
+          <Button type="button" loading={rechecking} onClick={onRecheck}>
+            Volver a revisar
+          </Button>
+        ) : (
+          <Button type="button" loading={applying} onClick={onApply}>
+            Aplicar cambio
+          </Button>
+        )}
+        <Button type="button" variant="ghost" disabled={applying} onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
+    </section>
   );
 }
