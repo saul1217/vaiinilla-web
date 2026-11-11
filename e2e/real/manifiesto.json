@@ -1,6 +1,9 @@
 {
   "descripcion": "Manifiesto versionado de escenarios E2E reales de la tanda 3 (web + backend + Postgres, sin mocks de API). `npm run e2e:conteo` falla si no cuadra con los tests que Playwright lista.",
-  "minimos": { "A": 86, "C": 10 },
+  "minimos": {
+    "A": 86,
+    "C": 10
+  },
   "escenarios": [
     {
       "id": "A-CAF-CAJ-01",
@@ -126,6 +129,42 @@
       "accion_ui": "Admin de negocio abre /plataforma por URL.",
       "esperado": "UI no entra al panel de plataforma ni muestra «Establecimientos».",
       "spec": "e2e/real/x-tenant.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-ADM-05",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "admin",
+      "tipo": "cafeteria",
+      "precondiciones": "Seed. DEV-Cafe Sur sin operaciones vivas y con entrega en mesa «mesa».",
+      "accion_ui": "Admin de DEV-Cafe Sur abre /app/flujo, elige «Pasan por él a la barra», sube la gracia 1 minuto, pulsa «Guardar flujo», revisa y pulsa «Aplicar cambio».",
+      "esperado": "UI enseña la revisión con la versión leída (xmin) y «El servidor permite el cambio» sin escribir nada; al confirmar, «Flujo guardado». DB: entrega_en_espacio barra y gracia +1 (los dos grupos), tipo, QR y pago al final igual; una sola fila de idempotencia de transicion_hito2.",
+      "spec": "e2e/real/w1-transicion.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-ADM-06",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "admin",
+      "tipo": "cafeteria",
+      "precondiciones": "DEV-Cafe Norte con caja abierta (por UI si falta) y sin pago al final.",
+      "accion_ui": "Admin de DEV-Cafe Norte elige «Al final, con cuenta abierta», cambia la gracia, pulsa «Guardar flujo» y luego «Volver a revisar».",
+      "esperado": "UI muestra «No se puede aplicar todavía» con «Caja abierta» en las operaciones que bloquean, sin correos ni nombres del personal, y no ofrece «Aplicar cambio». DB: sin cambios (ni transición ni PATCH) y sin filas nuevas de transicion_hito2.",
+      "spec": "e2e/real/w1-transicion.spec.ts",
+      "modo": "real-chromium"
+    },
+    {
+      "id": "A-CAF-ADM-07",
+      "bloque": "A",
+      "familia": "P",
+      "rol": "admin",
+      "tipo": "cafeteria",
+      "precondiciones": "DEV-Cafe Sur sin operaciones vivas (después de A-CAF-ADM-05).",
+      "accion_ui": "Admin revisa «El cliente elige» en una sesión; en otra sesión quita el QR y lo aplica; vuelve a la primera y pulsa «Aplicar cambio» y después «Volver a revisar» y «Aplicar cambio».",
+      "esperado": "UI: el primer intento dice que la configuración cambió en otra sesión y no ofrece aplicar; la nueva revisión trae la versión nueva y solo el cambio propio. DB: tras el 409 no cambia nada; al final entrega_en_espacio ambas y entrega_requiere_qr false (no se revierte el cambio de la otra sesión).",
+      "spec": "e2e/real/w1-transicion.spec.ts",
       "modo": "real-chromium"
     }
   ]
