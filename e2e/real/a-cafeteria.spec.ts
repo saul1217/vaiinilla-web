@@ -45,7 +45,7 @@ async function asegurarCajaAbierta(browser: Browser) {
 
 async function abrirNuevoPedidoEnMesa(page: Page, mesa: string) {
   await page.goto('/app/pos');
-  await page.getByRole('button', { name: new RegExp(`^${mesa}\\.`) }).click();
+  await page.getByRole('button', { name: `${mesa}.` }).first().click();
   await page.getByRole('dialog', { name: mesa }).getByRole('button', { name: 'Nuevo pedido en esta mesa' }).click();
   const dialogo = page.getByRole('dialog', { name: 'Nuevo pedido' });
   await expect(dialogo.getByRole('heading', { name: `Pedido para ${mesa}` })).toBeVisible();
