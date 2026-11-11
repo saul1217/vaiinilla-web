@@ -107,7 +107,7 @@ describe('StaffOrderForm', () => {
     renderForm('mesero', vi.fn(), 2);
     await user.click(await screen.findByRole('button', { name: 'Agregar' }));
     await user.type(screen.getByLabelText(/Nombre del cliente/), 'Ana');
-    // Con pago al final permitido, la mesa lo trae marcado de inicio (T3-0007 lo oculta si no se permite).
+    // Con pago al final permitido, la mesa lo trae marcado de inicio (T3-0011 lo oculta si no se permite).
     const deferred = screen.getByLabelText('Pagar al final, con la cuenta de la mesa');
     await waitFor(() => expect(deferred).toBeChecked());
     await user.click(screen.getByRole('button', { name: 'Agregar uno' }));
@@ -120,7 +120,7 @@ describe('StaffOrderForm', () => {
     expect(apiMock.createStaffOrder).not.toHaveBeenCalled();
   });
 
-  it('T3-0007: sin pago al final en el negocio no ofrece la opción y envía pago_diferido false', async () => {
+  it('T3-0011: sin pago al final en el negocio no ofrece la opción y envía pago_diferido false', async () => {
     const user = userEvent.setup();
     renderForm('mesero', vi.fn(), 2);
     await waitFor(() => expect(apiMock.operationalSettings).toHaveBeenCalled());
@@ -130,8 +130,8 @@ describe('StaffOrderForm', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
     await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
-    expect(apiMock.createStaffOrder.mock.calls[0]?.[1]).toMatchObject({ destino: 'en_espacio' });
-    expect(apiMock.createStaffOrder.mock.calls[0]?.[1]?.pago_diferido).not.toBe(true);
+    expect(llamadas()[0]?.[1]).toMatchObject({ destino: 'en_espacio' });
+    expect(llamadas()[0]?.[1]).not.toMatchObject({ pago_diferido: true });
   });
 
   it('para llevar: envía el pedido en efectivo con la opción obligatoria ya elegida', async () => {
@@ -190,7 +190,7 @@ describe('StaffOrderForm', () => {
 
     await user.click(screen.getByRole('button', { name: 'En mesa' }));
     await user.click(await screen.findByRole('button', { name: /Mesa 2/ }));
-    // T3-0007: ni marcada ni ofrecida, porque el servidor la rechazaría.
+    // T3-0011: ni marcada ni ofrecida, porque el servidor la rechazaría.
     await waitFor(() => expect(screen.queryByLabelText(/Pagar al final/)).not.toBeInTheDocument());
   });
 
