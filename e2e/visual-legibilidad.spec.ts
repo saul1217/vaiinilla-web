@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { LOCAL_BASE_URL } from './base-url';
 
 // Credenciales de la tienda QA de desarrollo: `.env.e2e.local` (fuera de git).
 function loadEnv(): Record<string, string> {
@@ -24,8 +25,10 @@ const accounts = {
   mesero: { email: env.E2E_MESERO_EMAIL ?? '', password: env.E2E_MESERO_PASSWORD ?? '' },
 };
 
-// El CORS del API de desarrollo solo admite http://127.0.0.1:5173 (no el 4173 de la config): `npm run dev -- --host 127.0.0.1`.
-test.use({ baseURL: env.E2E_BASE_URL ?? 'http://127.0.0.1:5173' });
+// T3-0006: el baseURL sale de playwright.config.ts (un solo puerto). Si el CORS del API remoto solo
+// admite 5173, corre con E2E_PORT=5173 en vez de fijar otro puerto aquí.
+const baseURL = env.E2E_BASE_URL ?? LOCAL_BASE_URL;
+test.use({ baseURL });
 
 test.skip(Object.values(accounts).some((a) => !a.email || !a.password), 'Falta .env.e2e.local con las cuentas QA de desarrollo.');
 
@@ -96,7 +99,7 @@ test('Cocina con tema oscuro del personal', async ({ page }, info) => {
 
 // La tienda de CI no trae mesas sembradas. Con la cuenta admin se crean por API (lote) solo si no hay ninguna.
 async function sembrarMesas(browser: Browser) {
-  const context = await browser.newContext({ baseURL: env.E2E_BASE_URL ?? 'http://127.0.0.1:5173' });
+  const context = await browser.newContext({ baseURL });
   try {
     const page = await context.newPage();
     await login(page, accounts.admin);

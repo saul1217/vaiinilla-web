@@ -5,10 +5,30 @@ import { PlatformGuard, RoleGuard, TenantGuard } from '../components/route-guard
 import { Spinner } from '../components/brand-mark';
 import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
+import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
+import { HOTEL_ADMIN_ENABLED } from '../lib/hotel-admin-feature';
+import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
+import { REPARTO_ENABLED } from '../lib/reparto-feature';
+import { SCHOOL_ADMIN_ENABLED } from '../lib/school-admin-feature';
+import { AGENDA_ENABLED } from '../lib/agenda-feature';
+import { AGENDA_ROLES } from '../lib/agenda';
+import { CORTES_REPORTE_ENABLED } from '../lib/features';
+import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
+import { IA_CONFIG_ENABLED } from '../lib/features';
+import { useCortesScope, useCortesSessionIsolation } from '../hooks/use-cortes-session-isolation';
 
 const AuthPage = lazy(() => import('../pages/auth-page').then((module) => ({ default: module.AuthPage })));
 const AccessSelectionPage = lazy(() => import('../pages/access-selection-page').then((module) => ({ default: module.AccessSelectionPage })));
 const TenantDashboardPage = lazy(() => import('../pages/tenant-dashboard-page').then((module) => ({ default: module.TenantDashboardPage })));
+const CortesReportePage = lazy(() => import('../pages/cortes-reporte-page').then((module) => ({ default: module.CortesReportePage })));
+const SinInternetPage = lazy(() => import('../pages/sin-internet-page').then((module) => ({ default: module.SinInternetPage })));
+const AssistantConfigPage = lazy(() => import('../pages/assistant-config-page').then((module) => ({ default: module.AssistantConfigPage })));
+const InventarioPage = lazy(() => import('../pages/inventario-page').then((module) => ({ default: module.InventarioPage })));
+const WalletCajaPage = lazy(() => import('../pages/wallet-caja-page').then((module) => ({ default: module.WalletCajaPage })));
+const RepartoPage = lazy(() => import('../pages/reparto-page').then((module) => ({ default: module.RepartoPage })));
+const HotelAdminPage = lazy(() => import('../pages/hotel-admin-page').then((module) => ({ default: module.HotelAdminPage })));
+const AgendaPage = lazy(() => import('../pages/agenda-page').then((module) => ({ default: module.AgendaPage })));
+const SchoolAdminPage = lazy(() => import('../pages/school-admin-page').then((module) => ({ default: module.SchoolAdminPage })));
 const InvitationsPage = lazy(() => import('../pages/invitations-page').then((module) => ({ default: module.InvitationsPage })));
 const OrdersPage = lazy(() => import('../pages/orders-page').then((module) => ({ default: module.OrdersPage })));
 const PosPage = lazy(() => import('../pages/pos-page').then((module) => ({ default: module.PosPage })));
@@ -29,6 +49,7 @@ const LegalIndexPage = lazy(() => import('../pages/legal-index-page').then((modu
 const LegalDocumentPage = lazy(() => import('../pages/legal-document-page').then((module) => ({ default: module.LegalDocumentPage })));
 const AccountDeletionPage = lazy(() => import('../pages/account-deletion-page').then((module) => ({ default: module.AccountDeletionPage })));
 const StripeOnboardingReturnPage = lazy(() => import('../pages/stripe-onboarding-return-page').then((module) => ({ default: module.StripeOnboardingReturnPage })));
+const VilloPage = lazy(() => import('../pages/villo-page').then((module) => ({ default: module.VilloPage })));
 
 function LoadingRoute() {
   return (
@@ -62,11 +83,26 @@ function TenantArea() {
               <OrdersPage />
             </RoleGuard>
           </Route>
+          {CORTES_REPORTE_ENABLED && <Route path="/app/cortes"><RoleGuard allowed={['admin']}><CortesReportePage /></RoleGuard></Route>}
           <Route path="/app/menu">
             <RoleGuard allowed={['admin']}>
               <MenuPage />
             </RoleGuard>
           </Route>
+          {SIN_INTERNET_ENABLED && <Route path="/app/sin-internet"><RoleGuard allowed={['admin']}><SinInternetPage /></RoleGuard></Route>}
+          {IA_CONFIG_ENABLED && <Route path="/app/asistente-configuracion"><RoleGuard allowed={['admin']}><AssistantConfigPage /></RoleGuard></Route>}
+          {INVENTARIO_ENABLED && <Route path="/app/inventario"><RoleGuard allowed={['admin', 'cocina']}><InventarioPage /></RoleGuard></Route>}
+          {HOTEL_ADMIN_ENABLED && <Route exact path="/app/hotel"><RoleGuard allowed={['admin']}><HotelAdminPage section="resumen" /></RoleGuard></Route>}
+          {HOTEL_ADMIN_ENABLED && <Route exact path="/app/hotel/habitaciones"><RoleGuard allowed={['admin']}><HotelAdminPage section="habitaciones" /></RoleGuard></Route>}
+          {HOTEL_ADMIN_ENABLED && <Route exact path="/app/hotel/ajustes"><RoleGuard allowed={['admin']}><HotelAdminPage section="ajustes" /></RoleGuard></Route>}
+          {WALLET_CAJA_ENABLED && <Route path="/app/saldo"><RoleGuard allowed={['cajero', 'admin']}><WalletCajaPage /></RoleGuard></Route>}
+          {REPARTO_ENABLED && <Route path="/app/reparto"><RoleGuard allowed={['admin', 'cajero']}><RepartoPage /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela"><RoleGuard allowed={['admin']}><SchoolAdminPage section="ajustes" /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela/dias"><RoleGuard allowed={['admin']}><SchoolAdminPage section="dias" /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela/padron"><RoleGuard allowed={['admin']}><SchoolAdminPage section="padron" /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela/tutores"><RoleGuard allowed={['admin']}><SchoolAdminPage section="tutores" /></RoleGuard></Route>}
+          {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela/devoluciones"><RoleGuard allowed={['admin']}><SchoolAdminPage section="devoluciones" /></RoleGuard></Route>}
+          {AGENDA_ENABLED && <Route exact path="/app/agenda"><RoleGuard allowed={AGENDA_ROLES}><AgendaPage /></RoleGuard></Route>}
           {CASHBACK_ENABLED && CashbackPage ? (
             <Route path="/app/cashback">
               <RoleGuard allowed={['admin']}>
@@ -119,6 +155,8 @@ function PlatformArea() {
 
 export function AppRouter() {
   useAdminTheme();
+  // Limpia la caché de cortes al cambiar de sesión aunque la pantalla no esté abierta.
+  useCortesSessionIsolation(useCortesScope());
   return (
     <BrowserRouter>
       <Deferred>
@@ -134,6 +172,7 @@ export function AppRouter() {
           <Route exact path="/legal/privacidad/:version"><LegalDocumentPage kind="privacidad" /></Route>
           <Route exact path="/eliminar-cuenta"><AccountDeletionPage /></Route>
           <Route exact path="/stripe/onboarding/return"><StripeOnboardingReturnPage /></Route>
+          <Route exact path="/villo"><VilloPage /></Route>
           <Route path="/app"><TenantArea /></Route>
           <Route exact path="/plataforma/acceso"><AuthPage surface="platform" /></Route>
           <Route path="/plataforma"><PlatformArea /></Route>

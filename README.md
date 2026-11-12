@@ -50,6 +50,11 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 | `/app/invitaciones` | Crear, consultar, revocar y reenviar invitaciones |
 | `/app/pedidos` | Consultar pedidos activos, entregados e incidencias |
 | `/app/pos` | Abrir/cerrar Caja; para el rol Caja, cobrar efectivo y entregar con QR |
+| `/app/hotel`, `/app/hotel/habitaciones`, `/app/hotel/ajustes` | Admin de Hotel (resumen, alta de habitaciones en lote con QR y ajustes). Detrás de `HOTEL_ADMIN_ENABLED` (`src/lib/hotel-admin-feature.ts`, apagada); solo rol admin en un negocio con hotel |
+| `/app/saldo` | Saldo de clientes: buscar al cliente, ver su saldo y movimientos y, solo con rol Caja, recargarle en efectivo (con confirmación e `Idempotency-Key`). Admin solo consulta. Detrás de `WALLET_CAJA_ENABLED` (`src/lib/wallet-caja-feature.ts`, apagada) |
+| `/app/reparto` | Reparto y encargos: «Por aceptar», «Me deben» y la agenda por día de los pedidos a domicilio y encargos, con aceptar, rechazar, salió a entregar, entregar con el código del cliente (admin puede entregar sin código si se bloqueó), cobrar en la puerta y cancelar, con `Idempotency-Key`. Paridad con la agenda de repostería de Android. Detrás de `REPARTO_ENABLED` (`src/lib/reparto-feature.ts`, apagada); solo admin y cajero |
+| `/app/escuela`, `/app/escuela/dias`, `/app/escuela/padron`, `/app/escuela/tutores`, `/app/escuela/devoluciones` | Admin de Escuela (código para unirse y reglas, menú y días sin servicio, padrón pegado de la hoja de cálculo, tutores y devoluciones o bajas), con paridad a Negocio › Escuela de Android. Detrás de `SCHOOL_ADMIN_ENABLED` (`src/lib/school-admin-feature.ts`, apagada); solo rol admin en un negocio con `modo_escuela` |
+| `/app/agenda` | Agenda de reservas por día y por cancha: ver, apartar (queda por cobrar en Caja), mover una reserva sin pagar a otro horario y cancelar (con reembolso si ya se pagó), con paridad a Mesas y espacios › Reservas de Android. Solo usa las rutas de `/reservas` que ya tiene el back. Detrás de `AGENDA_ENABLED` (`src/lib/agenda-feature.ts`, apagada); roles admin, cajero y mesero |
 | `/invitaciones/aceptar` | Confirmar identidad y aceptar una invitación recibida por correo |
 | `/acceso/verificar` | Procesar el enlace de verificación de correo de Firebase |
 | `/acceso/recuperar` | Definir una contraseña nueva desde un enlace de recuperación |
@@ -125,6 +130,8 @@ npm run test:e2e
 ```
 
 Las pruebas E2E usan Playwright. Si es la primera ejecución, instala Chromium con `npx playwright install chromium`.
+
+`npm run test:e2e` usa un solo puerto local (`E2E_PORT`, 4173 por omisión) o el servidor de `E2E_BASE_URL`. Los escenarios reales de la tanda 3 (web + backend + Postgres desechable, sin mocks de API) corren con `E2E_BACK_DIR=<checkout del back> npm run e2e:real` y se cuadran con `npm run e2e:conteo`; ver `e2e/real/README.md`.
 
 ## Publicación
 

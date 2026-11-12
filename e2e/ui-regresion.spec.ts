@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { installStaffR2Mocks } from './fixtures/staff-r2';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { LOCAL_BASE_URL } from './base-url';
 
 function loadEnv(): Record<string, string> {
   try {
@@ -32,7 +33,8 @@ const VIEWPORTS = [
   { name: '1280x800', width: 1280, height: 800 },
 ] as const;
 // Solo se usa tema claro: no hay capturas del tema oscuro del personal.
-test.use({ baseURL: env.E2E_BASE_URL ?? 'http://127.0.0.1:5173', colorScheme: 'light', contextOptions: { reducedMotion: 'reduce' } });
+// T3-0006: mismo puerto que playwright.config.ts.
+test.use({ baseURL: env.E2E_BASE_URL ?? LOCAL_BASE_URL, colorScheme: 'light', contextOptions: { reducedMotion: 'reduce' } });
 
 
 type Surface = { name: string; route: string; email: () => string; password: () => string; ready: (page: Page) => Promise<void>; trigger?: (page: Page) => ReturnType<Page['locator']> };
