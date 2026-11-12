@@ -1213,6 +1213,112 @@ export interface HotelRoomBatchResult {
   omitidas: string[];
 }
 
+/** Estado de una estancia (vaiinilla_back estancias.service). */
+export type HotelStayStatus = 'reservada' | 'en_casa' | 'salio' | 'cancelada';
+
+export type HotelChargeCategory = 'minibar' | 'spa' | 'salida_tardia' | 'otro';
+
+/** Un cargo manual de recepción (POST /estancias/:id/cargos). */
+export interface HotelStayCharge {
+  id: number;
+  concepto: string;
+  categoria: HotelChargeCategory;
+  monto: string;
+  creado_en: string | null;
+}
+
+/** Un pedido de room service ligado a la estancia; `por_cobrar` se cobra en el check-out. */
+export interface HotelStayOrder {
+  id: string;
+  folio: string | null;
+  estado: string;
+  total: string;
+  items_resumen: string | null;
+  por_cobrar: boolean;
+  creado_en: string | null;
+}
+
+/** Estancia plana de GET /estancias y GET /estancias/:id. `cargos` y `pedidos` solo vienen llenos en el detalle y las altas. */
+export interface HotelStay {
+  id: string;
+  estado: HotelStayStatus;
+  huesped: string;
+  contacto: string | null;
+  codigo: string | null;
+  espacio_id: number;
+  espacio_nombre: string;
+  piso: number | null;
+  categoria: string | null;
+  entrada: string;
+  salida: string;
+  noches: number;
+  salida_prevista: string | null;
+  tarifa_noche: string | null;
+  no_molestar: boolean;
+  total: string;
+  cuenta: { noches_total: string; cargos_total: string; pedidos_total: string; total: string; pedidos_pendientes: number };
+  metodo_cobro: 'efectivo' | 'tarjeta' | null;
+  total_cobrado: string | null;
+  cargos: HotelStayCharge[];
+  pedidos: HotelStayOrder[];
+  version: number;
+}
+
+/** GET /estancias: `hoy` es el día del hotel, no el del navegador. */
+export interface HotelStayList {
+  hoy: string;
+  estancias: HotelStay[];
+  limit: number | null;
+  offset: number;
+  hay_mas: boolean;
+}
+
+/**
+ * POST /estancias (check-in en recepción). Sin `entrada` el servidor usa el día del hotel y la
+ * estancia queda en casa; se mandan `noches` (no `salida`) para no depender del reloj del navegador.
+ */
+export interface HotelCheckInInput {
+  espacio_id: number;
+  huesped_nombre: string;
+  contacto?: string;
+  noches: number;
+  tarifa_noche: string;
+}
+
+/** POST /estancias/:id/cargos. */
+export interface HotelChargeInput {
+  concepto: string;
+  monto: string;
+  categoria: HotelChargeCategory;
+}
+
+/** POST /estancias/:id/checkout: la app no cobra, registra con qué pagó el huésped. */
+export interface HotelCheckoutInput {
+  metodo_pago: 'efectivo' | 'tarjeta';
+  total_esperado: string;
+  version_esperada: number;
+}
+
+export type HotelRequestType = 'toallas' | 'almohadas' | 'limpieza' | 'cargador' | 'salida_tardia' | 'otro';
+export type HotelRequestStatus = 'pendiente' | 'tomada' | 'resuelta' | 'cancelada';
+
+/** GET /solicitudes-hotel (el personal ve las abiertas de todo el hotel). */
+export interface HotelRequest {
+  id: string;
+  estancia_id: string;
+  habitacion: { id: number; nombre: string; piso: number | null } | null;
+  tipo: HotelRequestType;
+  cantidad: number;
+  nota: string | null;
+  estado: HotelRequestStatus;
+  huesped: { nombre: string } | null;
+  tomada_por: { usuario_id: string | null; nombre: string } | null;
+  creado_en: string | null;
+  tomada_en: string | null;
+  cerrada_en: string | null;
+  version: number;
+}
+
 /** Cliente que devuelve GET /wallets/clientes (búsqueda de Caja; cajero o admin). */
 export interface WalletClient {
   usuario_id: string;
