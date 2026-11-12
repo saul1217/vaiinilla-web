@@ -3,6 +3,7 @@ import { getApp, getApps, initializeApp } from 'firebase/app';
 import {
   browserLocalPersistence,
   applyActionCode,
+  connectAuthEmulator,
   confirmPasswordReset,
   createUserWithEmailAndPassword,
   getAuth,
@@ -44,6 +45,23 @@ export const firebaseConfigured = Boolean(
 );
 
 let authInstance: Auth | null = null;
+
+// Solo el harness E2E local (e2e/real) define esta variable y solo con el servidor de
+// desarrollo de Vite: un build de producción nunca se conecta al emulador aunque la traiga.
+export function authEmulatorUrl(
+  host: string | undefined,
+  isDev: boolean,
+): string | null {
+  const value = host?.trim();
+  if (!isDev || !value) return null;
+  if (!/^(127\.0\.0\.1|localhost):\d{2,5}$/.test(value)) return null;
+  return `http://${value}`;
+}
+
+function connectEmulatorIfConfigured(auth: Auth): void {
+  const url = authEmulatorUrl(import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST, import.meta.env.DEV);
+  if (url) connectAuthEmulator(auth, url, { disableWarnings: true });
+}
 let persistenceReady: Promise<void> | null = null;
 
 function getConfiguredAuth(): Auth {
@@ -54,6 +72,7 @@ function getConfiguredAuth(): Auth {
   if (!authInstance) {
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     authInstance = getAuth(app);
+    connectEmulatorIfConfigured(authInstance);
     persistenceReady = setPersistence(authInstance, browserLocalPersistence);
   }
 

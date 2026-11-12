@@ -27,8 +27,10 @@ import {
   durationLabel,
   freeStarts,
   isLive,
+  MoveBookingError,
   moveBooking,
   needsRefund,
+  releaseOrphan,
 } from '../lib/agenda';
 import { api } from '../lib/api';
 import { VaiinillaApiError, errorMessage } from '../lib/api-error';
@@ -276,6 +278,8 @@ function BookingFormModal({ token, storeId, initialDate, dates, today, state, on
   const nameError = name.trim().length > 120 ? 'Hasta 120 caracteres.' : undefined;
   const ready = Boolean(court && chosenStart && chosenMinutes && !nameError);
 
+  const queryClient = useQueryClient();
+  const cancelWithKey = (id: string, key: string) => api.cancelCounterRental(token, id, undefined, key);
   const save = useMutation({
     mutationFn: async () => {
       const target = { espacio_id: court!.espacio.id, inicio: chosenStart, duracion_min: chosenMinutes! };
@@ -283,7 +287,7 @@ function BookingFormModal({ token, storeId, initialDate, dates, today, state, on
         return moveBooking({
           create: (input) => api.createStaffBooking(token, input, createIdempotencyKey()),
           markCashLater: (id) => api.markBookingCashLater(token, id, createIdempotencyKey()),
-          cancel: (id) => api.cancelCounterRental(token, id),
+          cancel: cancelWithKey,
         }, moving, target);
       }
       const trimmed = name.trim();
@@ -301,6 +305,15 @@ function BookingFormModal({ token, storeId, initialDate, dates, today, state, on
       else if ('holdOnly' in result) await onDone(`Horario apartado en ${court!.espacio.nombre}, ${when}, pero no quedó por cobrar en Caja: cóbralo en los próximos 10 minutos o vence.`);
       else await onDone(`Reserva creada en ${court!.espacio.nombre}, ${when}. Queda por cobrar en Caja.`);
     },
+    // Un movimiento a medias puede dejar el horario nuevo apartado: que se vea en la agenda.
+    onError: (error) => {
+      if (error instanceof MoveBookingError && error.orphan) void queryClient.invalidateQueries({ queryKey: agendaKeys.all(storeId) });
+    },
+  });
+  const orphan = save.error instanceof MoveBookingError ? save.error.orphan : undefined;
+  const release = useMutation({
+    mutationFn: () => releaseOrphan({ cancel: cancelWithKey }, orphan!),
+    onSuccess: () => onDone('No se movió la reserva: sigue en su horario original y el horario nuevo quedó libre.'),
   });
 
   return <Modal open onOpenChange={(open) => !open && onClose()}
@@ -330,10 +343,12 @@ function BookingFormModal({ token, storeId, initialDate, dates, today, state, on
           onChange={(event) => setName(event.target.value)} error={nameError} />}
       </>)}
       {save.isError && <Feedback tone="error">{actionError(save.error)}</Feedback>}
+      {orphan && release.isError && <Feedback tone="error">Tampoco se pudo soltar el horario nuevo: {actionError(release.error)} Cancélalo desde la agenda y no lo cobres en Caja.</Feedback>}
       <div className="flex flex-wrap gap-2">
-        <VaiButton variant="accent" loading={save.isPending} disabled={!ready} onClick={() => save.mutate()}>
-          {moving ? 'Mover reserva' : 'Apartar'}
-        </VaiButton>
+        {orphan ? <VaiButton variant="coral" loading={release.isPending} onClick={() => release.mutate()}>Soltar el horario nuevo</VaiButton>
+          : <VaiButton variant="accent" loading={save.isPending} disabled={!ready} onClick={() => save.mutate()}>
+            {moving ? 'Mover reserva' : 'Apartar'}
+          </VaiButton>}
         <VaiButton variant="quiet" onClick={onClose}>Cerrar</VaiButton>
       </div>
     </div>
