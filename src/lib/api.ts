@@ -1,11 +1,23 @@
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
+import {
+  clearMixedPaymentAttempt,
+  isCompleteScope,
+  listPendingMixedPaymentAttempts,
+  mixedPaymentLockName,
+  mixedPaymentUnavailableKey,
+  readMixedPaymentAttempt,
+  writeMixedPaymentAttempt,
+  type MixedPaymentAttempt,
+  type MixedPaymentScope,
+} from './mixed-payment-attempts';
 import type {
   ApiEnvelope,
   ApiErrorEnvelope,
   AccountDeletion,
   CashSession,
   CashPaymentResult,
+  MixedPaymentResult,
   StaffOrderInput,
   StaffOrderResult,
   CashbackRule,
@@ -38,6 +50,7 @@ import type {
   TenantContextResponse,
   TenantAnalytics,
   BookingSettings,
+  CourtAvailabilityDay,
   BookingSettingsInput,
   ManagedSpace,
   BusinessSettings,
@@ -64,6 +77,41 @@ import type {
   PendingRefund,
   RefundMethod,
   StoreImageKind,
+  StoreAssistantFile,
+  StoreAssistantMessage,
+  StoreAssistantReply,
+  InventoryMovementInput,
+  InventoryOverview,
+  InventoryProduct,
+  InventorySupply,
+  InventorySupplyInput,
+  RecipeLine,
+  RecipeLineInput,
+  StaffBookingInput,
+  VilloDevice,
+  VilloDeviceAlert,
+  VilloDeviceTokenIssued,
+  VilloDeviceUpdateInput,
+  HotelRoom,
+  HotelRoomBatchInput,
+  HotelRoomBatchResult,
+  HotelSettings,
+  HotelSettingsInput,
+  HotelSummary,
+  WalletCashRecharge,
+  HomeAgendaDay,
+  HomeOrder,
+  WalletClient,
+  WalletClientDetail,
+  SchoolDayClosure,
+  SchoolGuardianRequest,
+  SchoolGuardianship,
+  SchoolMenuDays,
+  SchoolReservedDay,
+  SchoolRoster,
+  SchoolRosterStudent,
+  SchoolSettingsInput,
+  SchoolStudentRequest,
 } from '../types/api';
 
 // La URL del backend sale de VITE_API_URL: .env.development para `npm run dev` y
@@ -86,10 +134,76 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   idempotent?: boolean;
   idempotencyKey?: string;
+  expectedStatus?: number;
+}
+
+const mixedPaymentLocks = new Map<string, Promise<void>>();
+
+async function withMixedPaymentLock<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (locks) return locks.request(key, run);
+
+  const previous = mixedPaymentLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const queued = previous.then(() => current);
+  mixedPaymentLocks.set(key, queued);
+  await previous;
+  try {
+    return await run();
+  } finally {
+    release();
+    if (mixedPaymentLocks.get(key) === queued) mixedPaymentLocks.delete(key);
+  }
+}
+
+/** Negocio y usuario de la sesión que cobra; el entorno lo pone el cliente (apiUrl). */
+export interface MixedPaymentOwner {
+  establecimientoId: string;
+  usuarioId: string;
+}
+
+function mixedPaymentScope(owner: MixedPaymentOwner): MixedPaymentScope {
+  const scope = { apiUrl, establecimientoId: owner.establecimientoId, usuarioId: owner.usuarioId };
+  if (!isCompleteScope(scope)) throw new Error('No se pudo identificar la sesión de Caja. Vuelve a entrar antes de cobrar.');
+  return scope;
+}
+
+function sameMixedPaymentBody(a: MixedPaymentAttempt['body'], b: MixedPaymentAttempt['body']): boolean {
+  return a.metodo_pago === b.metodo_pago && a.monto === b.monto && (a.monto_recibido ?? '') === (b.monto_recibido ?? '');
+}
+
+/** Manda el intento guardado con su llave. Solo se llama dentro del candado del pedido. */
+async function sendMixedPaymentAttempt(token: string, attempt: MixedPaymentAttempt): Promise<MixedPaymentResult> {
+  try {
+    const result = await request<MixedPaymentResult>(`/pedidos/${attempt.orderId}/pagos-mixtos`, {
+      method: 'POST',
+      token,
+      idempotencyKey: attempt.idempotencyKey,
+      body: attempt.body,
+    });
+    writeMixedPaymentAttempt({ ...attempt, completedRemaining: result.data.restante });
+    return result.data;
+  } catch (error) {
+    // Estos estados rechazan la solicitud sin aplicar el pago. Un 409 puede
+    // ser una repetición cuyo resultado se perdió, así que conserva la clave.
+    if (error instanceof VaiinillaApiError && [400, 404, 422].includes(error.status)) {
+      clearMixedPaymentAttempt(attempt.scope, attempt.orderId);
+    }
+    throw error;
+  }
+}
+
+/** Pago mixto con otro pago del mismo pedido aún sin confirmar: hay que reintentar ese primero. */
+export class MixedPaymentPendingError extends Error {
+  constructor() {
+    super('Este pedido tiene un pago pendiente de confirmar. Reintenta ese mismo pago antes de registrar otro.');
+    this.name = 'MixedPaymentPendingError';
+  }
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
-  const { token, body, idempotent, idempotencyKey, ...requestOptions } = options;
+  const { token, body, idempotent, idempotencyKey, expectedStatus, ...requestOptions } = options;
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
   const isFormData = body instanceof FormData;
@@ -103,6 +217,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
     headers,
     body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
   });
+
+  if (expectedStatus !== undefined && response.status !== expectedStatus) {
+    throw new VaiinillaApiError(response.status, {
+      code: 'HTTP_ERROR',
+      message: 'El servidor devolvió un estado inesperado.',
+    });
+  }
 
   if (response.ok && response.status === 204) {
     return { data: undefined as T, meta: {}, error: null };
@@ -133,6 +254,59 @@ function params(values: Record<string, string | number | undefined>): string {
 }
 
 export const api = {
+  /** Intento sin confirmar del pedido para esta sesión (entorno, negocio y usuario), si hay. */
+  pendingMixedPayment(owner: MixedPaymentOwner, orderId: string): MixedPaymentAttempt | null {
+    try {
+      const attempt = readMixedPaymentAttempt(mixedPaymentScope(owner), orderId);
+      return attempt?.completedRemaining === undefined ? attempt : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /** El backend de esta sesión (entorno, negocio y usuario) ya respondió que no tiene el pago mixto. */
+  isMixedPaymentUnavailable(owner: MixedPaymentOwner): boolean {
+    try {
+      return window.sessionStorage.getItem(mixedPaymentUnavailableKey(mixedPaymentScope(owner))) === '1';
+    } catch {
+      return false;
+    }
+  },
+
+  /** Lo recuerda en la pestaña para no volver a intentar el endpoint al cerrar y abrir el cobro. */
+  markMixedPaymentUnavailable(owner: MixedPaymentOwner): void {
+    try {
+      window.sessionStorage.setItem(mixedPaymentUnavailableKey(mixedPaymentScope(owner)), '1');
+    } catch {
+      // Sin almacenamiento solo dura lo que dure la página.
+    }
+  },
+
+  /**
+   * Reenvía, uno por uno y con su misma llave, solo los intentos sin confirmar de
+   * esta sesión. Nunca crea un intento nuevo: si otra pestaña ya lo resolvió, lo salta.
+   */
+  async recoverPendingMixedPayments(
+    token: string,
+    owner: MixedPaymentOwner,
+  ): Promise<Array<{ orderId: string; result: MixedPaymentResult }>> {
+    const scope = mixedPaymentScope(owner);
+    const recovered: Array<{ orderId: string; result: MixedPaymentResult }> = [];
+    for (const { orderId } of listPendingMixedPaymentAttempts(scope)) {
+      try {
+        const result = await withMixedPaymentLock(mixedPaymentLockName(scope, orderId), async () => {
+          const attempt = readMixedPaymentAttempt(scope, orderId);
+          if (!attempt || attempt.completedRemaining !== undefined) return null;
+          return sendMixedPaymentAttempt(token, attempt);
+        });
+        if (result) recovered.push({ orderId, result });
+      } catch {
+        // Queda guardado (salvo rechazo definitivo) y se reintenta desde el pedido o en la siguiente carga.
+      }
+    }
+    return recovered;
+  },
+
   async getLegalVersions(): Promise<LegalVersions> {
     return (await request<LegalVersions>('/publico/legal/vigente')).data;
   },
@@ -251,12 +425,14 @@ export const api = {
   async createInvitation(
     token: string,
     input: { email: string; rol: InvitationRole },
+    idempotencyKey?: string,
   ): Promise<StaffInvitation> {
     return (
       await request<StaffInvitation>('/personal/invitaciones', {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: input,
       })
     ).data;
@@ -404,6 +580,50 @@ export const api = {
     ).data;
   },
 
+  async payOrderMixed(
+    token: string,
+    owner: MixedPaymentOwner,
+    id: string,
+    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
+    expectedRemaining: string,
+  ): Promise<MixedPaymentResult> {
+    const scope = mixedPaymentScope(owner);
+    const requestedBody = {
+      metodo_pago: input.metodoPago,
+      monto: input.monto,
+      ...(input.metodoPago === 'efectivo' && input.montoRecibido
+        ? { monto_recibido: input.montoRecibido }
+        : {}),
+    };
+    return withMixedPaymentLock(mixedPaymentLockName(scope, id), async () => {
+      let attempt = readMixedPaymentAttempt(scope, id);
+      if (attempt?.completedRemaining !== undefined) {
+        // A stale tab must not turn its old balance into a second charge.
+        if (attempt.completedRemaining !== expectedRemaining) {
+          throw new Error('El saldo del pedido cambió en otra pestaña. Actualiza Caja antes de cobrar de nuevo.');
+        }
+        attempt = null;
+      }
+      if (attempt && !sameMixedPaymentBody(attempt.body, requestedBody)) {
+        // Otro pago del pedido (otra pestaña o una respuesta perdida) sigue sin confirmar.
+        throw new MixedPaymentPendingError();
+      }
+      if (!attempt) {
+        attempt = {
+          version: 2,
+          scope,
+          orderId: id,
+          idempotencyKey: createIdempotencyKey(),
+          body: requestedBody,
+          expectedRemaining,
+          createdAt: Date.now(),
+        };
+        writeMixedPaymentAttempt(attempt);
+      }
+      return sendMixedPaymentAttempt(token, attempt);
+    });
+  },
+
   /** La llave la pone quien llama: los reintentos del mismo pedido deben reenviar la misma. */
   async createStaffOrder(
     token: string,
@@ -462,12 +682,13 @@ export const api = {
     return (await request<CatalogResponse>('/catalogo', { token })).data;
   },
 
-  async createCategory(token: string, input: CatalogCategoryInput): Promise<CatalogCategory> {
+  async createCategory(token: string, input: CatalogCategoryInput, idempotencyKey?: string): Promise<CatalogCategory> {
     return (
       await request<CatalogCategory>('/catalogo/categorias', {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: input,
       })
     ).data;
@@ -488,12 +709,13 @@ export const api = {
     ).data;
   },
 
-  async createProduct(token: string, input: CatalogProductInput): Promise<CatalogProduct> {
+  async createProduct(token: string, input: CatalogProductInput, idempotencyKey?: string): Promise<CatalogProduct> {
     return (
       await request<CatalogProduct>('/catalogo/productos', {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: input,
       })
     ).data;
@@ -824,11 +1046,12 @@ export const api = {
 
   /** Suelta el horario apartado si no se cobró. */
   /** Sin `refund` cancela una reserva por pagar; con él cancela una pagada y reembolsa de 0 al total pagado. */
-  async cancelCounterRental(token: string, rentalId: string, refund?: BookingRefundInput): Promise<void> {
+  async cancelCounterRental(token: string, rentalId: string, refund?: BookingRefundInput, idempotencyKey?: string): Promise<void> {
     await request(`/reservas/${rentalId}/cancelacion`, {
       method: 'POST',
       token,
       idempotent: true,
+      idempotencyKey,
       body: refund ? { motivo: refund.motivo, monto_reembolso: refund.monto_reembolso } : undefined,
     });
   },
@@ -836,6 +1059,12 @@ export const api = {
   /** Reporte de reembolsos de reservas de cancha (solo Administración del negocio). */
   async listBookingRefunds(token: string): Promise<BookingRefund[]> {
     return (await request<BookingRefund[]>('/reservas/reembolsos', { token })).data;
+  },
+
+  /** Horario reservable y lo ocupado de cada cancha en un día; sin `date` el back usa hoy. */
+  async courtAvailability(token: string, date?: string): Promise<CourtAvailabilityDay> {
+    const query = date ? `?fecha=${encodeURIComponent(date)}` : '';
+    return (await request<CourtAvailabilityDay>(`/reservas/disponibilidad${query}`, { token })).data;
   },
 
   /** Reservas de cancha del día (de clientes y de mostrador). `date` = YYYY-MM-DD. */
@@ -879,8 +1108,9 @@ export const api = {
   async createSpaceBatch(
     token: string,
     input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number },
+    idempotencyKey?: string,
   ): Promise<SpaceBatchResult> {
-    return (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, body: input })).data;
+    return (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
   },
 
   async createSpace(token: string, input: { nombre: string; tipo: SpaceType }): Promise<ManagedSpace> {
@@ -891,8 +1121,9 @@ export const api = {
     token: string,
     id: number,
     input: SpaceUpdateInput,
+    idempotencyKey?: string,
   ): Promise<ManagedSpace> {
-    return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, body: input })).data;
+    return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, idempotencyKey, body: input })).data;
   },
 
   async businessSettings(token: string): Promise<BusinessSettings> {
@@ -905,6 +1136,62 @@ export const api = {
 
   async saveBusinessSettings(token: string, input: BusinessSettingsInput): Promise<BusinessSettings> {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
+  },
+
+  async setOfflinePause(token: string, enabled: boolean): Promise<BusinessSettings> {
+    return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: { pausa_sin_conexion: enabled } })).data;
+  },
+
+  /**
+   * Los Excel van en `archivos` en cada mensaje (hasta 3, 2 MB cada uno); sin Excel no se manda la clave.
+   * `signal` corta la llamada si el usuario cambia de sesión o de negocio antes de que conteste.
+   */
+  async askStoreAssistant(
+    token: string,
+    messages: StoreAssistantMessage[],
+    files: StoreAssistantFile[] = [],
+    signal?: AbortSignal,
+  ): Promise<StoreAssistantReply> {
+    const body = files.length ? { mensajes: messages, archivos: files } : { mensajes: messages };
+    return (await request<StoreAssistantReply>('/establecimiento/asistente', { method: 'POST', token, body, signal })).data;
+  },
+
+  /** Insumos activos del inventario (GET /inventario/insumos). */
+  async inventorySupplies(token: string): Promise<InventorySupply[]> {
+    return (await request<{ insumos: InventorySupply[] }>('/inventario/insumos', { token })).data.insumos;
+  },
+
+  async createInventorySupply(token: string, input: InventorySupplyInput, idempotencyKey?: string): Promise<InventorySupply> {
+    return (await request<InventorySupply>('/inventario/insumos', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+  },
+
+  /** Entrada, merma o conteo. El `id` (UUID) evita que un reintento lo cuente dos veces. */
+  async registerInventoryMovement(token: string, input: InventoryMovementInput): Promise<void> {
+    await request('/inventario/movimientos', { method: 'POST', token, idempotencyKey: input.id, body: input });
+  },
+
+  /** Productos del menú vistos desde inventario (id y nombre, con o sin receta). */
+  async inventoryProducts(token: string): Promise<InventoryProduct[]> {
+    return (await request<{ productos: InventoryProduct[] }>('/inventario/productos', { token })).data.productos;
+  },
+
+  async productRecipe(token: string, productId: number): Promise<RecipeLine[]> {
+    return (await request<{ producto_id: number; lineas: RecipeLine[] }>(`/inventario/productos/${productId}/receta`, { token })).data.lineas;
+  },
+
+  /** Reemplaza la receta completa del producto. */
+  async saveProductRecipe(token: string, productId: number, lines: RecipeLineInput[], idempotencyKey?: string): Promise<void> {
+    await request(`/inventario/productos/${productId}/receta`, { method: 'PUT', token, idempotent: true, idempotencyKey, body: { lineas: lines } });
+  },
+
+  /** Aparta una pista u horario para alguien que llamó; queda por cobrar en Caja con `markBookingCashLater`. */
+  async createStaffBooking(token: string, input: StaffBookingInput, idempotencyKey?: string): Promise<CounterRental> {
+    return (await request<CounterRental>('/reservas', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+  },
+
+  /** Efectivo sin monto: la renta queda por cobrar en Caja, como una renta de mostrador. */
+  async markBookingCashLater(token: string, bookingId: string, idempotencyKey?: string): Promise<void> {
+    await request(`/reservas/${bookingId}/pago`, { method: 'POST', token, idempotent: true, idempotencyKey, body: { metodo_pago: 'efectivo' } });
   },
 
   async uploadStoreImage(token: string, kind: StoreImageKind, file: File): Promise<BusinessSettings> {
@@ -1017,6 +1304,31 @@ export const api = {
     ).data;
   },
 
+  async cashDayCut(token: string, date?: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/sesiones-caja/cortes${params({ fecha: date })}`, { token, signal })).data;
+  },
+
+  async cashSessionCut(token: string, sessionId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/sesiones-caja/${encodeURIComponent(sessionId)}/corte`, { token, signal })).data;
+  },
+
+  async accountingReport(token: string, from: string, to: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return (await request<Record<string, unknown>>(`/reportes/contable${params({ desde: from, hasta: to })}`, { token, signal })).data;
+  },
+
+  /**
+   * Pantalla de inventario: insumos con existencia y, desde la migración 205, `permisos`
+   * (`puede_editar` de esta sesión y `cocina_edita` del negocio). Un backend anterior no los manda.
+   */
+  async inventoryOverview(token: string): Promise<InventoryOverview> {
+    return (await request<InventoryOverview>('/inventario/insumos', { token })).data;
+  },
+
+  /** Solo admin: deja o no a Cocina editar el inventario (`cocina_edita_inventario`, migración 205). */
+  async setInventoryKitchenPermission(token: string, allow: boolean): Promise<{ cocina_edita: boolean }> {
+    return (await request<{ cocina_edita: boolean }>('/inventario/permisos', { method: 'PATCH', token, body: { cocina_edita: allow } })).data;
+  },
+
   async configurePlatformStripe(
     token: string,
     id: string,
@@ -1035,4 +1347,254 @@ export const api = {
       )
     ).data;
   },
+
+  /** Acceso del dueño de la plataforma a la sección Villo (204 = permitido). */
+  async villoOwnerAccess(token: string | null | undefined): Promise<void> {
+    await request<void>('/villo/owner/acceso', {
+      token: token ?? '',
+      expectedStatus: 204,
+    });
+  },
+
+  /** Guía en Markdown para el dueño de la plataforma. */
+  async villoOwnerGuide(
+    token: string | null | undefined,
+  ): Promise<{ markdown: string; actualizado_en: string }> {
+    return (
+      await request<{ markdown: string; actualizado_en: string }>(
+        '/villo/owner/guia',
+        { token: token ?? '' },
+      )
+    ).data;
+  },
+  /** VILLO del negocio (rol admin, token de contexto del negocio). Nunca trae tokens. */
+  async listVilloDevices(token: string): Promise<VilloDevice[]> {
+    return (await request<VilloDevice[]>('/villo/dispositivos', { token })).data;
+  },
+
+  async createVilloDevice(
+    token: string,
+    input: { nombre: string; espacio_id?: number | null },
+  ): Promise<VilloDevice> {
+    return (
+      await request<VilloDevice>('/villo/dispositivos', { method: 'POST', token, body: input })
+    ).data;
+  },
+
+  async updateVilloDevice(
+    token: string,
+    id: string,
+    input: VilloDeviceUpdateInput,
+  ): Promise<VilloDevice> {
+    return (
+      await request<VilloDevice>(`/villo/dispositivos/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        token,
+        body: input,
+      })
+    ).data;
+  },
+
+  /** Token nuevo en claro, una sola vez (no-store). Invalida el anterior. No lo guardes. */
+  async issueVilloDeviceToken(token: string, id: string): Promise<VilloDeviceTokenIssued> {
+    return (
+      await request<VilloDeviceTokenIssued>(
+        `/villo/dispositivos/${encodeURIComponent(id)}/token`,
+        { method: 'POST', token, cache: 'no-store' },
+      )
+    ).data;
+  },
+
+  async revokeVilloDevice(token: string, id: string, motivo?: string): Promise<VilloDevice> {
+    return (
+      await request<VilloDevice>(`/villo/dispositivos/${encodeURIComponent(id)}/revocar`, {
+        method: 'POST',
+        token,
+        body: motivo ? { motivo } : {},
+      })
+    ).data;
+  },
+
+  async listVilloDeviceAlerts(token: string, id: string): Promise<VilloDeviceAlert[]> {
+    return (
+      await request<VilloDeviceAlert[]>(`/villo/dispositivos/${encodeURIComponent(id)}/alertas`, {
+        token,
+      })
+    ).data;
+  },
+
+  /** Ajustes del hotel (cualquier rol). `activo: false` si el negocio no es hotel. */
+  async hotelSettings(token: string): Promise<HotelSettings> {
+    return (await request<HotelSettings>('/hotel/configuracion', { token })).data;
+  },
+
+  /** Admin, solo en un hotel. Se mezcla con lo guardado; esta ruta no pide Idempotency-Key. */
+  async saveHotelSettings(token: string, input: HotelSettingsInput): Promise<HotelSettings> {
+    return (await request<HotelSettings>('/hotel/configuracion', { method: 'PUT', token, body: input })).data;
+  },
+
+  /** Resumen del día del hotel (admin). */
+  async hotelSummary(token: string): Promise<HotelSummary> {
+    return (await request<HotelSummary>('/hotel/resumen', { token })).data;
+  },
+
+  /** Habitaciones del hotel; con rol admin trae `qr_url`. */
+  async hotelRooms(token: string): Promise<HotelRoom[]> {
+    return (await request<HotelRoom[]>('/habitaciones', { token })).data;
+  },
+
+  /** Alta en lote (admin, solo hotel). La llave la pone quien llama para reintentar el mismo lote. */
+  async createHotelRooms(
+    token: string,
+    input: HotelRoomBatchInput,
+    idempotencyKey: string,
+  ): Promise<HotelRoomBatchResult> {
+    return (
+      await request<HotelRoomBatchResult>('/habitaciones/lote', {
+        method: 'POST',
+        token,
+        body: input,
+        idempotencyKey,
+      })
+    ).data;
+  },
+
+  /** Busca clientes del negocio por nombre o identificador (cajero o admin). `q` de 2 a 80 letras. */
+  async searchWalletClients(token: string, query: string, signal?: AbortSignal): Promise<WalletClient[]> {
+    return (await request<WalletClient[]>(`/wallets/clientes${params({ q: query.trim() })}`, { token, signal })).data;
+  },
+
+  /** Saldo y movimientos de un cliente (cajero o admin). `cursor` sale de `meta.cursor` de la página anterior. */
+  async walletClientDetail(
+    token: string,
+    userId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ): Promise<{ data: WalletClientDetail; cursor: string | null }> {
+    const response = await request<WalletClientDetail>(
+      `/wallets/${encodeURIComponent(userId)}${params({ limit: options.limit, cursor: options.cursor })}`,
+      { token },
+    );
+    return { data: response.data, cursor: response.meta?.cursor || null };
+  },
+
+  /**
+   * Recarga en efectivo (solo cajero, con Caja abierta). La llave la pone quien llama y la guarda
+   * antes de mandar: si se pierde la respuesta, reintentar con la misma no abona dos veces.
+   */
+  async rechargeWalletCash(token: string, userId: string, amount: string, idempotencyKey: string): Promise<WalletCashRecharge> {
+    return (
+      await request<WalletCashRecharge>(`/wallets/${encodeURIComponent(userId)}/recargas-efectivo`, {
+        method: 'POST',
+        token,
+        body: { monto: amount },
+        idempotencyKey,
+      })
+    ).data;
+  },
+
+  // region Reparto y encargos (admin y cajero, docs/reposteria-domicilio.md del back).
+
+  /** Pedidos a domicilio y encargos por día de entrega. Rango de 0 a 60 días. */
+  async homeAgenda(token: string, from: string, to: string, signal?: AbortSignal): Promise<HomeAgendaDay[]> {
+    return (await request<HomeAgendaDay[]>(`/establecimiento/agenda${params({ desde: from, hasta: to })}`, { token, signal })).data;
+  },
+
+  /**
+   * Aceptar, rechazar, mandar, entregar o cobrar en la puerta. Responde el pedido como quedó. La
+   * llave la pone quien llama: reintentar con la misma tras perder la respuesta no lo repite.
+   */
+  async homeOrderAction(
+    token: string,
+    orderId: string,
+    path: 'aceptar' | 'rechazar' | 'en-camino' | 'entregar-domicilio' | 'cobrar-entrega',
+    body: Record<string, unknown>,
+    idempotencyKey: string,
+  ): Promise<HomeOrder> {
+    return (
+      await request<HomeOrder>(`/pedidos/${encodeURIComponent(orderId)}/${path}`, { method: 'POST', token, body, idempotencyKey })
+    ).data;
+  },
+
+  /** El negocio cancela un pedido aceptado que aún no se entrega; lo pagado se devuelve. */
+  async cancelHomeOrder(token: string, orderId: string, body: Record<string, unknown>, idempotencyKey: string): Promise<void> {
+    await request(`/pedidos/${encodeURIComponent(orderId)}/cancelaciones`, { method: 'POST', token, body, idempotencyKey });
+  },
+
+  // endregion
+
+  // region Escuela (admin). Cada cambio lleva la llave que pone quien llama, para reintentar sin duplicar.
+
+  /** Código para unirse y reglas de la escuela; devuelve la configuración completa del negocio. */
+  async saveSchoolSettings(token: string, input: SchoolSettingsInput, idempotencyKey: string): Promise<BusinessSettings> {
+    return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input, idempotencyKey })).data;
+  },
+
+  /** Sin rango, de hoy al último día que se aparta; siempre trae el "hoy" de la escuela. */
+  async schoolMenuDays(token: string, range?: { desde: string; hasta: string }): Promise<SchoolMenuDays> {
+    return (await request<SchoolMenuDays>(`/menu-dias${range ? params(range) : ''}`, { token })).data;
+  },
+
+  /** Lista vacía: ese día se vende todo el menú. */
+  async saveSchoolMenuDay(token: string, fecha: string, productIds: number[], idempotencyKey: string): Promise<void> {
+    await request(`/menu-dias/${fecha}`, { method: 'PUT', token, body: { producto_ids: productIds }, idempotencyKey });
+  },
+
+  /** Cancela lo apartado de ese día y regresa el saldo. */
+  async closeSchoolDay(token: string, fecha: string, motivo: string, idempotencyKey: string): Promise<SchoolDayClosure> {
+    return (await request<SchoolDayClosure>(`/menu-dias/${fecha}/sin-servicio`, { method: 'PUT', token, body: { motivo }, idempotencyKey })).data;
+  },
+
+  async reopenSchoolDay(token: string, fecha: string, idempotencyKey: string): Promise<void> {
+    await request(`/menu-dias/${fecha}/sin-servicio`, { method: 'DELETE', token, idempotencyKey });
+  },
+
+  async schoolReservedDay(token: string, fecha: string): Promise<SchoolReservedDay> {
+    return (await request<SchoolReservedDay>(`/menu-dias/${fecha}/apartados`, { token })).data;
+  },
+
+  async schoolRoster(token: string): Promise<SchoolRoster> {
+    return (await request<SchoolRoster>('/padron', { token })).data;
+  },
+
+  /** Reemplaza el padrón completo; vacío lo quita. */
+  async saveSchoolRoster(token: string, alumnos: SchoolRosterStudent[], idempotencyKey: string): Promise<{ total: number }> {
+    return (await request<{ total: number }>('/padron', { method: 'PUT', token, body: { alumnos }, idempotencyKey })).data;
+  },
+
+  /** Tutores que esperan a la escuela, del más viejo al más nuevo. */
+  async schoolGuardianRequests(token: string): Promise<SchoolGuardianRequest[]> {
+    return (await request<SchoolGuardianRequest[]>('/solicitudes-tutela', { token })).data;
+  },
+
+  async reviewSchoolGuardianRequest(token: string, tutelaId: string, approve: boolean, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-tutela/${tutelaId}/${approve ? 'aprobar' : 'rechazar'}`, { method: 'POST', token, body: {}, idempotencyKey });
+  },
+
+  /** Quién cuida a los alumnos cuyo nombre o matrícula coincide. */
+  async searchSchoolGuardianships(token: string, query: string, signal?: AbortSignal): Promise<SchoolGuardianship[]> {
+    return (await request<SchoolGuardianship[]>(`/solicitudes-tutela/tutores${params({ q: query })}`, { token, signal })).data;
+  },
+
+  async removeSchoolGuardianship(token: string, tutelaId: string, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-tutela/${tutelaId}/quitar`, { method: 'POST', token, body: {}, idempotencyKey });
+  },
+
+  async makeSchoolGuardianPrincipal(token: string, tutelaId: string, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-tutela/${tutelaId}/principal`, { method: 'POST', token, body: {}, idempotencyKey });
+  },
+
+  /** Devoluciones de saldo y bajas que esperan a la escuela. */
+  async schoolStudentRequests(token: string): Promise<SchoolStudentRequest[]> {
+    return (await request<SchoolStudentRequest[]>('/solicitudes-alumno', { token })).data;
+  },
+
+  async resolveSchoolStudentRequest(token: string, id: string, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-alumno/${id}/resolver`, { method: 'POST', token, body: {}, idempotencyKey });
+  },
+
+  async rejectSchoolStudentRequest(token: string, id: string, motivo: string, idempotencyKey: string): Promise<void> {
+    await request(`/solicitudes-alumno/${id}/rechazar`, { method: 'POST', token, body: { motivo }, idempotencyKey });
+  },
+
+  // endregion
 };

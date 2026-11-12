@@ -809,4 +809,86 @@ describe('Vaiinilla API client', () => {
       folio: 42,
     });
   });
+
+  it('consulta cortes del día y reporte contable con parámetros', async () => {
+    server.use(
+      http.get(`${baseUrl}/sesiones-caja/cortes`, ({ request }) => {
+        expect(new URL(request.url).searchParams.get('fecha')).toBe('2026-11-04');
+        return HttpResponse.json({ data: { resumen: { ventas: 100 } }, meta: {}, error: null });
+      }),
+      http.get(`${baseUrl}/reportes/contable`, ({ request }) => {
+        const url = new URL(request.url);
+        expect(url.searchParams.get('desde')).toBe('2026-11-01');
+        expect(url.searchParams.get('hasta')).toBe('2026-11-04');
+        return HttpResponse.json({ data: { resumen: { ventas: 100 } }, meta: {}, error: null });
+      }),
+      http.get(`${baseUrl}/sesiones-caja/session-id/corte`, () => HttpResponse.json({ data: { resumen: { ventas: 75 } }, meta: {}, error: null })),
+    );
+    await expect(api.cashDayCut('tenant-token', '2026-11-04')).resolves.toMatchObject({ resumen: { ventas: 100 } });
+    await expect(api.cashSessionCut('tenant-token', 'session-id')).resolves.toMatchObject({ resumen: { ventas: 75 } });
+    await expect(api.accountingReport('tenant-token', '2026-11-01', '2026-11-04')).resolves.toMatchObject({ resumen: { ventas: 100 } });
+  });
+
+  it('envía la conversación al asistente de configuración', async () => {
+    const messages = [{ rol: 'dueno' as const, texto: 'Tengo una cafetería' }];
+    server.use(http.post(`${baseUrl}/establecimiento/asistente`, async ({ request }) => {
+      await expect(request.json()).resolves.toEqual({ mensajes: messages });
+      return HttpResponse.json({ data: { mensaje: '¿Qué horario manejas?', opciones: ['Mañana', 'Tarde'] }, meta: {}, error: null });
+    }));
+    await expect(api.askStoreAssistant('tenant-token', messages)).resolves.toMatchObject({ mensaje: '¿Qué horario manejas?' });
+  });
+
+  it('manda los Excel del asistente en archivos', async () => {
+    const messages = [{ rol: 'dueno' as const, texto: 'Mi inventario [excel1]' }];
+    const files = [{ id: 'excel1', nombre: 'Inventario.xlsx', contenido: 'UEsDBA==' }];
+    server.use(http.post(`${baseUrl}/establecimiento/asistente`, async ({ request }) => {
+      await expect(request.json()).resolves.toEqual({ mensajes: messages, archivos: files });
+      return HttpResponse.json({ data: { mensaje: 'Leí tu Excel', opciones: [], propuesta: null, sigue: false, quedan_mensajes: 58 }, meta: {}, error: null });
+    }));
+    await expect(api.askStoreAssistant('tenant-token', messages, files)).resolves.toMatchObject({ quedan_mensajes: 58 });
+  });
+
+  it('registra el movimiento del asistente con su id como Idempotency-Key', async () => {
+    const id = '7d9f3c1a-0b2e-4c5d-8e6f-1a2b3c4d5e6f';
+    server.use(http.post(`${baseUrl}/inventario/movimientos`, async ({ request }) => {
+      expect(request.headers.get('Idempotency-Key')).toBe(id);
+      await expect(request.json()).resolves.toEqual({ id, insumo_id: 7, tipo: 'entrada', cantidad: 5 });
+      return HttpResponse.json({ data: { id }, meta: {}, error: null }, { status: 201 });
+    }));
+    await expect(api.registerInventoryMovement('tenant-token', { id, insumo_id: 7, tipo: 'entrada', cantidad: 5 })).resolves.toBeUndefined();
+  });
+
+  it('deja una reserva del asistente por cobrar en Caja con llaves estables', async () => {
+    server.use(
+      http.post(`${baseUrl}/reservas`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBe('llave-reserva');
+        await expect(request.json()).resolves.toEqual({ espacio_id: 3, inicio: '2026-11-10T00:00:00.000Z', duracion_min: 60 });
+        return HttpResponse.json({ data: { id: 'r1' }, meta: {}, error: null }, { status: 201 });
+      }),
+      http.post(`${baseUrl}/reservas/r1/pago`, async ({ request }) => {
+        expect(request.headers.get('Idempotency-Key')).toBe('llave-pago');
+        await expect(request.json()).resolves.toEqual({ metodo_pago: 'efectivo' });
+        return HttpResponse.json({ data: {}, meta: {}, error: null });
+      }),
+    );
+    const booking = await api.createStaffBooking('tenant-token', { espacio_id: 3, inicio: '2026-11-10T00:00:00.000Z', duracion_min: 60 }, 'llave-reserva');
+    await api.markBookingCashLater('tenant-token', booking.id, 'llave-pago');
+  });
+
+  it('trae los insumos con los permisos de la migración 205 desde GET /inventario/insumos', async () => {
+    server.use(
+      http.get(`${baseUrl}/inventario/insumos`, () => HttpResponse.json({ data: { insumos: [{ id: 7, nombre: 'Harina', unidad: 'kg', existencia: 3 }], permisos: { puede_editar: false, cocina_edita: false } }, meta: {}, error: null })),
+    );
+    await expect(api.inventoryOverview('tenant-token')).resolves.toEqual({ insumos: [{ id: 7, nombre: 'Harina', unidad: 'kg', existencia: 3 }], permisos: { puede_editar: false, cocina_edita: false } });
+  });
+
+  it('cambia el permiso de Cocina sobre el inventario con PATCH /inventario/permisos', async () => {
+    server.use(
+      http.patch(`${baseUrl}/inventario/permisos`, async ({ request }) => {
+        await expect(request.json()).resolves.toEqual({ cocina_edita: true });
+        return HttpResponse.json({ data: { cocina_edita: true }, meta: {}, error: null });
+      }),
+    );
+    await expect(api.setInventoryKitchenPermission('tenant-token', true)).resolves.toEqual({ cocina_edita: true });
+  });
 });

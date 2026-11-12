@@ -137,6 +137,7 @@ export interface CashSession {
 
 export interface OperationalStatus {
   recibiendo_pedidos: boolean;
+  local_sin_conexion?: boolean;
   sesion_caja_abierta: boolean;
   caja_en_linea: boolean;
   cocina_en_linea: boolean;
@@ -221,6 +222,53 @@ export interface CashPaymentResult {
   cambio: string;
 }
 
+/**
+ * Pedido a domicilio o encargo (vaiinilla_back docs/reposteria-domicilio.md). Suma dos estados
+ * que el resto de la web no conoce (`por_aceptar` y `en_camino`); por eso no se agregan a
+ * OrderStatus, que tiene mapas exhaustivos en otras pantallas.
+ */
+export type HomeOrderStatus = OrderStatus | 'por_aceptar' | 'en_camino';
+
+export interface HomeOrderDelivery {
+  direccion: string;
+  referencia: string | null;
+  telefono: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+export interface HomeOrder extends Omit<OrderDetail, 'estado' | 'destino'> {
+  estado: HomeOrderStatus;
+  destino: OrderDestination | 'a_domicilio';
+  fecha_entrega?: string | null;
+  franja_entrega?: string | null;
+  /** Solo a domicilio y nunca para Cocina. */
+  entrega?: HomeOrderDelivery | null;
+  costo_envio?: string;
+  anticipo?: string | null;
+  /** Lo que falta cobrar en la puerta; "0.00" si nada. */
+  por_cobrar_al_entregar?: string;
+  cobrado_al_entregar?: { metodo: 'efectivo' | 'transferencia'; en: string } | null;
+  aceptar_antes_de?: string | null;
+  pagar_antes_de?: string | null;
+  repartidor_nombre?: string | null;
+  en_camino_en?: string | null;
+}
+
+/** GET /establecimiento/agenda: los pedidos de cada día de entrega. */
+export interface HomeAgendaDay {
+  fecha: string;
+  pedidos: HomeOrder[];
+}
+
+/** POST /pedidos/:id/pagos-mixtos (vaiinilla_back#211). */
+export interface MixedPaymentResult {
+  pago: { metodo_pago: 'efectivo' | 'terminal'; monto: string };
+  restante: string;
+  liquidada: boolean;
+  pedido: OrderDetail;
+}
+
 /** Pedido que registra el staff (POST /pedidos con rol mesero, cajero o admin). Solo efectivo. */
 export interface StaffOrderInput {
   metodo_pago: 'efectivo';
@@ -231,6 +279,8 @@ export interface StaffOrderInput {
   pago_diferido?: boolean;
   cobrar_ahora?: true;
   monto_recibido?: string;
+  /** Pedido tomado sin internet (migración 161). `sesion_caja_id` solo cuando Caja ya cobró. */
+  sin_conexion?: { id: string; sesion_caja_id?: string; capturado_en: string; folio_local: string };
 }
 
 export interface OperationalSettings {
@@ -457,10 +507,15 @@ export interface StoreVideo {
 }
 
 /** Cómo funciona el negocio (guía "Flujo de mi tienda"). Solo la administración. */
+export type AssistantMode = 'ambos' | 'personal' | 'ninguno';
+
 export interface BusinessSettings {
   tipo: string;
+  pausa_sin_conexion?: boolean;
   entrega_requiere_qr: boolean;
   permite_pago_al_final: boolean;
+  /** Disponibilidad del asistente; null cuando la migración de IA aún no está instalada. */
+  asistente_modo: AssistantMode | null;
   /** Si el negocio permite recargas y compras con saldo / wallet. */
   permite_saldo?: boolean;
   gracia_liberacion_min: number;
@@ -477,14 +532,137 @@ export interface BusinessSettings {
   /** Logo del negocio (carrito y seguimiento en la app). Se cambia con su propia ruta. */
   logo_url?: string | null;
   tipos_disponibles: string[];
+  /** Padres e hijos: solo con true se muestra el admin de Escuela. Un backend anterior no lo manda. */
+  modo_escuela?: boolean;
+  /** Código de 6 caracteres para unirse a la escuela; null sin código. */
+  codigo_union?: string | null;
+  union_requiere_codigo?: boolean;
+  tutores_requieren_aprobacion?: boolean;
+  /** Montos como "50.00". */
+  recarga_minima?: string | null;
+  recarga_maxima?: string | null;
+  dias_adelanto_pedido?: number;
+  /** "HH:MM" o null (sin hora). */
+  hora_corte_pedido?: string | null;
+  hora_corte_cancelacion?: string | null;
 }
 
 /** Las dos imágenes del negocio que sube su administración. */
 export type StoreImageKind = 'logo' | 'foto';
 
 export type BusinessSettingsInput = Partial<
-  Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url' | 'imagen_url' | 'logo_url'>
->;
+  Omit<BusinessSettings, 'tipos_disponibles' | 'tienda_url' | 'imagen_url' | 'logo_url' | 'asistente_modo'>
+> & { asistente_modo?: AssistantMode };
+
+/** Un mensaje de la plática con el asistente de la tienda (POST /establecimiento/asistente). */
+export interface StoreAssistantMessage {
+  rol: 'dueno' | 'asistente';
+  texto: string;
+}
+
+/** Un Excel (.xlsx) que el dueño mandó en la plática; viaja completo en cada mensaje. */
+export interface StoreAssistantFile {
+  /** excel1, excel2 o excel3: es el token que va en el texto como [excel1]. */
+  id: string;
+  nombre: string;
+  /** El .xlsx en base64. */
+  contenido: string;
+}
+
+/**
+ * Lo que propone el asistente. `cambios` va con PATCH /establecimiento/configuracion; las demás
+ * secciones (mesas, menú, personal, inventario, reservas…) tienen cada una su ruta y hoy las
+ * aplican las apps de Android e iOS.
+ */
+export interface StoreAssistantProposal {
+  cambios?: BusinessSettingsInput;
+  motivos?: Record<string, string>;
+  [seccion: string]: unknown;
+}
+
+export interface StoreAssistantReply {
+  mensaje: string;
+  opciones?: string[];
+  propuesta?: StoreAssistantProposal | null;
+  /** La propuesta va por partes: al aceptarla, «Sigue con lo demás» trae el resto. */
+  sigue?: boolean;
+  /** Mensajes que caben todavía en la plática (el tope es 60). */
+  quedan_mensajes?: number;
+}
+
+export type InventoryUnit = 'pieza' | 'ml' | 'l' | 'g' | 'kg' | 'oz' | 'botella' | 'porcion';
+
+/** Un insumo del inventario (GET /inventario/insumos); solo lo que usa la web. */
+export interface InventorySupply {
+  id: number;
+  nombre: string;
+  unidad: InventoryUnit;
+  activo?: boolean;
+}
+
+/** Permisos de inventario de la sesión (migración 205). */
+export interface InventoryPermissions {
+  puede_editar: boolean;
+  cocina_edita: boolean;
+}
+
+/** Insumo con existencia, como lo lista GET /inventario/insumos. */
+export interface InventoryStock extends InventorySupply {
+  existencia?: number | null;
+  minimo?: number | null;
+  bajo_minimo?: boolean;
+}
+
+/** GET /inventario/insumos completo; `permisos` falta si el backend no tiene la 205. */
+export interface InventoryOverview {
+  insumos: InventoryStock[];
+  permisos?: InventoryPermissions;
+}
+
+export interface InventorySupplyInput {
+  nombre: string;
+  unidad: InventoryUnit;
+  minimo: number;
+  costo_unitario?: number;
+  existencia_inicial?: number;
+}
+
+export interface InventoryMovementInput {
+  /** UUID; el mismo en un reintento para que el servidor no lo registre dos veces. */
+  id: string;
+  insumo_id: number;
+  tipo: 'entrada' | 'merma' | 'conteo';
+  cantidad: number;
+  costo_unitario?: number;
+  nota?: string;
+}
+
+export interface InventoryProduct {
+  id: number;
+  nombre: string;
+}
+
+/** Una línea de la receta de un producto (GET /inventario/productos/{id}/receta). */
+export interface RecipeLine {
+  insumo_id: number;
+  cantidad: number;
+  opcion_id: number | null;
+}
+
+export interface RecipeLineInput {
+  insumo_id: number;
+  cantidad: number;
+  opcion_id: number | null;
+}
+
+/** POST /reservas desde administración: una renta apartada a nombre de alguien. */
+export interface StaffBookingInput {
+  espacio_id: number;
+  inicio: string;
+  duracion_min: number;
+  nombre_cliente?: string;
+  jugadores?: number;
+}
 
 /** Una cuenta abierta (pagar al final) que nadie ha cobrado. */
 export interface UnpaidAccount {
@@ -631,12 +809,55 @@ export interface StaffBooking {
   inicio: string;
   fin: string;
   monto?: string | null;
-  estado: 'pendiente_pago' | 'confirmada' | 'en_curso' | 'terminada' | 'cancelada' | 'expirada' | 'conflicto' | string;
+  estado: string;
   /** Hora en que vence el apartado en efectivo; null si ya no aplica. */
   expira_en?: string | null;
   version?: number;
   /** Cómo pagó el cliente, si el backend lo manda. */
   metodo_pago?: string | null;
+  /** Nombre que puso el personal o el cliente al apartar (lo manda el back en develop). */
+  nombre_cliente?: string | null;
+  duracion_min?: number;
+  /** Pedido de renta; en una pendiente significa que quedó por cobrar (efectivo) o con pago en curso. */
+  pedido_id?: string | null;
+  /** `cliente` o `mostrador`. */
+  canal?: string | null;
+  jugadores?: number | null;
+}
+
+/** Un intervalo tomado de una cancha en GET /reservas/disponibilidad. */
+export interface CourtBusyInterval {
+  inicio: string;
+  fin: string;
+  /** `reserva`, `turno` o `cerrado`. */
+  motivo: string;
+}
+
+export interface CourtAvailabilityCourt {
+  espacio: { id: number; nombre: string; tipo?: string | null };
+  precio_hora: string | null;
+  rentable: boolean;
+  /** Duraciones que respeta el mínimo de la cancha; vacía o ausente con un back anterior. */
+  duraciones_min?: number[];
+  ocupado: CourtBusyInterval[];
+}
+
+/** Horario reservable de un día y lo ocupado de cada cancha (GET /reservas/disponibilidad). */
+export interface CourtAvailabilityDay {
+  fecha: string;
+  hoy: string;
+  zona_horaria: string;
+  apertura: string;
+  cierre: string;
+  abre: string;
+  cierra: string;
+  bloque_min: number;
+  duraciones_min: number[];
+  dias_adelanto: number;
+  cerrado?: boolean;
+  apartado_min?: number;
+  ahora: string;
+  canchas: CourtAvailabilityCourt[];
 }
 
 export interface BookingRefundInput {
@@ -882,4 +1103,257 @@ export interface ItemRejectionResult {
   };
   /** Solo con metodo_reembolso = manual: la devolución que Caja debe entregar y confirmar. */
   devolucion?: PendingRefund | null;
+}
+
+/** VILLO (#237): dispositivo de voz en una mesa. El token nunca viene aquí, solo su estado. */
+export interface VilloDevice {
+  id: string;
+  nombre: string;
+  estado: 'activo' | 'revocado';
+  espacio: { id: number; nombre: string | null } | null;
+  token: {
+    emitido: boolean;
+    vigente: boolean;
+    emitido_en: string | null;
+    expira_en: string | null;
+  };
+  ultimo_uso_en: string | null;
+  ultima_alerta_en: string | null;
+  revocado_en: string | null;
+  motivo_revocacion: string | null;
+  creado_en: string;
+  version: number;
+}
+
+/** Respuesta de POST /villo/dispositivos/:id/token. El token se muestra una sola vez. */
+export interface VilloDeviceTokenIssued {
+  token: string;
+  expira_en: string;
+  dispositivo: VilloDevice;
+}
+
+export interface VilloDeviceAlert {
+  id: string;
+  /** ip_nueva o fuera_de_horario (el backend puede agregar más). */
+  tipo: string;
+  creado_en: string;
+}
+
+export interface VilloDeviceUpdateInput {
+  nombre?: string;
+  espacio_id?: number | null;
+  version_esperada?: number;
+}
+
+/** GET/PUT /hotel/configuracion (vaiinilla_back docs/hotel.md). `activo` es false si el negocio no es hotel. */
+export interface HotelSettings {
+  activo: boolean;
+  cargo_habitacion_activo: boolean;
+  tarjeta_al_pedir: boolean;
+  codigo_entrega_activo: boolean;
+  cocina_desde: string | null;
+  cocina_hasta: string | null;
+  solicitudes_activas: boolean;
+  no_molestar_activo: boolean;
+  hora_checkout: string | null;
+  salida_tardia_hora: string | null;
+  salida_tardia_precio: string | null;
+}
+
+/** Lo que acepta PUT /hotel/configuracion: todo menos `activo`; `hora_checkout` no admite null. */
+export type HotelSettingsInput = Partial<Omit<HotelSettings, 'activo' | 'hora_checkout'>> & {
+  hora_checkout?: string;
+};
+
+/** GET /hotel/resumen (admin). */
+export interface HotelSummary {
+  habitaciones: { total: number; ocupadas: number; por_limpiar: number; sin_molestar: number };
+  room_service: { pedidos_hoy: number; ventas_hoy: string | null; pedidos_a_cuartos: number; en_cocina_ahora: number };
+  solicitudes: { abiertas: number; mas_vieja_desde: string | null };
+  lo_mas_pedido: { producto: string; cantidad: number }[];
+  llegadas_hoy: number;
+  salidas_hoy: {
+    estancia_id: string;
+    huesped_nombre: string | null;
+    habitacion: { id: number; nombre: string } | null;
+    salida_prevista: string | null;
+  }[];
+  consultado_en: string | null;
+}
+
+/** Una fila de GET /habitaciones; `qr_*` solo llegan a admin. */
+export interface HotelRoom {
+  id: number;
+  nombre: string;
+  piso: number | null;
+  categoria: string | null;
+  limpieza: 'lista' | 'por_limpiar';
+  ocupada: boolean;
+  no_molestar: boolean;
+  estancia: { id: string; huesped_nombre: string | null; salida_prevista: string | null } | null;
+  solicitudes_abiertas: number;
+  pedidos_en_curso: number;
+  qr_token?: string | null;
+  qr_url?: string | null;
+}
+
+/** POST /habitaciones/lote. */
+export interface HotelRoomBatchInput {
+  prefijo: string;
+  desde: number;
+  hasta: number;
+  piso?: number | null;
+  categoria?: string | null;
+}
+
+export interface HotelRoomBatchResult {
+  solicitadas: number;
+  creadas: number;
+  convertidas: number;
+  omitidas: string[];
+}
+
+/** Cliente que devuelve GET /wallets/clientes (búsqueda de Caja; cajero o admin). */
+export interface WalletClient {
+  usuario_id: string;
+  nombre: string;
+  identificador_cliente: string | null;
+  correo_enmascarado: string | null;
+  ultimo_pedido_en: string | null;
+  /** Saldo antes de recargar; "0.00" si no tiene cartera en este negocio. */
+  saldo: string;
+}
+
+/** Un movimiento de la cartera de un cliente (GET /wallets/:usuarioId). `monto` lleva signo. */
+export interface WalletClientMovement {
+  id: string;
+  tipo: string;
+  descripcion: string;
+  monto: string;
+  saldo_posterior: string;
+  pedido_id: string | null;
+  pedido_folio: number | null;
+  lugar: string | null;
+  resumen_productos: string | null;
+  creado_en: string;
+}
+
+export interface WalletClientDetail {
+  cliente: { usuario_id: string; nombre: string; identificador_cliente: string | null };
+  wallet: {
+    id: string | null;
+    usuario_id: string;
+    establecimiento_id: string;
+    saldo: string;
+    actualizado_en: string | null;
+    /** Con «Pagar con saldo» apagado: el saldo se conserva, pero no se gasta ni se recarga. */
+    saldo_congelado: boolean;
+  };
+  movimientos: WalletClientMovement[];
+}
+
+/** Respuesta 201 de POST /wallets/:usuarioId/recargas-efectivo. */
+export interface WalletCashRecharge {
+  usuario_id: string;
+  saldo_anterior: string;
+  recarga: string;
+  saldo_nuevo: string;
+  movimiento_id: string;
+  sesion_caja_id: string;
+}
+
+/**
+ * Lo que el admin de Escuela manda a PATCH /establecimiento/configuracion (vaiinilla_back
+ * docs/padres-hijos.md). `codigo_union`: 'generar' crea uno nuevo, null lo quita, ausente no lo toca.
+ */
+export interface SchoolSettingsInput {
+  codigo_union?: 'generar' | null;
+  union_requiere_codigo?: boolean;
+  tutores_requieren_aprobacion?: boolean;
+  recarga_minima?: string;
+  recarga_maxima?: string;
+  dias_adelanto_pedido?: number;
+  hora_corte_pedido?: string | null;
+  hora_corte_cancelacion?: string | null;
+}
+
+/** GET /menu-dias: el "hoy" de la escuela, el menú de cada fecha y los días sin servicio. */
+export interface SchoolMenuDays {
+  programacion: { hoy: string; dias_adelanto_pedido?: number };
+  dias: { fecha: string; producto_ids: number[] }[];
+  sin_servicio: { fecha: string; motivo: string }[];
+}
+
+/** PUT /menu-dias/:fecha/sin-servicio. */
+export interface SchoolDayClosure {
+  fecha: string;
+  motivo: string;
+  cancelados: number;
+  devuelto: string;
+  sin_cancelar: { pedido_id: string; code?: string }[];
+}
+
+/** GET /menu-dias/:fecha/apartados (solo lo que usa el admin). */
+export interface SchoolReservedDay {
+  fecha: string;
+  pedidos: number;
+  sin_servicio: string | null;
+  productos: { producto_id: number; nombre: string; cantidad: number; pedidos: number }[];
+}
+
+/** Un alumno del padrón. */
+export interface SchoolRosterStudent {
+  matricula: string;
+  nombre: string | null;
+  grupo: string | null;
+}
+
+/** GET /padron. */
+export interface SchoolRoster {
+  total: number;
+  alumnos: SchoolRosterStudent[];
+}
+
+export interface SchoolPerson {
+  nombre: string | null;
+  email: string | null;
+}
+
+export interface SchoolStudentRef {
+  usuario_id?: string | null;
+  nombre: string | null;
+  matricula: string | null;
+  grupo: string | null;
+  tiene_cuenta?: boolean;
+}
+
+/** GET /solicitudes-tutela: un tutor que espera a la escuela. */
+export interface SchoolGuardianRequest {
+  tutela_id: string;
+  tutor: SchoolPerson;
+  alumno: SchoolStudentRef;
+  en_padron: boolean;
+  otros_tutores: number;
+}
+
+/** GET /solicitudes-tutela/tutores: una tutela aprobada. */
+export interface SchoolGuardianship {
+  tutela_id: string;
+  principal: boolean;
+  tutor: SchoolPerson;
+  alumno: SchoolStudentRef;
+}
+
+/** GET /solicitudes-alumno: una devolución de saldo o una baja que espera a la escuela. */
+export interface SchoolStudentRequest {
+  id: string;
+  /** 'devolucion' o 'baja_datos'; un tipo nuevo del servidor se omite en pantalla. */
+  tipo: string;
+  /** 'efectivo' o 'transferencia'. */
+  como_devolver: string | null;
+  nota: string | null;
+  saldo_al_pedir: string | null;
+  saldo_actual: string | null;
+  tutor: SchoolPerson;
+  alumno: SchoolStudentRef;
 }

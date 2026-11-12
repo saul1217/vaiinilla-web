@@ -1,10 +1,13 @@
 import {
   ArrowLeftRight,
+  CalendarDays,
   BadgePercent,
   Building2,
   ChefHat,
+  PackageCheck,
   ClipboardList,
   ConciergeBell,
+  HandCoins,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -14,7 +17,9 @@ import {
   Store,
   Sun,
   Moon,
+  MoonStar,
   Table2,
+  Truck,
   Workflow,
   UserPlus,
   WalletCards,
@@ -23,8 +28,13 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { NavLink, useHistory, useLocation } from 'react-router-dom';
-import { useAdminTheme } from '../lib/admin-theme';
+import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
+import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
+import { AGENDA_ENABLED } from '../lib/agenda-feature';
+import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
+import { REPARTO_ENABLED } from '../lib/reparto-feature';
+import { clearAllPendingRecharges } from '../lib/wallet-caja';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
 import { Logo } from './brand-mark';
@@ -38,6 +48,9 @@ interface NavItem {
   end?: boolean;
 }
 
+// Agenda de reservas: Administración, Caja y Mesero (los roles que el back deja crear y cancelar).
+const agendaNavigation: NavItem[] = AGENDA_ENABLED ? [{ to: '/app/agenda', label: 'Agenda de reservas', icon: CalendarDays }] : [];
+
 const adminNavigation: NavItem[] = [
   { to: '/app', label: 'Inicio', icon: LayoutDashboard, end: true },
   { to: '/app/menu', label: 'Menú', icon: NotebookTabs },
@@ -48,12 +61,25 @@ const adminNavigation: NavItem[] = [
   { to: '/app/flujo', label: 'Flujo de mi tienda', icon: Workflow },
   { to: '/app/espacios', label: 'Mesas y espacios', icon: Table2 },
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
+  // Admin solo consulta el saldo; recargar es de Caja (lo resuelve la página).
+  ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo de clientes', icon: HandCoins } satisfies NavItem] : []),
+  ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto y encargos', icon: Truck } satisfies NavItem] : []),
   { to: '/app/pos', label: 'Pedir', icon: WalletCards },
+  ...agendaNavigation,
 ];
 
-const posNavigation: NavItem[] = [{ to: '/app/pos', label: 'Caja', icon: WalletCards }];
-const kitchenNavigation: NavItem[] = [{ to: '/app/cocina', label: 'Cocina', icon: ChefHat }];
-const waiterNavigation: NavItem[] = [{ to: '/app/pos', label: 'Mesas', icon: ConciergeBell }];
+const posNavigation: NavItem[] = [
+  { to: '/app/pos', label: 'Caja', icon: WalletCards },
+  ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo', icon: HandCoins } satisfies NavItem] : []),
+  ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto', icon: Truck } satisfies NavItem] : []),
+  ...agendaNavigation,
+];
+const kitchenNavigation: NavItem[] = [
+  { to: '/app/cocina', label: 'Cocina', icon: ChefHat },
+  // Cocina ve el inventario; editarlo depende de `cocina_edita_inventario` (lo resuelve la página).
+  ...(INVENTARIO_ENABLED ? [{ to: '/app/inventario', label: 'Inventario', icon: PackageCheck } satisfies NavItem] : []),
+];
+const waiterNavigation: NavItem[] = [{ to: '/app/pos', label: 'Mesas', icon: ConciergeBell }, ...agendaNavigation];
 
 const platformNavigation: NavItem[] = [
   { to: '/plataforma', label: 'Resumen global', icon: ShieldCheck, end: true },
@@ -70,11 +96,14 @@ export function TenantShell({ children }: { children: ReactNode }) {
   const items = navigationForRole(tenant.context.rol);
 
   async function switchContext() {
+    // Las recargas en efectivo sin confirmar no se quedan en el navegador al cambiar de acceso.
+    clearAllPendingRecharges();
     await clearTenant();
     history.replace('/accesos');
   }
 
   async function exit() {
+    clearAllPendingRecharges();
     await clearAll();
     await signOut();
     history.replace('/acceso');
@@ -120,24 +149,21 @@ function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenC
     // Focus main even while a lazy page is loading. Its h1 will be the next reading stop.
     main.current?.focus();
   }, [location.pathname]);
-  const primary = navigation.length > 1
+  // Hasta cuatro destinos caben en la barra; con más (admin) van los cuatro de siempre y el resto a «Más».
+  const primary = navigation.length > 4
     ? ['/app', '/app/menu', '/app/pos', '/app/pedidos'].map((path) => navigation.find((item) => item.to === path)!)
     : navigation;
   const secondary = navigation.filter((item) => !primary.includes(item));
   const accountActions = <>
     <Button variant="ghost" onClick={onSwitchContext}><ArrowLeftRight aria-hidden="true" />Cambiar acceso</Button>
-    <Button variant="ghost" onClick={() => setTheme(theme === 'oscuro' ? 'claro' : 'oscuro')}
-      aria-label={theme === 'oscuro' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}>
-      {theme === 'oscuro' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-      {theme === 'oscuro' ? 'Tema claro' : 'Tema oscuro'}
-    </Button>
+    <ThemeCycleButton theme={theme} onChange={setTheme} />
     <Button variant="ghost" onClick={() => void onExit()}><LogOut aria-hidden="true" />Cerrar sesión</Button>
   </>;
   return <div className="app-frame app-frame--tenant tenant-app">
     <a href="#contenido" className="skip-link">Saltar al contenido</a>
-    <AppIdentityHeader title={title} subtitle={subtitle} dark={theme === 'oscuro'} opener={accountButton}
+    <AppIdentityHeader title={title} subtitle={subtitle} dark={isDarkAdminTheme(theme)} opener={accountButton}
       open={accountOpen} onOpen={() => onAccountOpenChange(true)} />
-    <DesktopAppRail navigation={navigation} title={title} subtitle={subtitle} dark={theme === 'oscuro'}>{accountActions}</DesktopAppRail>
+    <DesktopAppRail navigation={navigation} title={title} subtitle={subtitle} dark={isDarkAdminTheme(theme)}>{accountActions}</DesktopAppRail>
     <main id="contenido" ref={main} className="app-main tenant-app__main" tabIndex={-1}>{children}</main>
     <MobileAppNav navigation={primary} more={secondary.length > 0} moreActive={secondary.some((item) => location.pathname === item.to)}
       moreOpen={moreOpen} opener={moreButton} onMore={() => { moreReturnFocus.current = moreButton.current; setMoreOpen(true); }} />
@@ -153,6 +179,20 @@ function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenC
       {accountActions}
     </AccountMenuSheet>
   </div>;
+}
+
+/** Como `VaiinillaThemeMode.next()` en Android: claro, oscuro, AMOLED y de vuelta a claro. */
+const NEXT_THEME: Record<AdminTheme, { next: AdminTheme; label: string; icon: LucideIcon }> = {
+  claro: { next: 'oscuro', label: 'Tema oscuro', icon: Moon },
+  oscuro: { next: 'amoled', label: 'Tema AMOLED', icon: MoonStar },
+  amoled: { next: 'claro', label: 'Tema claro', icon: Sun },
+};
+
+function ThemeCycleButton({ theme, onChange }: { theme: AdminTheme; onChange: (next: AdminTheme) => void }) {
+  const { next, label, icon: Icon } = NEXT_THEME[theme];
+  return <Button variant="ghost" onClick={() => onChange(next)} aria-label={`Cambiar a ${label.toLowerCase().replace('amoled', 'AMOLED')}`}>
+    <Icon aria-hidden="true" />{label}
+  </Button>;
 }
 
 function AppIdentityHeader({ title, subtitle, dark, opener, open, onOpen }: {
