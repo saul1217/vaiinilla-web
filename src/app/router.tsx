@@ -10,6 +10,7 @@ import { HOTEL_ADMIN_ENABLED } from '../lib/hotel-admin-feature';
 import { HOTEL_STAFF_ENABLED } from '../lib/hotel-staff-feature';
 import { HOUSEKEEPING_ROLES, RECEPTION_ROLES } from '../lib/hotel-staff';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
+import { BOWLING_ADMIN_ENABLED } from '../lib/bowling-admin-feature';
 import { REPARTO_ENABLED } from '../lib/reparto-feature';
 import { SCHOOL_ADMIN_ENABLED } from '../lib/school-admin-feature';
 import { AGENDA_ENABLED } from '../lib/agenda-feature';
@@ -27,6 +28,7 @@ const SinInternetPage = lazy(() => import('../pages/sin-internet-page').then((mo
 const AssistantConfigPage = lazy(() => import('../pages/assistant-config-page').then((module) => ({ default: module.AssistantConfigPage })));
 const InventarioPage = lazy(() => import('../pages/inventario-page').then((module) => ({ default: module.InventarioPage })));
 const WalletCajaPage = lazy(() => import('../pages/wallet-caja-page').then((module) => ({ default: module.WalletCajaPage })));
+const BowlingAdminPage = lazy(() => import('../pages/bowling-admin-page').then((module) => ({ default: module.BowlingAdminPage })));
 const RepartoPage = lazy(() => import('../pages/reparto-page').then((module) => ({ default: module.RepartoPage })));
 const HotelAdminPage = lazy(() => import('../pages/hotel-admin-page').then((module) => ({ default: module.HotelAdminPage })));
 const HotelStaffPage = lazy(() => import('../pages/hotel-staff-page').then((module) => ({ default: module.HotelStaffPage })));
@@ -100,6 +102,7 @@ function TenantArea() {
           {HOTEL_ADMIN_ENABLED && <Route exact path="/app/hotel/ajustes"><RoleGuard allowed={['admin']}><HotelAdminPage section="ajustes" /></RoleGuard></Route>}
           {HOTEL_STAFF_ENABLED && <Route exact path="/app/hotel/recepcion"><RoleGuard allowed={RECEPTION_ROLES}><HotelStaffPage section="recepcion" /></RoleGuard></Route>}
           {HOTEL_STAFF_ENABLED && <Route exact path="/app/hotel/ama-de-llaves"><RoleGuard allowed={HOUSEKEEPING_ROLES}><HotelStaffPage section="ama-de-llaves" /></RoleGuard></Route>}
+          {BOWLING_ADMIN_ENABLED && <Route exact path="/app/boliche"><RoleGuard allowed={['admin', 'cajero', 'mesero']}><BowlingAdminPage /></RoleGuard></Route>}
           {WALLET_CAJA_ENABLED && <Route path="/app/saldo"><RoleGuard allowed={['cajero', 'admin']}><WalletCajaPage /></RoleGuard></Route>}
           {REPARTO_ENABLED && <Route path="/app/reparto"><RoleGuard allowed={['admin', 'cajero']}><RepartoPage /></RoleGuard></Route>}
           {SCHOOL_ADMIN_ENABLED && <Route exact path="/app/escuela"><RoleGuard allowed={['admin']}><SchoolAdminPage section="ajustes" /></RoleGuard></Route>}

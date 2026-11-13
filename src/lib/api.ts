@@ -1023,28 +1023,44 @@ export const api = {
     });
   },
 
-  /** Aparta una cancha en mostrador: `inicio` null = ahora; el fin del turno = renovar. */
+  /**
+   * Aparta una cancha en mostrador: `inicio` null = ahora; el fin del turno = renovar.
+   * En un boliche van los `jugadores` (el servidor responde PLAYERS_REQUIRED sin ellos, salvo al renovar).
+   */
   async startCounterRental(
     token: string,
-    input: { espacioId: number; duracionMin: number; inicio: string | null },
+    input: { espacioId: number; duracionMin: number; inicio: string | null; jugadores?: number; nombreCliente?: string },
+    idempotencyKey?: string,
   ): Promise<CounterRental> {
+    const name = input.nombreCliente?.trim();
     return (
       await request<CounterRental>('/reservas', {
         method: 'POST',
         token,
         idempotent: true,
-        body: { espacio_id: input.espacioId, duracion_min: input.duracionMin, ...(input.inicio ? { inicio: input.inicio } : {}) },
+        idempotencyKey,
+        body: {
+          espacio_id: input.espacioId,
+          duracion_min: input.duracionMin,
+          ...(input.inicio ? { inicio: input.inicio } : {}),
+          ...(input.jugadores ? { jugadores: input.jugadores } : {}),
+          ...(name ? { nombre_cliente: name } : {}),
+        },
       })
     ).data;
   },
 
-  /** Cobra en efectivo la renta apartada: con el cobro se ocupa la cancha o se alarga su turno. */
-  async payCounterRental(token: string, rentalId: string, montoRecibido: string): Promise<CounterRentalPayment> {
+  /**
+   * Cobra en efectivo la renta apartada: con el cobro se ocupa la cancha o se alarga su turno.
+   * Un reintento del mismo cobro debe mandar la misma `idempotencyKey` para no cobrar dos veces.
+   */
+  async payCounterRental(token: string, rentalId: string, montoRecibido: string, idempotencyKey?: string): Promise<CounterRentalPayment> {
     return (
       await request<CounterRentalPayment>(`/reservas/${rentalId}/pago`, {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: { metodo_pago: 'efectivo', monto_recibido: montoRecibido },
       })
     ).data;
@@ -1070,7 +1086,7 @@ export const api = {
   /** Horario reservable y lo ocupado de cada cancha en un día; sin `date` el back usa hoy. */
   async courtAvailability(token: string, date?: string): Promise<CourtAvailabilityDay> {
     const query = date ? `?fecha=${encodeURIComponent(date)}` : '';
-    return (await request<CourtAvailabilityDay>(`/reservas/disponibilidad${query}`, { token })).data;
+    return (await request<CourtAvailabilityDay>(`/reservas/disponibilidad${query}`, { token, cache: 'no-store' })).data;
   },
 
   /** Reservas de cancha del día (de clientes y de mostrador). `date` = YYYY-MM-DD. */
@@ -1113,7 +1129,7 @@ export const api = {
 
   async createSpaceBatch(
     token: string,
-    input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number },
+    input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number; capacidad?: number },
     idempotencyKey?: string,
   ): Promise<SpaceBatchResult> {
     return (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
