@@ -29,7 +29,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { NavLink, useHistory, useLocation } from 'react-router-dom';
 import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-theme';
-import { CASHBACK_ENABLED } from '../lib/features';
+import { CASHBACK_ENABLED, IA_CONFIG_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { AGENDA_ENABLED } from '../lib/agenda-feature';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
@@ -68,6 +68,8 @@ const adminNavigation: NavItem[] = [
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo de clientes', icon: HandCoins } satisfies NavItem] : []),
   ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto y encargos', icon: Truck } satisfies NavItem] : []),
   { to: '/app/pos', label: 'Pedir', icon: WalletCards },
+  ...(INVENTARIO_ENABLED ? [{ to: '/app/inventario', label: 'Inventario y recetas', icon: PackageCheck } satisfies NavItem] : []),
+  ...(IA_CONFIG_ENABLED ? [{ to: '/app/asistente-configuracion', label: 'Asistente', icon: ShieldCheck } satisfies NavItem] : []),
   ...agendaNavigation,
 ];
 
