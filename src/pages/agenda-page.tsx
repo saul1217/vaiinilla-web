@@ -5,7 +5,7 @@
 // (efectivo sin monto) y POST /reservas/:id/cancelacion.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Plus, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Redirect } from 'react-router-dom';
 import { AppPageHeader } from '../components/app-page-header';
 import { Feedback, Field, Modal, SelectField } from '../components/ui';
@@ -22,6 +22,7 @@ import {
   bookingSpaceId,
   canCancel,
   canMove,
+  cancelErrorMessage,
   clockIn,
   dateLabel,
   durationLabel,
@@ -30,6 +31,7 @@ import {
   MoveBookingError,
   moveBooking,
   needsRefund,
+  refundSummary,
   releaseOrphan,
 } from '../lib/agenda';
 import { api } from '../lib/api';
@@ -37,7 +39,7 @@ import { VaiinillaApiError, errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
 import { formatMoney, moneyToCents, normalizeMoneyInput } from '../lib/money';
 import { tenantHomePath } from '../lib/tenant-route';
-import type { CourtAvailabilityDay, StaffBooking } from '../types/api';
+import type { BookingCancelRefund, BookingRefundInput, CourtAvailabilityDay, StaffBooking } from '../types/api';
 
 const BADGE: Record<string, string> = {
   pendiente_pago: 'pendiente',
@@ -50,8 +52,22 @@ const BADGE: Record<string, string> = {
 };
 
 function actionError(error: unknown): string {
-  if (error instanceof VaiinillaApiError && error.status === 403) return 'Tu rol no tiene permiso para esta acción.';
+  if (error instanceof VaiinillaApiError) {
+    if (error.status === 403) return 'Tu rol no tiene permiso para esta acción.';
+    const cancelMessage = cancelErrorMessage(error.code, error.details);
+    if (cancelMessage) return cancelMessage;
+  }
   return errorMessage(error);
+}
+
+/**
+ * Llaves de idempotencia del modal de crear o mover: se crean una vez al abrirlo y los reintentos
+ * del mismo modal las reusan, para que un reintento tras perder la respuesta no aparte ni deje por
+ * cobrar dos veces (el back libera la llave si la operación falló). Las cancelaciones de un
+ * movimiento llevan las suyas dentro de moveBooking, con reintentos.
+ */
+function newFormKeys() {
+  return { create: createIdempotencyKey(), markCashLater: createIdempotencyKey() };
 }
 
 export function AgendaPage() {
@@ -135,11 +151,13 @@ function AgendaScreen({ token, storeId }: { token: string; storeId: string }) {
     )}
     {canceling && day.data && (
       <CancelModal
+        key={canceling.id}
         token={token}
         booking={canceling}
         timeZone={day.data.zona_horaria}
         onClose={() => setCanceling(null)}
         onDone={async (message) => { setCanceling(null); await done(message); }}
+        onRefunded={() => void refresh()}
         onError={() => void refresh()}
       />
     )}
@@ -262,6 +280,9 @@ function BookingFormModal({ token, storeId, initialDate, dates, today, state, on
   const [start, setStart] = useState<string>(state.kind === 'create' ? state.inicio ?? '' : '');
   const [minutes, setMinutes] = useState<number | null>(moving ? bookingMinutes(moving) : null);
   const [name, setName] = useState('');
+  // Una vez por modal abierto; se renuevan solo si el back ya completó el apartado y se deshizo.
+  const [initialKeys] = useState(newFormKeys);
+  const keys = useRef(initialKeys);
 
   const day = useQuery({
     queryKey: agendaKeys.day(storeId, date),
@@ -283,17 +304,19 @@ function BookingFormModal({ token, storeId, initialDate, dates, today, state, on
   const save = useMutation({
     mutationFn: async () => {
       const target = { espacio_id: court!.espacio.id, inicio: chosenStart, duracion_min: chosenMinutes! };
+      const key = keys.current;
       if (moving) {
         return moveBooking({
-          create: (input) => api.createStaffBooking(token, input, createIdempotencyKey()),
-          markCashLater: (id) => api.markBookingCashLater(token, id, createIdempotencyKey()),
+          create: (input) => api.createStaffBooking(token, input, key.create),
+          markCashLater: (id) => api.markBookingCashLater(token, id, key.markCashLater),
+          // Cancelar la original y soltar la nueva llevan las llaves y reintentos de moveBooking.
           cancel: cancelWithKey,
         }, moving, target);
       }
       const trimmed = name.trim();
-      const created = await api.createStaffBooking(token, { ...target, ...(trimmed ? { nombre_cliente: trimmed } : {}) }, createIdempotencyKey());
+      const created = await api.createStaffBooking(token, { ...target, ...(trimmed ? { nombre_cliente: trimmed } : {}) }, key.create);
       try {
-        await api.markBookingCashLater(token, created.id, createIdempotencyKey());
+        await api.markBookingCashLater(token, created.id, key.markCashLater);
       } catch {
         return { ...created, holdOnly: true };
       }
@@ -305,9 +328,13 @@ function BookingFormModal({ token, storeId, initialDate, dates, today, state, on
       else if ('holdOnly' in result) await onDone(`Horario apartado en ${court!.espacio.nombre}, ${when}, pero no quedó por cobrar en Caja: cóbralo en los próximos 10 minutos o vence.`);
       else await onDone(`Reserva creada en ${court!.espacio.nombre}, ${when}. Queda por cobrar en Caja.`);
     },
-    // Un movimiento a medias puede dejar el horario nuevo apartado: que se vea en la agenda.
     onError: (error) => {
-      if (error instanceof MoveBookingError && error.orphan) void queryClient.invalidateQueries({ queryKey: agendaKeys.all(storeId) });
+      if (!(error instanceof MoveBookingError)) return;
+      // El horario nuevo sí se apartó: con las mismas llaves el back repetiría ese apartado, así
+      // que el siguiente intento es una operación nueva.
+      keys.current = newFormKeys();
+      // Un movimiento a medias puede dejar el horario nuevo apartado: que se vea en la agenda.
+      if (error.orphan) void queryClient.invalidateQueries({ queryKey: agendaKeys.all(storeId) });
     },
   });
   const orphan = save.error instanceof MoveBookingError ? save.error.orphan : undefined;
@@ -355,15 +382,20 @@ function BookingFormModal({ token, storeId, initialDate, dates, today, state, on
   </Modal>;
 }
 
-function CancelModal({ token, booking, timeZone, onClose, onDone, onError }: {
+function CancelModal({ token, booking, timeZone, onClose, onDone, onRefunded, onError }: {
   token: string;
   booking: StaffBooking;
   timeZone: string;
   onClose: () => void;
   onDone: (message: string) => Promise<void>;
+  /** Pagada y cancelada: el modal se queda abierto con el reembolso y la agenda se actualiza atrás. */
+  onRefunded: () => void;
   onError: () => void;
 }) {
   const paid = needsRefund(booking);
+  // Una sola llave por modal: «Sí, cancelar reserva» otra vez tras un error manda la misma.
+  const [idempotencyKey] = useState(createIdempotencyKey);
+  const [refunded, setRefunded] = useState<{ refund: BookingCancelRefund | null } | null>(null);
   const [reason, setReason] = useState('');
   const [refundAmount, setRefundAmount] = useState(booking.monto ?? '0.00');
   const refundCents = moneyToCents(normalizeMoneyInput(refundAmount));
@@ -372,26 +404,58 @@ function CancelModal({ token, booking, timeZone, onClose, onDone, onError }: {
     ? 'Escribe un monto válido, de 0 al total pagado.'
     : paidCents !== null && refundCents > paidCents ? 'El reembolso no puede ser mayor a lo pagado.' : null;
   const reasonLength = reason.trim().length;
-  const valid = !paid || (reasonLength >= 3 && reasonLength <= 240 && !refundError);
+  // Lo que se mandó la primera vez queda fijo: el back compara monto y motivo en el hash de la
+  // llave, y reenviar otros con la misma daría IDEMPOTENCY_KEY_REUSED. Para cambiarlos se cierra
+  // el modal y se abre otro (llave nueva).
+  const [sent, setSent] = useState<{ body: BookingRefundInput | undefined } | null>(null);
+  const frozen = sent !== null;
+  const valid = frozen || !paid || (reasonLength >= 3 && reasonLength <= 240 && !refundError);
+  const submit = () => {
+    const body = sent ? sent.body : paid ? { motivo: reason.trim(), monto_reembolso: normalizeMoneyInput(refundAmount) } : undefined;
+    if (!sent) setSent({ body });
+    cancel.mutate(body);
+  };
   const cancel = useMutation({
-    mutationFn: () => api.cancelCounterRental(token, booking.id,
-      paid ? { motivo: reason.trim(), monto_reembolso: normalizeMoneyInput(refundAmount) } : undefined),
-    onSuccess: () => onDone(paid ? 'Reserva cancelada y reembolso registrado.' : 'Reserva cancelada. El horario quedó libre.'),
+    mutationFn: (body: BookingRefundInput | undefined) => api.cancelCounterRental(token, booking.id, body, idempotencyKey),
+    onSuccess: async (result) => {
+      const refund = result?.reembolso ?? null;
+      if (!paid && !refund) return onDone('Reserva cancelada. El horario quedó libre.');
+      setRefunded({ refund });
+      onRefunded();
+    },
     onError,
   });
+  if (refunded) {
+    const summary = refunded.refund ? refundSummary(refunded.refund) : null;
+    return <Modal open onOpenChange={(open) => !open && onDone('Reserva cancelada y reembolso registrado.')}
+      title="Reserva cancelada"
+      description={`La reserva de ${bookingName(booking)} quedó cancelada y el horario libre.`}>
+      <div className="mb-3 grid gap-2" aria-label="Reembolso registrado" role="status">
+        {summary ? <>
+          <p className="font-extrabold text-ink">Reembolso: {summary.amount}</p>
+          <p className="text-sm text-muted">{summary.route}</p>
+        </> : <p className="text-sm text-muted">El servidor no informó el reembolso. Revísalo en el reporte de reembolsos.</p>}
+      </div>
+      <VaiButton variant="accent" onClick={() => void onDone('Reserva cancelada y reembolso registrado.')}>Listo</VaiButton>
+    </Modal>;
+  }
   return <Modal open onOpenChange={(open) => !open && onClose()}
     title={paid ? 'Cancelar reserva pagada' : 'Cancelar reserva'}
     description={`¿Cancelar la reserva de ${bookingName(booking)} en ${booking.espacio?.nombre ?? 'la cancha'}, de ${clockIn(booking.inicio, timeZone)} a ${clockIn(booking.fin, timeZone)}? El horario queda libre${paid ? '. Elige cuánto se reembolsa (de $0 a lo pagado) y escribe el motivo.' : '.'}`}>
     {paid && <div className="mb-3 grid gap-3">
-      <Field label="Monto a reembolsar" name="agenda-refund-amount" inputMode="decimal" value={refundAmount}
-        onChange={(event) => setRefundAmount(event.target.value)} error={refundError ?? undefined}
+      <Field label="Monto a reembolsar" name="agenda-refund-amount" inputMode="decimal"
+        value={frozen ? sent.body?.monto_reembolso ?? refundAmount : refundAmount} readOnly={frozen}
+        onChange={(event) => setRefundAmount(event.target.value)} error={frozen ? undefined : refundError ?? undefined}
         hint={booking.monto ? `Pagado: ${formatMoney(booking.monto)}. Puedes reembolsar $0.` : undefined} />
-      <Field label="Motivo (3 a 240 caracteres)" name="agenda-refund-reason" maxLength={240} value={reason}
+      <p className="text-xs text-muted">El tope es orientativo: el servidor revisa lo que se pagó y decide el monto final del reembolso, que verás al terminar.</p>
+      <Field label="Motivo (3 a 240 caracteres)" name="agenda-refund-reason" maxLength={240}
+        value={frozen ? sent.body?.motivo ?? reason : reason} readOnly={frozen}
         onChange={(event) => setReason(event.target.value)} />
+      {frozen && <p className="text-xs text-muted">El monto y el motivo ya se enviaron y quedan fijos para reintentar sin reembolsar dos veces. Para cambiarlos, cierra y vuelve a abrir la cancelación.</p>}
     </div>}
     {cancel.isError && <Feedback tone="error">{actionError(cancel.error)}</Feedback>}
     <div className="flex flex-wrap gap-2">
-      <VaiButton variant="coral" loading={cancel.isPending} disabled={!valid} onClick={() => cancel.mutate()}>Sí, cancelar reserva</VaiButton>
+      <VaiButton variant="coral" loading={cancel.isPending} disabled={!valid} onClick={submit}>Sí, cancelar reserva</VaiButton>
       <VaiButton variant="quiet" onClick={onClose}>No, conservar</VaiButton>
     </div>
   </Modal>;

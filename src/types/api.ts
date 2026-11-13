@@ -878,6 +878,25 @@ export interface BookingRefundInput {
   monto_reembolso: string;
 }
 
+/** Reembolso que devuelve POST /reservas/:id/cancelacion al cancelar una pagada (docs/reservas-cancha.md del back). */
+export interface BookingCancelRefund {
+  id: string;
+  /** `efectivo`, `saldo` o `tarjeta` (la vía del pago). */
+  metodo: string;
+  monto: string;
+  monto_pagado: string;
+  /** `ninguna`, `cartera`, `caja` o `devolucion_pendiente`. */
+  salida: string;
+  /** Saldo del cliente después del reembolso, solo cuando la salida es `cartera`. */
+  saldo_nuevo?: string | null;
+  creado_en: string;
+  devolucion_id?: string | null;
+  sesion_caja_id?: string | null;
+}
+
+/** Respuesta de la cancelación: la reserva cancelada y su reembolso (`null` si no hubo). */
+export type CancelledBooking = StaffBooking & { reembolso?: BookingCancelRefund | null };
+
 /** Fila del reporte GET /reservas/reembolsos (registro solo de inserción). */
 export interface BookingRefund {
   id: string;
