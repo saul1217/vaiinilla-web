@@ -116,6 +116,27 @@ describe('HotelStaffPage', () => {
     expect(body).toEqual({ concepto: 'Spa', monto: '350.50', categoria: 'spa' });
   });
 
+  it.each([[408, 'TIMEOUT'], [429, 'RATE_LIMITED']])('si el cargo responde %i, el reintento manda la misma Idempotency-Key', async (status, code) => {
+    const keys: (string | null)[] = [];
+    server.use(settingsHandler(), roomsHandler(), staysHandler([stayFixture({ salida: '2026-11-20' })]),
+      http.post(`${baseUrl}/estancias/stay-1/cargos`, ({ request }) => {
+        keys.push(request.headers.get('Idempotency-Key'));
+        return keys.length === 1 ? fail(status, code) : ok(stayFixture(), 201);
+      }));
+    const user = userEvent.setup();
+    renderPage('recepcion');
+    await user.click(await screen.findByRole('button', { name: 'Cargo a Laura Ramos' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Importe'), '90');
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar a la cuenta' }));
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar a la cuenta' }));
+    expect(await screen.findByText('Se agregó Minibar por $90.00 a la cuenta de Laura Ramos.')).toBeInTheDocument();
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
+  });
+
   it('el check-out muestra la cuenta, manda total y versión, y si cambió la recarga', async () => {
     const bodies: unknown[] = [];
     let detailCalls = 0;

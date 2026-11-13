@@ -46,12 +46,21 @@ export class RetryKeys {
     return key;
   }
 
-  /** Tras un éxito o un rechazo del servidor (4xx) la llave ya no sirve; tras un fallo de red se conserva. */
+  /**
+   * Tras un éxito o un rechazo final del servidor (4xx) la llave ya no sirve. Tras un fallo de red,
+   * un 5xx, un 408 o un 429 se conserva: la operación pudo haberse aplicado y el reintento debe
+   * mandar la misma llave para no duplicar el cargo, el check-in ni el cobro.
+   */
   settle(error: unknown, ...parts: unknown[]) {
-    if (error === null || (error instanceof VaiinillaApiError && error.status >= 400 && error.status < 500)) {
+    if (error === null || finalAnswer(error)) {
       this.keys.delete(JSON.stringify(parts));
     }
   }
+}
+
+/** Un 4xx (salvo 408 y 429) es la respuesta final del servidor: repetirlo da lo mismo. Igual que boliche (bowling-admin.ts). */
+function finalAnswer(error: unknown): boolean {
+  return error instanceof VaiinillaApiError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
 }
 
 /** «90», «90.5», «1,250.75», «$90» → «90.00», «90.50», «1250.75»; vacío, cero, negativo o más de 2 decimales → null. */

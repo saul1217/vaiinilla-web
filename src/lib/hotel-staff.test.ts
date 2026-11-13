@@ -155,4 +155,18 @@ describe('errores y llaves de reintento', () => {
     expect(keys.keyFor('charge', 'stay-1', { monto: '90.00' })).not.toBe(first);
     expect(keys.keyFor('charge', 'stay-2', { monto: '90.00' })).not.toBe(first);
   });
+
+  it.each([408, 429, 500, 503])('con %i el reintento usa la misma llave: el cargo pudo haberse aplicado', (status) => {
+    const keys = new RetryKeys();
+    const first = keys.keyFor('charge', 'stay-1', { monto: '90.00' });
+    keys.settle(apiError(status, status === 429 ? 'RATE_LIMITED' : 'TIMEOUT'), 'charge', 'stay-1', { monto: '90.00' });
+    expect(keys.keyFor('charge', 'stay-1', { monto: '90.00' })).toBe(first);
+  });
+
+  it.each([400, 403, 404, 409, 422])('con %i (respuesta final) el siguiente intento lleva llave nueva', (status) => {
+    const keys = new RetryKeys();
+    const first = keys.keyFor('charge', 'stay-1', { monto: '90.00' });
+    keys.settle(apiError(status, 'VALIDATION_ERROR'), 'charge', 'stay-1', { monto: '90.00' });
+    expect(keys.keyFor('charge', 'stay-1', { monto: '90.00' })).not.toBe(first);
+  });
 });
