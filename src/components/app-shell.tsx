@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  BedDouble,
   CalendarDays,
   BadgePercent,
   Building2,
@@ -8,6 +9,7 @@ import {
   ClipboardList,
   ConciergeBell,
   HandCoins,
+  Hotel,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -35,6 +37,12 @@ import { AGENDA_ENABLED } from '../lib/agenda-feature';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
 import { BOWLING_ADMIN_ENABLED } from '../lib/bowling-admin-feature';
 import { REPARTO_ENABLED } from '../lib/reparto-feature';
+import { HOTEL_STAFF_ENABLED } from '../lib/hotel-staff-feature';
+import { HOUSEKEEPING_ROLES, RECEPTION_ROLES } from '../lib/hotel-staff';
+import { hotelKeys } from '../lib/hotel-admin';
+import { api } from '../lib/api';
+import { useQuery } from '@tanstack/react-query';
+import type { OperationalRole } from '../types/api';
 import { clearAllPendingRecharges } from '../lib/wallet-caja';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
@@ -89,6 +97,28 @@ const waiterNavigation: NavItem[] = [
   ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
 ];
 
+/**
+ * Recepción (Caja y Administración) y Habitaciones del ama de llaves (Mesero y Administración), solo
+ * en un negocio con hotel. Con la bandera apagada no se consulta nada: el hook vacío no usa React Query.
+ */
+function useHotelStaffNavigationLive(role: OperationalRole, token: string, storeId: string): NavItem[] {
+  const reception = RECEPTION_ROLES.includes(role);
+  const housekeeping = HOUSEKEEPING_ROLES.includes(role);
+  const settings = useQuery({
+    queryKey: hotelKeys(storeId).settings,
+    enabled: Boolean(token) && (reception || housekeeping),
+    queryFn: () => api.hotelSettings(token),
+    staleTime: 5 * 60_000,
+  });
+  if (!settings.data?.activo) return [];
+  return [
+    ...(reception ? [{ to: '/app/hotel/recepcion', label: 'Recepción', icon: Hotel } satisfies NavItem] : []),
+    ...(housekeeping ? [{ to: '/app/hotel/ama-de-llaves', label: 'Habitaciones', icon: BedDouble } satisfies NavItem] : []),
+  ];
+}
+const noHotelStaffNavigation = (): NavItem[] => [];
+const useHotelStaffNavigation = HOTEL_STAFF_ENABLED ? useHotelStaffNavigationLive : noHotelStaffNavigation;
+
 const platformNavigation: NavItem[] = [
   { to: '/plataforma', label: 'Resumen global', icon: ShieldCheck, end: true },
   { to: '/plataforma/establecimientos', label: 'Establecimientos', icon: Building2 },
@@ -100,8 +130,9 @@ export function TenantShell({ children }: { children: ReactNode }) {
   const history = useHistory();
   const [open, setOpen] = useState(false);
 
+  const hotelItems = useHotelStaffNavigation(tenant?.context.rol ?? 'cliente', tenant?.token ?? '', tenant?.context.establecimiento_id ?? '');
   if (!tenant) return null;
-  const items = navigationForRole(tenant.context.rol);
+  const items = [...navigationForRole(tenant.context.rol), ...hotelItems];
 
   async function switchContext() {
     // Las recargas en efectivo sin confirmar no se quedan en el navegador al cambiar de acceso.
