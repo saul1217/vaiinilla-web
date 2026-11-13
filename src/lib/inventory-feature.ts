@@ -6,4 +6,4 @@
  * solo las banderas que conocen, y un export que falte ahí tumba toda la app.
  * Revisado el 2026-11-09: aplicada en dev (Vainilla_bd_pruebas), falta en producción.
  */
-export const INVENTARIO_ENABLED = false;
+export const INVENTARIO_ENABLED = true;

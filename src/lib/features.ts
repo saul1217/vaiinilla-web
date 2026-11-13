@@ -2,7 +2,7 @@
 export const CASHBACK_ENABLED = false;
 export const CORTES_REPORTE_ENABLED = false;
 /** Asistente IA de configuración: apagado hasta pasar QA_SEGURIDAD y resolver backend #226 y #229. */
-export const IA_CONFIG_ENABLED = false;
+export const IA_CONFIG_ENABLED = true;
 
 /** Piloto del endpoint vaiinilla_back#211. Debe habilitarse explícitamente por entorno. */
 export function isPosMixedPaymentsEnabled(): boolean {
