@@ -489,6 +489,8 @@ export interface ManagedSpace {
   descripcion?: string | null;
   imagen_url?: string | null;
   caracteristicas?: string[];
+  /** Cuántos caben (en un boliche, jugadores por pista, de 1 a 99); null = sin tope propio. Un backend anterior no lo manda. */
+  capacidad?: number | null;
 }
 
 export interface SpaceUpdateInput {
@@ -496,6 +498,8 @@ export interface SpaceUpdateInput {
   tipo?: SpaceType;
   activo?: boolean;
   precio_hora?: string | null;
+  /** De 1 a 99, o null para quitarla. */
+  capacidad?: number | null;
   descripcion?: string | null;
   caracteristicas?: string[];
 }
@@ -799,6 +803,9 @@ export interface CounterRental {
   monto: string;
   estado: string;
   version: number;
+  /** Jugadores de la renta (obligatorios en un boliche); un backend anterior no lo manda. */
+  jugadores?: number | null;
+  nombre_cliente?: string | null;
 }
 
 /** Reserva de cancha del día vista por caja (GET /reservas?fecha=). Algunos campos los completa el backend (vaiinilla_back#112). */
@@ -839,6 +846,8 @@ export interface CourtAvailabilityCourt {
   rentable: boolean;
   /** Duraciones que respeta el mínimo de la cancha; vacía o ausente con un back anterior. */
   duraciones_min?: number[];
+  /** Cuántos juegan como máximo (boliche); null o ausente = el tope del servidor (30). */
+  capacidad?: number | null;
   ocupado: CourtBusyInterval[];
 }
 
@@ -854,6 +863,8 @@ export interface CourtAvailabilityDay {
   bloque_min: number;
   duraciones_min: number[];
   dias_adelanto: number;
+  /** «boliche» nombra pistas; lo demás, canchas. Un backend anterior no lo manda. */
+  tipo_establecimiento?: string | null;
   cerrado?: boolean;
   apartado_min?: number;
   ahora: string;
