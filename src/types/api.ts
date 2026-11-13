@@ -489,6 +489,8 @@ export interface ManagedSpace {
   descripcion?: string | null;
   imagen_url?: string | null;
   caracteristicas?: string[];
+  /** Cuántos caben (en un boliche, jugadores por pista, de 1 a 99); null = sin tope propio. Un backend anterior no lo manda. */
+  capacidad?: number | null;
 }
 
 export interface SpaceUpdateInput {
@@ -496,6 +498,8 @@ export interface SpaceUpdateInput {
   tipo?: SpaceType;
   activo?: boolean;
   precio_hora?: string | null;
+  /** De 1 a 99, o null para quitarla. */
+  capacidad?: number | null;
   descripcion?: string | null;
   caracteristicas?: string[];
 }
@@ -799,6 +803,9 @@ export interface CounterRental {
   monto: string;
   estado: string;
   version: number;
+  /** Jugadores de la renta (obligatorios en un boliche); un backend anterior no lo manda. */
+  jugadores?: number | null;
+  nombre_cliente?: string | null;
 }
 
 /** Reserva de cancha del día vista por caja (GET /reservas?fecha=). Algunos campos los completa el backend (vaiinilla_back#112). */
@@ -839,6 +846,8 @@ export interface CourtAvailabilityCourt {
   rentable: boolean;
   /** Duraciones que respeta el mínimo de la cancha; vacía o ausente con un back anterior. */
   duraciones_min?: number[];
+  /** Cuántos juegan como máximo (boliche); null o ausente = el tope del servidor (30). */
+  capacidad?: number | null;
   ocupado: CourtBusyInterval[];
 }
 
@@ -854,6 +863,8 @@ export interface CourtAvailabilityDay {
   bloque_min: number;
   duraciones_min: number[];
   dias_adelanto: number;
+  /** «boliche» nombra pistas; lo demás, canchas. Un backend anterior no lo manda. */
+  tipo_establecimiento?: string | null;
   cerrado?: boolean;
   apartado_min?: number;
   ahora: string;
@@ -1211,6 +1222,112 @@ export interface HotelRoomBatchResult {
   creadas: number;
   convertidas: number;
   omitidas: string[];
+}
+
+/** Estado de una estancia (vaiinilla_back estancias.service). */
+export type HotelStayStatus = 'reservada' | 'en_casa' | 'salio' | 'cancelada';
+
+export type HotelChargeCategory = 'minibar' | 'spa' | 'salida_tardia' | 'otro';
+
+/** Un cargo manual de recepción (POST /estancias/:id/cargos). */
+export interface HotelStayCharge {
+  id: number;
+  concepto: string;
+  categoria: HotelChargeCategory;
+  monto: string;
+  creado_en: string | null;
+}
+
+/** Un pedido de room service ligado a la estancia; `por_cobrar` se cobra en el check-out. */
+export interface HotelStayOrder {
+  id: string;
+  folio: string | null;
+  estado: string;
+  total: string;
+  items_resumen: string | null;
+  por_cobrar: boolean;
+  creado_en: string | null;
+}
+
+/** Estancia plana de GET /estancias y GET /estancias/:id. `cargos` y `pedidos` solo vienen llenos en el detalle y las altas. */
+export interface HotelStay {
+  id: string;
+  estado: HotelStayStatus;
+  huesped: string;
+  contacto: string | null;
+  codigo: string | null;
+  espacio_id: number;
+  espacio_nombre: string;
+  piso: number | null;
+  categoria: string | null;
+  entrada: string;
+  salida: string;
+  noches: number;
+  salida_prevista: string | null;
+  tarifa_noche: string | null;
+  no_molestar: boolean;
+  total: string;
+  cuenta: { noches_total: string; cargos_total: string; pedidos_total: string; total: string; pedidos_pendientes: number };
+  metodo_cobro: 'efectivo' | 'tarjeta' | null;
+  total_cobrado: string | null;
+  cargos: HotelStayCharge[];
+  pedidos: HotelStayOrder[];
+  version: number;
+}
+
+/** GET /estancias: `hoy` es el día del hotel, no el del navegador. */
+export interface HotelStayList {
+  hoy: string;
+  estancias: HotelStay[];
+  limit: number | null;
+  offset: number;
+  hay_mas: boolean;
+}
+
+/**
+ * POST /estancias (check-in en recepción). Sin `entrada` el servidor usa el día del hotel y la
+ * estancia queda en casa; se mandan `noches` (no `salida`) para no depender del reloj del navegador.
+ */
+export interface HotelCheckInInput {
+  espacio_id: number;
+  huesped_nombre: string;
+  contacto?: string;
+  noches: number;
+  tarifa_noche: string;
+}
+
+/** POST /estancias/:id/cargos. */
+export interface HotelChargeInput {
+  concepto: string;
+  monto: string;
+  categoria: HotelChargeCategory;
+}
+
+/** POST /estancias/:id/checkout: la app no cobra, registra con qué pagó el huésped. */
+export interface HotelCheckoutInput {
+  metodo_pago: 'efectivo' | 'tarjeta';
+  total_esperado: string;
+  version_esperada: number;
+}
+
+export type HotelRequestType = 'toallas' | 'almohadas' | 'limpieza' | 'cargador' | 'salida_tardia' | 'otro';
+export type HotelRequestStatus = 'pendiente' | 'tomada' | 'resuelta' | 'cancelada';
+
+/** GET /solicitudes-hotel (el personal ve las abiertas de todo el hotel). */
+export interface HotelRequest {
+  id: string;
+  estancia_id: string;
+  habitacion: { id: number; nombre: string; piso: number | null } | null;
+  tipo: HotelRequestType;
+  cantidad: number;
+  nota: string | null;
+  estado: HotelRequestStatus;
+  huesped: { nombre: string } | null;
+  tomada_por: { usuario_id: string | null; nombre: string } | null;
+  creado_en: string | null;
+  tomada_en: string | null;
+  cerrada_en: string | null;
+  version: number;
 }
 
 /** Cliente que devuelve GET /wallets/clientes (búsqueda de Caja; cajero o admin). */

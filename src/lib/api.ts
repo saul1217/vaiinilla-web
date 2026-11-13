@@ -92,8 +92,14 @@ import type {
   VilloDeviceAlert,
   VilloDeviceTokenIssued,
   VilloDeviceUpdateInput,
+  HotelChargeInput,
+  HotelCheckInInput,
+  HotelCheckoutInput,
+  HotelRequest,
   HotelRoom,
   HotelRoomBatchInput,
+  HotelStay,
+  HotelStayList,
   HotelRoomBatchResult,
   HotelSettings,
   HotelSettingsInput,
@@ -1017,28 +1023,44 @@ export const api = {
     });
   },
 
-  /** Aparta una cancha en mostrador: `inicio` null = ahora; el fin del turno = renovar. */
+  /**
+   * Aparta una cancha en mostrador: `inicio` null = ahora; el fin del turno = renovar.
+   * En un boliche van los `jugadores` (el servidor responde PLAYERS_REQUIRED sin ellos, salvo al renovar).
+   */
   async startCounterRental(
     token: string,
-    input: { espacioId: number; duracionMin: number; inicio: string | null },
+    input: { espacioId: number; duracionMin: number; inicio: string | null; jugadores?: number; nombreCliente?: string },
+    idempotencyKey?: string,
   ): Promise<CounterRental> {
+    const name = input.nombreCliente?.trim();
     return (
       await request<CounterRental>('/reservas', {
         method: 'POST',
         token,
         idempotent: true,
-        body: { espacio_id: input.espacioId, duracion_min: input.duracionMin, ...(input.inicio ? { inicio: input.inicio } : {}) },
+        idempotencyKey,
+        body: {
+          espacio_id: input.espacioId,
+          duracion_min: input.duracionMin,
+          ...(input.inicio ? { inicio: input.inicio } : {}),
+          ...(input.jugadores ? { jugadores: input.jugadores } : {}),
+          ...(name ? { nombre_cliente: name } : {}),
+        },
       })
     ).data;
   },
 
-  /** Cobra en efectivo la renta apartada: con el cobro se ocupa la cancha o se alarga su turno. */
-  async payCounterRental(token: string, rentalId: string, montoRecibido: string): Promise<CounterRentalPayment> {
+  /**
+   * Cobra en efectivo la renta apartada: con el cobro se ocupa la cancha o se alarga su turno.
+   * Un reintento del mismo cobro debe mandar la misma `idempotencyKey` para no cobrar dos veces.
+   */
+  async payCounterRental(token: string, rentalId: string, montoRecibido: string, idempotencyKey?: string): Promise<CounterRentalPayment> {
     return (
       await request<CounterRentalPayment>(`/reservas/${rentalId}/pago`, {
         method: 'POST',
         token,
         idempotent: true,
+        idempotencyKey,
         body: { metodo_pago: 'efectivo', monto_recibido: montoRecibido },
       })
     ).data;
@@ -1064,7 +1086,7 @@ export const api = {
   /** Horario reservable y lo ocupado de cada cancha en un día; sin `date` el back usa hoy. */
   async courtAvailability(token: string, date?: string): Promise<CourtAvailabilityDay> {
     const query = date ? `?fecha=${encodeURIComponent(date)}` : '';
-    return (await request<CourtAvailabilityDay>(`/reservas/disponibilidad${query}`, { token })).data;
+    return (await request<CourtAvailabilityDay>(`/reservas/disponibilidad${query}`, { token, cache: 'no-store' })).data;
   },
 
   /** Reservas de cancha del día (de clientes y de mostrador). `date` = YYYY-MM-DD. */
@@ -1107,7 +1129,7 @@ export const api = {
 
   async createSpaceBatch(
     token: string,
-    input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number },
+    input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number; capacidad?: number },
     idempotencyKey?: string,
   ): Promise<SpaceBatchResult> {
     return (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
@@ -1458,6 +1480,91 @@ export const api = {
       })
     ).data;
   },
+
+  // region Hotel: operación diaria del personal (vaiinilla-android ui/hotel/staff)
+
+  /** Llegadas y estancias en casa (cajero o admin); por defecto `en_casa` y `reservada`. */
+  async hotelStays(token: string): Promise<HotelStayList> {
+    return (await request<HotelStayList>('/estancias', { token })).data;
+  },
+
+  /** La cuenta completa de una estancia, con cargos y pedidos (cajero o admin). */
+  async hotelStay(token: string, stayId: string): Promise<HotelStay> {
+    return (await request<HotelStay>(`/estancias/${encodeURIComponent(stayId)}`, { token })).data;
+  },
+
+  /** Check-in en recepción; devuelve la estancia con el código de 6 dígitos para el huésped. */
+  async hotelCheckIn(token: string, input: HotelCheckInInput, idempotencyKey: string): Promise<HotelStay> {
+    return (await request<HotelStay>('/estancias', { method: 'POST', token, body: input, idempotencyKey })).data;
+  },
+
+  /** Una reserva que llegó pasa a «en casa» (`reservada → en_casa`). */
+  async hotelConfirmArrival(token: string, stayId: string, expectedVersion: number, idempotencyKey: string): Promise<HotelStay> {
+    return (
+      await request<HotelStay>(`/estancias/${encodeURIComponent(stayId)}/check-in`, {
+        method: 'POST', token, body: { version_esperada: expectedVersion }, idempotencyKey,
+      })
+    ).data;
+  },
+
+  /** Cancela una reserva (`reservada → cancelada`). */
+  async hotelCancelStay(token: string, stayId: string, expectedVersion: number, idempotencyKey: string): Promise<HotelStay> {
+    return (
+      await request<HotelStay>(`/estancias/${encodeURIComponent(stayId)}/cancelaciones`, {
+        method: 'POST', token, body: { version_esperada: expectedVersion }, idempotencyKey,
+      })
+    ).data;
+  },
+
+  /** Cargo manual a la cuenta (minibar, spa, salida tardía u otro). */
+  async hotelAddCharge(token: string, stayId: string, input: HotelChargeInput, idempotencyKey: string): Promise<HotelStay> {
+    return (
+      await request<HotelStay>(`/estancias/${encodeURIComponent(stayId)}/cargos`, { method: 'POST', token, body: input, idempotencyKey })
+    ).data;
+  },
+
+  /** Cierra la cuenta con la forma de pago con la que el huésped pagó en recepción. */
+  async hotelCheckout(token: string, stayId: string, input: HotelCheckoutInput, idempotencyKey: string): Promise<HotelStay> {
+    return (
+      await request<HotelStay>(`/estancias/${encodeURIComponent(stayId)}/checkout`, { method: 'POST', token, body: input, idempotencyKey })
+    ).data;
+  },
+
+  /** Solicitudes abiertas de los huéspedes (`pendiente` y `tomada`). */
+  async hotelRequests(token: string): Promise<HotelRequest[]> {
+    return (await request<HotelRequest[]>('/solicitudes-hotel', { token })).data;
+  },
+
+  /** Tomar o resolver una solicitud; el servidor compara la versión (409 si alguien más ya la movió). */
+  async hotelRequestTransition(
+    token: string,
+    requestId: string,
+    action: 'tomar' | 'resolver',
+    expectedVersion: number,
+    idempotencyKey: string,
+  ): Promise<HotelRequest> {
+    return (
+      await request<HotelRequest>(`/solicitudes-hotel/${encodeURIComponent(requestId)}/transiciones`, {
+        method: 'POST', token, body: { accion: action, version_esperada: expectedVersion }, idempotencyKey,
+      })
+    ).data;
+  },
+
+  /** Marca una habitación vacía como lista o por limpiar (mesero o admin). */
+  async hotelSetCleaning(
+    token: string,
+    roomId: number,
+    cleaning: 'lista' | 'por_limpiar',
+    idempotencyKey: string,
+  ): Promise<{ id: number; nombre: string; limpieza: string }> {
+    return (
+      await request<{ id: number; nombre: string; limpieza: string }>(`/habitaciones/${roomId}/limpieza`, {
+        method: 'POST', token, body: { limpieza: cleaning }, idempotencyKey,
+      })
+    ).data;
+  },
+
+  // endregion
 
   /** Busca clientes del negocio por nombre o identificador (cajero o admin). `q` de 2 a 80 letras. */
   async searchWalletClients(token: string, query: string, signal?: AbortSignal): Promise<WalletClient[]> {
