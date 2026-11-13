@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  BedDouble,
   CalendarDays,
   BadgePercent,
   Building2,
@@ -8,6 +9,7 @@ import {
   ClipboardList,
   ConciergeBell,
   HandCoins,
+  Hotel,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -33,7 +35,14 @@ import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { AGENDA_ENABLED } from '../lib/agenda-feature';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
+import { BOWLING_ADMIN_ENABLED } from '../lib/bowling-admin-feature';
 import { REPARTO_ENABLED } from '../lib/reparto-feature';
+import { HOTEL_STAFF_ENABLED } from '../lib/hotel-staff-feature';
+import { HOUSEKEEPING_ROLES, RECEPTION_ROLES } from '../lib/hotel-staff';
+import { hotelKeys } from '../lib/hotel-admin';
+import { api } from '../lib/api';
+import { useQuery } from '@tanstack/react-query';
+import type { OperationalRole } from '../types/api';
 import { clearAllPendingRecharges } from '../lib/wallet-caja';
 import { useAuth } from '../context/auth-context';
 import { useSessions } from '../context/session-context';
@@ -60,6 +69,8 @@ const adminNavigation: NavItem[] = [
     : []),
   { to: '/app/flujo', label: 'Flujo de mi tienda', icon: Workflow },
   { to: '/app/espacios', label: 'Mesas y espacios', icon: Table2 },
+  // La página dice si el negocio no es boliche; editar pistas solo lo ve admin.
+  ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas de boliche', icon: Table2 } satisfies NavItem] : []),
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
   // Admin solo consulta el saldo; recargar es de Caja (lo resuelve la página).
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo de clientes', icon: HandCoins } satisfies NavItem] : []),
@@ -73,13 +84,40 @@ const posNavigation: NavItem[] = [
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo', icon: HandCoins } satisfies NavItem] : []),
   ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto', icon: Truck } satisfies NavItem] : []),
   ...agendaNavigation,
+  ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
 ];
 const kitchenNavigation: NavItem[] = [
   { to: '/app/cocina', label: 'Cocina', icon: ChefHat },
   // Cocina ve el inventario; editarlo depende de `cocina_edita_inventario` (lo resuelve la página).
   ...(INVENTARIO_ENABLED ? [{ to: '/app/inventario', label: 'Inventario', icon: PackageCheck } satisfies NavItem] : []),
 ];
-const waiterNavigation: NavItem[] = [{ to: '/app/pos', label: 'Mesas', icon: ConciergeBell }, ...agendaNavigation];
+const waiterNavigation: NavItem[] = [
+  { to: '/app/pos', label: 'Mesas', icon: ConciergeBell },
+  ...agendaNavigation,
+  ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
+];
+
+/**
+ * Recepción (Caja y Administración) y Habitaciones del ama de llaves (Mesero y Administración), solo
+ * en un negocio con hotel. Con la bandera apagada no se consulta nada: el hook vacío no usa React Query.
+ */
+function useHotelStaffNavigationLive(role: OperationalRole, token: string, storeId: string): NavItem[] {
+  const reception = RECEPTION_ROLES.includes(role);
+  const housekeeping = HOUSEKEEPING_ROLES.includes(role);
+  const settings = useQuery({
+    queryKey: hotelKeys(storeId).settings,
+    enabled: Boolean(token) && (reception || housekeeping),
+    queryFn: () => api.hotelSettings(token),
+    staleTime: 5 * 60_000,
+  });
+  if (!settings.data?.activo) return [];
+  return [
+    ...(reception ? [{ to: '/app/hotel/recepcion', label: 'Recepción', icon: Hotel } satisfies NavItem] : []),
+    ...(housekeeping ? [{ to: '/app/hotel/ama-de-llaves', label: 'Habitaciones', icon: BedDouble } satisfies NavItem] : []),
+  ];
+}
+const noHotelStaffNavigation = (): NavItem[] => [];
+const useHotelStaffNavigation = HOTEL_STAFF_ENABLED ? useHotelStaffNavigationLive : noHotelStaffNavigation;
 
 const platformNavigation: NavItem[] = [
   { to: '/plataforma', label: 'Resumen global', icon: ShieldCheck, end: true },
@@ -92,8 +130,9 @@ export function TenantShell({ children }: { children: ReactNode }) {
   const history = useHistory();
   const [open, setOpen] = useState(false);
 
+  const hotelItems = useHotelStaffNavigation(tenant?.context.rol ?? 'cliente', tenant?.token ?? '', tenant?.context.establecimiento_id ?? '');
   if (!tenant) return null;
-  const items = navigationForRole(tenant.context.rol);
+  const items = [...navigationForRole(tenant.context.rol), ...hotelItems];
 
   async function switchContext() {
     // Las recargas en efectivo sin confirmar no se quedan en el navegador al cambiar de acceso.
