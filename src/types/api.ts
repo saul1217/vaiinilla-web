@@ -713,8 +713,8 @@ export interface SpaceAccountOrder {
   cliente: { nombre: string } | null;
   items_resumen: string;
   creado_en: string;
-  /** "Esto lo pago yo": el alias de quien dijo que paga este pedido. */
-  pagara?: string | null;
+  /** "Esto lo pago yo": participante concreto, o string de un backend legacy. */
+  pagara?: { id: string; alias: string | null } | string | null;
 }
 
 /** Un abono (dividir por monto o partes) aún sin liquidar. */
