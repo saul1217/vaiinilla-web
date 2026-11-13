@@ -45,6 +45,65 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 describe('Vaiinilla API client', () => {
+  describe('transición de tipo o modo', () => {
+    const transitionUrl = `${baseUrl}/establecimiento/configuracion/transiciones`;
+    // La llave se genera en cada corrida: una UUID literal la marcaba gitleaks como secreto.
+    const key = crypto.randomUUID();
+    const lockTimeout = (code = 'CONFIG_LOCK_TIMEOUT') =>
+      HttpResponse.json({ data: null, meta: {}, error: { code, message: 'ocupado' } }, { status: 503 });
+
+    it('el preflight es un POST de solo lectura con los cambios y sin Idempotency-Key', async () => {
+      let seen: { body: unknown; key: string | null } | null = null;
+      server.use(
+        http.post(`${transitionUrl}/preflight`, async ({ request }) => {
+          seen = { body: await request.json(), key: request.headers.get('Idempotency-Key') };
+          return HttpResponse.json({ data: { permitido: true, reason_codes: [], bloqueos: [], version_actual: 3, capacidades_resultantes: {} }, meta: {}, error: null });
+        }),
+      );
+      await expect(api.preflightBusinessTransition('t', { cambios: { tipo: 'bar' } })).resolves.toMatchObject({ version_actual: 3 });
+      expect(seen).toEqual({ body: { cambios: { tipo: 'bar' } }, key: null });
+    });
+
+    it('aplica con la llave dada y version_esperada; ante CONFIG_LOCK_TIMEOUT repite una vez con la misma llave', async () => {
+      const keys: string[] = [];
+      const bodies: unknown[] = [];
+      server.use(
+        http.post(transitionUrl, async ({ request }) => {
+          keys.push(request.headers.get('Idempotency-Key') ?? '');
+          bodies.push(await request.json());
+          return keys.length === 1 ? lockTimeout() : HttpResponse.json({ data: { permitido: true }, meta: {}, error: null });
+        }),
+      );
+      await expect(api.applyBusinessTransition('t', { version_esperada: 3, cambios: { tipo: 'bar' } }, key)).resolves.toMatchObject({ permitido: true });
+      expect(keys).toEqual([key, key]);
+      expect(bodies).toEqual([{ version_esperada: 3, cambios: { tipo: 'bar' } }, { version_esperada: 3, cambios: { tipo: 'bar' } }]);
+    });
+
+    it('no repite más de una vez: el segundo 503 llega a la UI', async () => {
+      let calls = 0;
+      server.use(http.post(transitionUrl, () => { calls += 1; return lockTimeout('IDEMPOTENCY_LOCK_TIMEOUT'); }));
+      const error = await api.applyBusinessTransition('t', { version_esperada: 3, cambios: { tipo: 'bar' } }, key).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(VaiinillaApiError);
+      expect((error as VaiinillaApiError).status).toBe(503);
+      expect(calls).toBe(2);
+    });
+
+    it('un 409 o un 503 que no es de candado no se repite', async () => {
+      let calls = 0;
+      server.use(
+        http.post(transitionUrl, () => {
+          calls += 1;
+          return calls === 1
+            ? HttpResponse.json({ data: null, meta: {}, error: { code: 'CONFIG_VERSION_CONFLICT', message: 'Versión', details: [{ version_actual: 4 }] } }, { status: 409 })
+            : HttpResponse.json({ data: null, meta: {}, error: { code: 'SERVICE_UNAVAILABLE', message: 'caído' } }, { status: 503 });
+        }),
+      );
+      await expect(api.applyBusinessTransition('t', { version_esperada: 3, cambios: { tipo: 'bar' } }, key)).rejects.toMatchObject({ status: 409, code: 'CONFIG_VERSION_CONFLICT' });
+      await expect(api.applyBusinessTransition('t', { version_esperada: 4, cambios: { tipo: 'bar' } }, key)).rejects.toMatchObject({ status: 503 });
+      expect(calls).toBe(2);
+    });
+  });
+
   it('consulta versiones legales y solicita verificación por el backend', async () => {
     server.use(
       http.get(`${baseUrl}/publico/legal/vigente`, () =>

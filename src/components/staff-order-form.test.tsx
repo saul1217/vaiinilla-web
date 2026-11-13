@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -132,6 +132,55 @@ describe('StaffOrderForm', () => {
     await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
     expect(llamadas()[0]?.[1]).toMatchObject({ destino: 'en_espacio' });
     expect(llamadas()[0]?.[1]).not.toMatchObject({ pago_diferido: true });
+  });
+
+  it('T3-0011: con pagar al final marcado mientras la configuración carga, no envía; al cargar sin permiso no sale pago_diferido=true', async () => {
+    let resolveSettings!: (value: unknown) => void;
+    apiMock.operationalSettings.mockReturnValue(new Promise((resolve) => { resolveSettings = resolve; }));
+    const user = userEvent.setup();
+    renderForm('mesero', vi.fn(), 2);
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    const checkbox = screen.getByLabelText('Pagar al final, con la cuenta de la mesa');
+    if (!(checkbox as HTMLInputElement).checked) await user.click(checkbox);
+    expect(checkbox).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Enviar pedido' })).toBeDisabled();
+    // Enter en el formulario también pasa por el guardia.
+    fireEvent.submit(screen.getByRole('button', { name: 'Enviar pedido' }).closest('form')!);
+    expect(await screen.findByText(/estamos cargando la configuración del negocio/)).toBeVisible();
+    expect(apiMock.createStaffOrder).not.toHaveBeenCalled();
+
+    resolveSettings({ permite_pago_al_final: false, entrega_requiere_qr: true });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar pedido' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(1));
+    expect(llamadas()[0]?.[1]).toMatchObject({ destino: 'en_espacio', espacio_id: 2 });
+    expect(llamadas()[0]?.[1]).not.toMatchObject({ pago_diferido: true });
+  });
+
+  it('T3-0011: un 422 PAYMENT_AT_END_NOT_ALLOWED se explica, desmarca la casilla y vuelve a leer la configuración', async () => {
+    // El negocio cambió a «sin pagar al final» después de cargar la pantalla.
+    apiMock.operationalSettings
+      .mockResolvedValueOnce({ permite_pago_al_final: true, entrega_requiere_qr: false })
+      .mockResolvedValue({ permite_pago_al_final: false, entrega_requiere_qr: false });
+    apiMock.createStaffOrder
+      .mockRejectedValueOnce(new VaiinillaApiError(422, { code: 'PAYMENT_AT_END_NOT_ALLOWED', message: 'Este establecimiento no permite pagar al final.' }))
+      .mockResolvedValueOnce(PEDIDO_CREADO);
+    const user = userEvent.setup();
+    renderForm('mesero', vi.fn(), 2);
+    await user.click(await screen.findByRole('button', { name: 'Agregar' }));
+    const checkbox = screen.getByLabelText('Pagar al final, con la cuenta de la mesa');
+    await waitFor(() => expect(checkbox).toBeChecked());
+    await user.click(checkbox);
+    await user.click(checkbox);
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    expect(await screen.findByText(/Este negocio no permite pagar al final/)).toBeVisible();
+    expect(llamadas()[0]?.[1]).toMatchObject({ pago_diferido: true });
+    await waitFor(() => expect(apiMock.operationalSettings).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByLabelText('Pagar al final, con la cuenta de la mesa')).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+    await waitFor(() => expect(apiMock.createStaffOrder).toHaveBeenCalledTimes(2));
+    expect(llamadas()[1]?.[1]).not.toMatchObject({ pago_diferido: true });
+    expect(llamadas()[1]?.[2]).not.toBe(llamadas()[0]?.[2]);
   });
 
   it('para llevar: envía el pedido en efectivo con la opción obligatoria ya elegida', async () => {

@@ -10,6 +10,8 @@ const apiMock = vi.hoisted(() => ({
   businessSettings: vi.fn(),
   askStoreAssistant: vi.fn(),
   saveBusinessSettings: vi.fn(),
+  preflightBusinessTransition: vi.fn(),
+  applyBusinessTransition: vi.fn(),
   createSpaceBatch: vi.fn(),
   listManagedSpaces: vi.fn(),
   updateSpace: vi.fn(),
@@ -25,7 +27,7 @@ const apiMock = vi.hoisted(() => ({
   markBookingCashLater: vi.fn(),
   createInvitation: vi.fn(),
 }));
-const WRITES = ['saveBusinessSettings', 'createSpaceBatch', 'updateSpace', 'createCategory', 'createProduct', 'createInventorySupply',
+const WRITES = ['saveBusinessSettings', 'applyBusinessTransition', 'createSpaceBatch', 'updateSpace', 'createCategory', 'createProduct', 'createInventorySupply',
   'saveProductRecipe', 'registerInventoryMovement', 'createStaffBooking', 'markBookingCashLater', 'createInvitation'] as const;
 type FakeTenant = { token: string; context: { usuario_id: string; establecimiento_id: string } };
 const session = vi.hoisted(() => ({ tenant: null as FakeTenant | null }));
@@ -67,6 +69,8 @@ describe('AssistantConfigPage', () => {
     apiMock.businessSettings.mockResolvedValue({ asistente_modo: 'ambos' });
     apiMock.askStoreAssistant.mockResolvedValue({ mensaje: '¿Qué te gustaría configurar?' });
     apiMock.saveBusinessSettings.mockResolvedValue({});
+    apiMock.preflightBusinessTransition.mockResolvedValue({ permitido: true, reason_codes: [], bloqueos: [], version_actual: 3, capacidades_resultantes: {} });
+    apiMock.applyBusinessTransition.mockResolvedValue({ permitido: true });
     apiMock.createSpaceBatch.mockResolvedValue({ creados: 8 });
     apiMock.createCategory.mockResolvedValue({ id: 40 });
     apiMock.createProduct.mockResolvedValue({ id: 90 });
@@ -165,7 +169,10 @@ describe('AssistantConfigPage', () => {
       await user.click(await screen.findByRole('button', { name: `Aplicar ${name}` }));
       await waitFor(() => expect(screen.queryByRole('button', { name: `Aplicar ${name}` })).not.toBeInTheDocument());
     }
-    expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('tenant-token', { permite_pago_al_final: true });
+    // Pagar al final es un modo del negocio: va por preflight + transición, no por el PATCH.
+    expect(apiMock.preflightBusinessTransition).toHaveBeenCalledWith('tenant-token', { cambios: { permite_pago_al_final: true } });
+    expect(apiMock.applyBusinessTransition).toHaveBeenCalledWith('tenant-token', { version_esperada: 3, cambios: { permite_pago_al_final: true } }, expect.any(String));
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
     expect(apiMock.createSpaceBatch).toHaveBeenCalledWith('tenant-token', { tipo: 'mesa', prefijo: 'Mesa', desde: 1, hasta: 8 }, expect.any(String));
     expect(apiMock.createInventorySupply).toHaveBeenCalledWith('tenant-token', { nombre: 'Clamato', unidad: 'ml', minimo: 500, existencia_inicial: 3000 }, expect.any(String));
     expect(apiMock.saveProductRecipe).toHaveBeenCalledWith('tenant-token', 90, [{ insumo_id: 12, cantidad: 120, opcion_id: null }], expect.any(String));
@@ -212,7 +219,7 @@ describe('AssistantConfigPage', () => {
     await screen.findByText('Claro, sin propuesta nueva');
     expect(screen.getByRole('button', { name: 'Aplicar Ajustes del negocio' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Aplicar Ajustes del negocio' }));
-    await waitFor(() => expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('tenant-token', { permite_pago_al_final: true }));
+    await waitFor(() => expect(apiMock.applyBusinessTransition).toHaveBeenCalledWith('tenant-token', { version_esperada: 3, cambios: { permite_pago_al_final: true } }, expect.any(String)));
   });
 
   it('trata el texto del modelo como datos: un prompt injection no aplica nada ni inyecta HTML', async () => {
@@ -244,7 +251,7 @@ describe('AssistantConfigPage', () => {
     await waitFor(() => expect(apiMock.askStoreAssistant).toHaveBeenCalledTimes(2));
     expectNoWrites();
     await user.click(screen.getByRole('button', { name: 'Aplicar Ajustes del negocio' }));
-    await waitFor(() => expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('tenant-token', { permite_pago_al_final: true }));
+    await waitFor(() => expect(apiMock.applyBusinessTransition).toHaveBeenCalledWith('tenant-token', { version_esperada: 3, cambios: { permite_pago_al_final: true } }, expect.any(String)));
   });
 
   it('enseña las secciones que la web no aplica sin escribirlas', async () => {

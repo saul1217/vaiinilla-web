@@ -4,9 +4,16 @@ import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { VaiinillaApiError } from '../lib/api-error';
 import { StoreFlowPage } from './store-flow-page';
 
-const apiMock = vi.hoisted(() => ({ businessSettings: vi.fn(), saveBusinessSettings: vi.fn(), cardPayments: vi.fn().mockResolvedValue(null) }));
+const apiMock = vi.hoisted(() => ({
+  businessSettings: vi.fn(),
+  saveBusinessSettings: vi.fn(),
+  preflightBusinessTransition: vi.fn(),
+  applyBusinessTransition: vi.fn(),
+  cardPayments: vi.fn().mockResolvedValue(null),
+}));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
 vi.mock('../context/session-context', () => ({
@@ -20,7 +27,11 @@ const cafeteria = {
   gracia_liberacion_min: 5,
   franjas_pedido: [],
   tipos_disponibles: ['cafeteria'],
+  entrega_en_espacio: 'mesa',
 };
+
+const allowed = { permitido: true, reason_codes: [], bloqueos: [], version_actual: 7, capacidades_resultantes: {} };
+const padelTransition = { tipo: 'padel', entrega_requiere_qr: false, permite_pago_al_final: true };
 
 function renderFlow() {
   const result = render(<StoreFlowPage />, { wrapper: Wrapper });
@@ -41,6 +52,8 @@ describe('Flujo de mi tienda', () => {
   beforeEach(() => {
     apiMock.businessSettings.mockReset().mockResolvedValue(cafeteria);
     apiMock.saveBusinessSettings.mockReset().mockResolvedValue({ ...cafeteria, tipo: 'padel' });
+    apiMock.preflightBusinessTransition.mockReset().mockResolvedValue(allowed);
+    apiMock.applyBusinessTransition.mockReset().mockResolvedValue({ ...allowed, version_actual: 8 });
   });
 
   it('muestra el flujo actual y no hay nada que guardar sin cambios', async () => {
@@ -50,7 +63,7 @@ describe('Flujo de mi tienda', () => {
     expect(screen.getByRole('button', { name: /Cafetería escolar/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('una plantilla cambia el flujo de abajo y se guarda al pulsar Guardar flujo', async () => {
+  it('una plantilla de otro tipo pasa por la revisión, se confirma y la transición va aparte del PATCH', async () => {
     const user = userEvent.setup();
     renderFlow();
     await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
@@ -58,29 +71,209 @@ describe('Flujo de mi tienda', () => {
     expect(screen.getByText('Prepara en cuanto llega el pedido, sin esperar el cobro')).toBeInTheDocument();
     expect(screen.getByText('La cancha se libera al quedar saldada')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
-    await waitFor(() =>
-      expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('tenant-token', {
-        tipo: 'padel',
-        entrega_requiere_qr: false,
-        permite_pago_al_final: true,
-        gracia_liberacion_min: 5,
-        franjas_pedido: [],
+    // Primero la revisión de solo lectura: nada se escribe todavía.
+    expect(await screen.findByText(/Versión revisada: 7/)).toBeInTheDocument();
+    expect(apiMock.preflightBusinessTransition).toHaveBeenCalledWith('tenant-token', { cambios: padelTransition });
+    expect(apiMock.applyBusinessTransition).not.toHaveBeenCalled();
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
+    const review = screen.getByRole('list', { name: 'Cambios de tipo o modo' });
+    expect(review).toHaveTextContent('Tipo de negocio: Cafetería → Club de pádel');
+    expect(review).toHaveTextContent('Cuándo pagan: Al pedir → Al final, con cuenta abierta');
+    expect(review).toHaveTextContent('Entrega: Con QR → Sin QR');
+    await user.click(screen.getByRole('button', { name: 'Aplicar cambio' }));
+    expect(await screen.findByText(/Flujo guardado/)).toBeInTheDocument();
+    expect(apiMock.applyBusinessTransition).toHaveBeenCalledTimes(1);
+    const [token, body, key] = apiMock.applyBusinessTransition.mock.calls[0] as [string, unknown, string];
+    expect(token).toBe('tenant-token');
+    expect(body).toEqual({ version_esperada: 7, cambios: padelTransition });
+    expect(key).toMatch(/^[0-9a-f-]{36}$/);
+    // La plantilla no cambió ningún ajuste ordinario: no hay PATCH, se relee lo guardado.
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
+  });
+
+  it('un cambio solo de ajustes ordinarios va directo al PATCH, sin preflight', async () => {
+    const user = userEvent.setup();
+    apiMock.saveBusinessSettings.mockResolvedValue({ ...cafeteria, gracia_liberacion_min: 12 });
+    renderFlow();
+    const grace = await screen.findByLabelText('Gracia al terminar un turno (minutos)');
+    await user.clear(grace);
+    await user.type(grace, '12');
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    expect(await screen.findByText(/Flujo guardado/)).toBeInTheDocument();
+    expect(apiMock.preflightBusinessTransition).not.toHaveBeenCalled();
+    expect(apiMock.applyBusinessTransition).not.toHaveBeenCalled();
+    const body = apiMock.saveBusinessSettings.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.gracia_liberacion_min).toBe(12);
+    for (const field of ['tipo', 'entrega_requiere_qr', 'permite_pago_al_final', 'entrega_en_espacio']) expect(body).not.toHaveProperty(field);
+  });
+
+  it('cambiar cómo llega el pedido en mesa es transición y conserva los ajustes ordinarios', async () => {
+    const user = userEvent.setup();
+    apiMock.saveBusinessSettings.mockResolvedValue({ ...cafeteria, entrega_en_espacio: 'barra', gracia_liberacion_min: 9 });
+    renderFlow();
+    await user.click(await screen.findByRole('radio', { name: /Pasan por él a la barra/ }));
+    const grace = screen.getByLabelText('Gracia al terminar un turno (minutos)');
+    await user.clear(grace);
+    await user.type(grace, '9');
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await user.click(await screen.findByRole('button', { name: 'Aplicar cambio' }));
+    expect(await screen.findByText(/Flujo guardado/)).toBeInTheDocument();
+    expect(apiMock.preflightBusinessTransition).toHaveBeenCalledWith('tenant-token', { cambios: { entrega_en_espacio: 'barra' } });
+    expect(apiMock.applyBusinessTransition.mock.calls[0]?.[1]).toEqual({ version_esperada: 7, cambios: { entrega_en_espacio: 'barra' } });
+    expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('tenant-token', expect.objectContaining({ gracia_liberacion_min: 9 }));
+    expect(apiMock.saveBusinessSettings.mock.calls[0]?.[1]).not.toHaveProperty('entrega_en_espacio');
+  });
+
+  it('una revisión bloqueada enseña motivos y operaciones, no aplica ni hace PATCH, y se puede volver a revisar', async () => {
+    const user = userEvent.setup();
+    apiMock.preflightBusinessTransition.mockResolvedValueOnce({
+      ...allowed,
+      permitido: false,
+      reason_codes: ['OPERATIONS_IN_FLIGHT'],
+      bloqueos: [{ code: 'OPEN_CASH_SESSION', count: 1, message: 'Hay una sesión de caja abierta.' }],
+      operaciones: { items: [{ code: 'OPEN_CASH_SESSION', id: 's1', referencia: 'Caja 1', estado: 'abierta', desde: null, panel: 'caja' }], pagina: 1, limite: 20, total: 1, hay_mas: false },
+    });
+    renderFlow();
+    await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    expect(await screen.findByText(/No se puede aplicar todavía/)).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Operaciones que bloquean' })).toHaveTextContent('Caja abierta Caja 1 · abierta');
+    expect(screen.queryByRole('button', { name: 'Aplicar cambio' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Volver a revisar' }));
+    expect(await screen.findByRole('button', { name: 'Aplicar cambio' })).toBeInTheDocument();
+    expect(apiMock.preflightBusinessTransition).toHaveBeenCalledTimes(2);
+    expect(apiMock.applyBusinessTransition).not.toHaveBeenCalled();
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
+  });
+
+  it('un 409 de versión al aplicar no guarda nada y pide volver a revisar con una llave nueva', async () => {
+    const user = userEvent.setup();
+    apiMock.applyBusinessTransition.mockRejectedValueOnce(
+      new VaiinillaApiError(409, { code: 'CONFIG_VERSION_CONFLICT', message: 'Versión desactualizada.', details: [{ version_actual: 8 }] }),
+    );
+    apiMock.preflightBusinessTransition.mockResolvedValueOnce(allowed).mockResolvedValueOnce({ ...allowed, version_actual: 8 });
+    renderFlow();
+    await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await user.click(await screen.findByRole('button', { name: 'Aplicar cambio' }));
+    expect(await screen.findByText(/cambió en otra sesión desde la revisión/)).toBeInTheDocument();
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Aplicar cambio' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Volver a revisar' }));
+    expect(await screen.findByText(/Versión revisada: 8/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Aplicar cambio' }));
+    expect(await screen.findByText(/Flujo guardado/)).toBeInTheDocument();
+    const calls = apiMock.applyBusinessTransition.mock.calls as [string, { version_esperada: number }, string][];
+    expect(calls.map(([, body]) => body.version_esperada)).toEqual([7, 8]);
+    expect(calls[1]?.[2]).not.toBe(calls[0]?.[2]);
+  });
+
+  it('volver a revisar tras un 409 de versión relee lo guardado y no revierte lo que cambió otra sesión', async () => {
+    const user = userEvent.setup();
+    // Otra sesión quitó el QR mientras este admin revisaba su cambio de entrega en mesa.
+    const otraSesion = { ...cafeteria, entrega_requiere_qr: false };
+    apiMock.businessSettings.mockResolvedValueOnce(cafeteria).mockResolvedValue(otraSesion);
+    apiMock.applyBusinessTransition.mockRejectedValueOnce(
+      new VaiinillaApiError(409, { code: 'CONFIG_VERSION_CONFLICT', message: 'Versión desactualizada.', details: [{ version_actual: 8 }] }),
+    );
+    apiMock.preflightBusinessTransition.mockResolvedValueOnce(allowed).mockResolvedValueOnce({ ...allowed, version_actual: 8 });
+    renderFlow();
+    await user.click(await screen.findByRole('radio', { name: /El cliente elige/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await user.click(await screen.findByRole('button', { name: 'Aplicar cambio' }));
+    await user.click(await screen.findByRole('button', { name: 'Volver a revisar' }));
+    expect(await screen.findByText(/Versión revisada: 8/)).toBeInTheDocument();
+    expect(apiMock.preflightBusinessTransition).toHaveBeenLastCalledWith('tenant-token', { cambios: { entrega_en_espacio: 'ambas' } });
+    expect(screen.getByRole('list', { name: 'Cambios de tipo o modo' })).not.toHaveTextContent('Entrega:');
+    await user.click(screen.getByRole('button', { name: 'Aplicar cambio' }));
+    await waitFor(() => expect(apiMock.applyBusinessTransition).toHaveBeenCalledTimes(2));
+    expect(apiMock.applyBusinessTransition.mock.calls[1]?.[1]).toEqual({ version_esperada: 8, cambios: { entrega_en_espacio: 'ambas' } });
+  });
+
+  it('un 409 de bloqueo al aplicar lista las operaciones del servidor y no hace PATCH', async () => {
+    const user = userEvent.setup();
+    apiMock.applyBusinessTransition.mockRejectedValueOnce(
+      new VaiinillaApiError(409, {
+        code: 'CONFIG_TRANSITION_BLOCKED',
+        message: 'La transición está bloqueada.',
+        details: [{
+          reason_codes: ['OPERATIONS_IN_FLIGHT'],
+          bloqueos: [{ code: 'OPEN_ORDERS', count: 2 }],
+          operaciones: { items: [{ code: 'OPEN_ORDERS', id: '1', referencia: '41', estado: 'preparando', desde: null, panel: 'pedidos' }], pagina: 1, limite: 20, total: 2, hay_mas: true },
+          version_actual: 7,
+        }],
       }),
     );
+    renderFlow();
+    await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await user.click(await screen.findByRole('button', { name: 'Aplicar cambio' }));
+    expect(await screen.findByText(/El servidor bloqueó el cambio al aplicarlo/)).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Operaciones que bloquean' })).toHaveTextContent('Pedido abierto 41 · preparando');
+    expect(screen.getByText('Y 1 más.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Volver a revisar' })).toBeInTheDocument();
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
+  });
+
+  it('si el candado sigue ocupado, el error se ve y volver a aplicar usa la misma llave', async () => {
+    const user = userEvent.setup();
+    apiMock.applyBusinessTransition.mockRejectedValueOnce(
+      new VaiinillaApiError(503, { code: 'CONFIG_LOCK_TIMEOUT', message: 'ocupado' }),
+    );
+    renderFlow();
+    await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await user.click(await screen.findByRole('button', { name: 'Aplicar cambio' }));
+    expect(await screen.findByText(/sigue ocupada después de un reintento/)).toBeInTheDocument();
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Aplicar cambio' }));
+    expect(await screen.findByText(/Flujo guardado/)).toBeInTheDocument();
+    const keys = apiMock.applyBusinessTransition.mock.calls.map((call) => call[2] as string);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it('un 404 de la revisión se ve y conserva el borrador', async () => {
+    const user = userEvent.setup();
+    apiMock.preflightBusinessTransition.mockRejectedValueOnce(new VaiinillaApiError(404, { code: 'NOT_FOUND', message: 'Not found' }));
+    renderFlow();
+    await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    expect(await screen.findByText(/todavía no tiene la revisión de cambios de tipo o modo \(404\)/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Club de pádel/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeEnabled();
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
+  });
+
+  it('un 404 al aplicar se ve y permite cancelar sin perder el borrador', async () => {
+    const user = userEvent.setup();
+    apiMock.applyBusinessTransition.mockRejectedValueOnce(new VaiinillaApiError(404, { code: 'NOT_FOUND', message: 'Not found' }));
+    renderFlow();
+    await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await user.click(await screen.findByRole('button', { name: 'Aplicar cambio' }));
+    expect(await screen.findByText(/no tiene el cambio de tipo o modo \(404\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.getByRole('button', { name: /Club de pádel/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeEnabled();
   });
 
   it('al guardar muestra de inmediato lo guardado, sin pasar por los datos viejos', async () => {
     const user = userEvent.setup();
-    const padel = { ...cafeteria, tipo: 'padel', entrega_requiere_qr: false, permite_pago_al_final: true };
+    const padel = { ...cafeteria, tipo: 'padel', entrega_requiere_qr: false, permite_pago_al_final: true, gracia_liberacion_min: 6 };
     apiMock.saveBusinessSettings.mockResolvedValue(padel);
     // La recarga posterior tarda: mientras, la pantalla debe mostrar ya lo guardado.
     apiMock.businessSettings.mockResolvedValueOnce(cafeteria).mockReturnValue(new Promise(() => {}));
     renderFlow();
     await user.click(await screen.findByRole('button', { name: /Club de pádel/ }));
+    const grace = screen.getByLabelText('Gracia al terminar un turno (minutos)');
+    await user.clear(grace);
+    await user.type(grace, '6');
     await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await user.click(await screen.findByRole('button', { name: 'Aplicar cambio' }));
     expect(await screen.findByText(/Flujo guardado/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Club de pádel/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByText(/es un flujo personalizado/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Gracia al terminar un turno (minutos)')).toHaveValue(6);
+    expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('tenant-token', { gracia_liberacion_min: 6 });
   });
 
   it('personalizar: pagar al final y entregar sin QR da un flujo personalizado', async () => {

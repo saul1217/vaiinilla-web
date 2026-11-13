@@ -1,7 +1,18 @@
 import { api } from './api';
 import { VaiinillaApiError } from './api-error';
+import {
+  isNotFound,
+  isVersionConflict,
+  operationLabel,
+  reasonLabel,
+  splitTransition,
+  transitionBlockDetails,
+} from './config-transition';
 import type {
   BusinessSettingsInput,
+  ConfigurationTransitionChanges,
+  ConfigurationTransitionOperation,
+  ConfigurationTransitionPreflight,
   CatalogProductInput,
   InventoryUnit,
   InvitationRole,
@@ -273,6 +284,45 @@ export class AssistantPartialFailure extends Error {
   }
 }
 
+/** La revisión previa (preflight) no permite el cambio de tipo o modo; trae motivos y operaciones. */
+export class AssistantTransitionBlocked extends Error {
+  constructor(readonly preflight: ConfigurationTransitionPreflight) {
+    super('El cambio de tipo o modo está bloqueado.');
+  }
+}
+
+/** El cambio de tipo o modo no se aplicó; los demás ajustes sí se guardaron. */
+export class AssistantTransitionFailure extends Error {
+  constructor(readonly fields: string[], readonly reason: unknown) {
+    super(transitionFailureMessage(fields, reason));
+  }
+}
+
+function blockSummary(reasons: string[], operations: ConfigurationTransitionOperation[], total: number): string {
+  const parts = reasons.filter((code) => code !== 'OPERATIONS_IN_FLIGHT').map(reasonLabel);
+  if (operations.length) {
+    const shown = operations.slice(0, 5).map((op) => `${operationLabel(op.code)}${op.referencia ? ` ${op.referencia}` : ''}${op.estado ? ` (${op.estado})` : ''}`);
+    const more = total > shown.length ? ` y ${total - shown.length} más` : '';
+    parts.push(`Cierra antes: ${shown.join(', ')}${more}.`);
+  } else if (reasons.includes('OPERATIONS_IN_FLIGHT')) {
+    parts.push(reasonLabel('OPERATIONS_IN_FLIGHT'));
+  }
+  return parts.join(' ');
+}
+
+function transitionFailureMessage(fields: string[], cause: unknown): string {
+  const what = `No se cambió ${fields.join(', ')}; lo demás sí se guardó.`;
+  if (cause instanceof AssistantTransitionBlocked) {
+    const { reason_codes, operaciones } = cause.preflight;
+    return `${what} ${blockSummary(reason_codes, operaciones?.items ?? [], operaciones?.total ?? 0)} Luego toca «Reintentar» para volver a revisarlo.`;
+  }
+  const blocked = transitionBlockDetails(cause);
+  if (blocked) return `${what} ${blockSummary(blocked.reason_codes, blocked.operaciones, blocked.total)} Luego toca «Reintentar» para volver a revisarlo.`;
+  if (isVersionConflict(cause)) return `${what} La configuración cambió en otra sesión: toca «Reintentar» para volver a revisarlo.`;
+  if (isNotFound(cause)) return `${what} Este servidor todavía no tiene el cambio con revisión previa (404). Inténtalo más tarde.`;
+  return `${what} ${cause instanceof Error && cause.message ? cause.message : 'Revisa tu conexión e inténtalo de nuevo.'}`;
+}
+
 const ALREADY_DONE = new Set(['INVITATION_PENDING_EXISTS', 'MEMBERSHIP_ROLE_EXISTS', 'INSUMO_NAME_CONFLICT']);
 const VALIDATION_STATUS = new Set([400, 409, 422]);
 
@@ -284,7 +334,7 @@ export function isAlreadyDone(error: unknown): boolean {
 export async function applyStep(token: string, step: AssistantStep, key: string): Promise<void> {
   switch (step.section) {
     case 'cambios':
-      return applySettings(token, step.cambios);
+      return applySettings(token, step.cambios, key);
     case 'espacios': {
       const { group } = step;
       await api.createSpaceBatch(token, { tipo: group.tipo, prefijo: group.prefijo, desde: 1, hasta: group.cantidad }, key);
@@ -345,8 +395,38 @@ export async function applyStep(token: string, step: AssistantStep, key: string)
   }
 }
 
-/** Todos los ajustes en un PATCH; si el servidor rechaza el contenido, uno por uno para no perder los demás. */
-async function applySettings(token: string, cambios: BusinessSettingsInput): Promise<void> {
+/**
+ * Los ajustes de la propuesta. El tipo y los modos del negocio (campos de transición) van por
+ * preflight + transición versionada, nunca por el PATCH; lo demás va en un PATCH y, si el servidor
+ * rechaza el contenido, uno por uno para no perder los demás. Si la transición se bloquea, los
+ * ajustes ordinarios se guardan igual y el paso falla con los motivos: reintentarlo repite la
+ * revisión (preflight) con la versión nueva, no reenvía a ciegas.
+ */
+async function applySettings(token: string, cambios: BusinessSettingsInput, key: string): Promise<void> {
+  const current = await api.businessSettings(token);
+  const { transition, ordinary } = splitTransition(cambios, current);
+  let transitionError: unknown = null;
+  if (transition) {
+    try {
+      await applyTransition(token, transition, key);
+    } catch (error) {
+      transitionError = error;
+    }
+  }
+  if (Object.keys(ordinary).length) await applyOrdinarySettings(token, ordinary);
+  if (transitionError) throw new AssistantTransitionFailure(Object.keys(transition ?? {}), transitionError);
+}
+
+async function applyTransition(token: string, cambios: ConfigurationTransitionChanges, key: string): Promise<void> {
+  const preflight = await api.preflightBusinessTransition(token, { cambios });
+  if (!preflight.permitido) throw new AssistantTransitionBlocked(preflight);
+  // La llave depende de la versión revisada: repetir con la misma versión es idempotente y una
+  // versión nueva (después de volver a revisar) no choca con la llave anterior.
+  const transitionKey = await stepKey(key, 'transicion', String(preflight.version_actual));
+  await api.applyBusinessTransition(token, { version_esperada: preflight.version_actual, cambios }, transitionKey);
+}
+
+async function applyOrdinarySettings(token: string, cambios: BusinessSettingsInput): Promise<void> {
   try {
     await api.saveBusinessSettings(token, cambios);
     return;
@@ -437,7 +517,7 @@ async function applyRecipe(token: string, recipe: AssistantRecipe, key: string):
 
 /** El texto que ve el usuario cuando un paso falla. */
 export function stepErrorMessage(error: unknown): string {
-  if (error instanceof AssistantPartialFailure) return error.message;
+  if (error instanceof AssistantPartialFailure || error instanceof AssistantTransitionFailure) return error.message;
   if (error instanceof VaiinillaApiError) return error.message;
   if (error instanceof Error && error.message) return error.message;
   return 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.';

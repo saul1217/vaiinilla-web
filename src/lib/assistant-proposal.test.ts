@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VaiinillaApiError } from './api-error';
-import { AssistantPartialFailure, applyStep, mergeRecipe, nameKey, parseProposal, proposalSteps, stepKey } from './assistant-proposal';
+import { AssistantPartialFailure, AssistantTransitionFailure, applyStep, mergeRecipe, nameKey, parseProposal, proposalSteps, stepErrorMessage, stepKey } from './assistant-proposal';
 
-const apiMock = vi.hoisted(() => ({ saveBusinessSettings: vi.fn(), createInvitation: vi.fn(), createInventorySupply: vi.fn(), listManagedSpaces: vi.fn(), updateSpace: vi.fn(), createSpaceBatch: vi.fn() }));
+const apiMock = vi.hoisted(() => ({ businessSettings: vi.fn(), preflightBusinessTransition: vi.fn(), applyBusinessTransition: vi.fn(), saveBusinessSettings: vi.fn(), createInvitation: vi.fn(), createInventorySupply: vi.fn(), listManagedSpaces: vi.fn(), updateSpace: vi.fn(), createSpaceBatch: vi.fn() }));
 vi.mock('./api', () => ({ api: apiMock }));
 
 describe('assistant-proposal', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMock.businessSettings.mockResolvedValue({ tipo: 'cafeteria', entrega_requiere_qr: true, permite_pago_al_final: false, entrega_en_espacio: 'mesa' });
+  });
 
   it('la llave de un paso es un UUID estable para la misma propuesta y distinta entre propuestas', async () => {
     const a = await stepKey('propuesta-1', 'menu-0');
@@ -44,17 +47,79 @@ describe('assistant-proposal', () => {
       .mockRejectedValueOnce(new VaiinillaApiError(422, { code: 'VALIDATION_ERROR', message: 'Regla cruzada' }))
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(new VaiinillaApiError(422, { code: 'VALIDATION_ERROR', message: 'No' }));
-    const step = { section: 'cambios' as const, label: 'Ajustes', cambios: { tipo: 'bar', permite_pago_al_final: true } };
+    const step = { section: 'cambios' as const, label: 'Ajustes', cambios: { gracia_liberacion_min: 9, visible_en_directorio: true } };
     const error = await applyStep('t', step, 'k').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AssistantPartialFailure);
-    expect((error as AssistantPartialFailure).failed).toEqual(['permite_pago_al_final']);
-    expect(apiMock.saveBusinessSettings).toHaveBeenNthCalledWith(2, 't', { tipo: 'bar' });
+    expect((error as AssistantPartialFailure).failed).toEqual(['visible_en_directorio']);
+    expect(apiMock.saveBusinessSettings).toHaveBeenNthCalledWith(2, 't', { gracia_liberacion_min: 9 });
+    expect(apiMock.preflightBusinessTransition).not.toHaveBeenCalled();
   });
 
   it('sin red no insiste campo por campo', async () => {
     apiMock.saveBusinessSettings.mockRejectedValueOnce(new Error('sin red'));
-    await expect(applyStep('t', { section: 'cambios', label: 'Ajustes', cambios: { tipo: 'bar' } }, 'k')).rejects.toThrow('sin red');
+    await expect(applyStep('t', { section: 'cambios', label: 'Ajustes', cambios: { gracia_liberacion_min: 9 } }, 'k')).rejects.toThrow('sin red');
     expect(apiMock.saveBusinessSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('el tipo y los modos van por preflight y transición, nunca por el PATCH', async () => {
+    apiMock.preflightBusinessTransition.mockResolvedValue({ permitido: true, reason_codes: [], bloqueos: [], version_actual: 4, capacidades_resultantes: {} });
+    apiMock.applyBusinessTransition.mockResolvedValue({ permitido: true });
+    apiMock.saveBusinessSettings.mockResolvedValue({});
+    const cambios = { tipo: 'bar', permite_pago_al_final: true, entrega_requiere_qr: true, entrega_en_espacio: 'barra' as const, gracia_liberacion_min: 9 };
+    await applyStep('t', { section: 'cambios', label: 'Ajustes', cambios }, 'k');
+    // entrega_requiere_qr ya vale true: no abre transición ni viaja en el PATCH.
+    const transition = { tipo: 'bar', permite_pago_al_final: true, entrega_en_espacio: 'barra' };
+    expect(apiMock.preflightBusinessTransition).toHaveBeenCalledWith('t', { cambios: transition });
+    expect(apiMock.applyBusinessTransition).toHaveBeenCalledWith('t', { version_esperada: 4, cambios: transition }, await stepKey('k', 'transicion', '4'));
+    expect(apiMock.saveBusinessSettings).toHaveBeenCalledTimes(1);
+    expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('t', { gracia_liberacion_min: 9 });
+  });
+
+  it('si la revisión bloquea, guarda lo demás, no aplica la transición y enseña motivos y operaciones', async () => {
+    apiMock.preflightBusinessTransition.mockResolvedValue({
+      permitido: false,
+      reason_codes: ['OPERATIONS_IN_FLIGHT'],
+      bloqueos: [{ code: 'OPEN_ORDERS', count: 1, message: 'Hay pedidos abiertos o en curso.' }],
+      version_actual: 4,
+      capacidades_resultantes: {},
+      operaciones: { items: [{ code: 'OPEN_ORDERS', id: '9', referencia: '12', estado: 'preparando', desde: null, panel: 'pedidos' }], pagina: 1, limite: 20, total: 3, hay_mas: true },
+    });
+    apiMock.saveBusinessSettings.mockResolvedValue({});
+    const error = await applyStep('t', { section: 'cambios', label: 'Ajustes', cambios: { tipo: 'bar', gracia_liberacion_min: 9 } }, 'k').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AssistantTransitionFailure);
+    expect(apiMock.applyBusinessTransition).not.toHaveBeenCalled();
+    expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('t', { gracia_liberacion_min: 9 });
+    expect(apiMock.saveBusinessSettings.mock.calls.every(([, body]) => !('tipo' in (body as object)))).toBe(true);
+    const message = stepErrorMessage(error);
+    expect(message).toContain('No se cambió tipo; lo demás sí se guardó.');
+    expect(message).toContain('Pedido abierto 12 (preparando) y 2 más');
+    expect(message).toContain('Reintentar');
+  });
+
+  it('un 409 de versión al aplicar pide volver a revisar; reintentar repite el preflight con otra llave', async () => {
+    apiMock.preflightBusinessTransition
+      .mockResolvedValueOnce({ permitido: true, reason_codes: [], bloqueos: [], version_actual: 4, capacidades_resultantes: {} })
+      .mockResolvedValueOnce({ permitido: true, reason_codes: [], bloqueos: [], version_actual: 5, capacidades_resultantes: {} });
+    apiMock.applyBusinessTransition
+      .mockRejectedValueOnce(new VaiinillaApiError(409, { code: 'CONFIG_VERSION_CONFLICT', message: 'Versión desactualizada.', details: [{ version_actual: 5 }] }))
+      .mockResolvedValueOnce({ permitido: true });
+    const step = { section: 'cambios' as const, label: 'Ajustes', cambios: { tipo: 'bar' } };
+    const error = await applyStep('t', step, 'k').catch((e: unknown) => e);
+    expect(stepErrorMessage(error)).toContain('volver a revisarlo');
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
+    await applyStep('t', step, 'k');
+    expect(apiMock.preflightBusinessTransition).toHaveBeenCalledTimes(2);
+    const [first, second] = apiMock.applyBusinessTransition.mock.calls.map((call) => call[2] as string);
+    expect(first).toBe(await stepKey('k', 'transicion', '4'));
+    expect(second).toBe(await stepKey('k', 'transicion', '5'));
+    expect(apiMock.applyBusinessTransition.mock.calls[1]?.[1]).toEqual({ version_esperada: 5, cambios: { tipo: 'bar' } });
+  });
+
+  it('un 404 de la transición se enseña y no cae al PATCH heredado', async () => {
+    apiMock.preflightBusinessTransition.mockRejectedValue(new VaiinillaApiError(404, { code: 'NOT_FOUND', message: 'Not found' }));
+    const error = await applyStep('t', { section: 'cambios', label: 'Ajustes', cambios: { permite_pago_al_final: true } }, 'k').catch((e: unknown) => e);
+    expect(stepErrorMessage(error)).toContain('(404)');
+    expect(apiMock.saveBusinessSettings).not.toHaveBeenCalled();
   });
 
   it('una invitación que ya existía cuenta como hecha', async () => {
