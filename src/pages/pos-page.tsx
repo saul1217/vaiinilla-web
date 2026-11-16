@@ -560,6 +560,7 @@ export function PosPage() {
           <div className="staff-cashbar__actions">
             {isCashier && active && <Button variant="secondary" onClick={() => setDrawerOpen(true)}>Movimientos del cajón</Button>}
             {isCashier && CORTES_REPORTE_ENABLED && <Link className="button button--secondary" to="/app/cortes">Corte de caja</Link>}
+            {canOperateSession && deliveryQr.data?.modo_escuela && <Link className="button button--secondary" to="/app/alumnos">Alumnos</Link>}
             <Button variant="secondary" disabled={session.isPending || (session.isError && !active)} onClick={() => setSessionOpen(true)}>{active ? 'Cerrar caja' : 'Abrir Caja'}</Button>
           </div>
           {isCashier && active && <CashDrawer token={token} sessionId={active.id} open={drawerOpen} onOpenChange={setDrawerOpen} />}
