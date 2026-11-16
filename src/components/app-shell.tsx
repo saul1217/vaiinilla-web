@@ -86,19 +86,18 @@ const posNavigation: NavItem[] = [
   ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto', icon: Truck } satisfies NavItem] : []),
   ...agendaNavigation,
   ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
-  { to: '/app/mi-turno', label: 'Mi turno', icon: Coins },
 ];
 const kitchenNavigation: NavItem[] = [
   { to: '/app/cocina', label: 'Cocina', icon: ChefHat },
   // Cocina ve el inventario; editarlo depende de `cocina_edita_inventario` (lo resuelve la página).
   ...(INVENTARIO_ENABLED ? [{ to: '/app/inventario', label: 'Inventario', icon: PackageCheck } satisfies NavItem] : []),
-  { to: '/app/mi-turno', label: 'Mi turno', icon: Coins },
 ];
+/** «Mi turno» va al final de Caja, Mesero y Cocina: lo de diario (y Recepción en un hotel) va primero. */
+const myShiftNavigation: NavItem = { to: '/app/mi-turno', label: 'Mi turno', icon: Coins };
 const waiterNavigation: NavItem[] = [
   { to: '/app/pos', label: 'Mesas', icon: ConciergeBell },
   ...agendaNavigation,
   ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
-  { to: '/app/mi-turno', label: 'Mi turno', icon: Coins },
 ];
 
 /**
@@ -136,7 +135,10 @@ export function TenantShell({ children }: { children: ReactNode }) {
 
   const hotelItems = useHotelStaffNavigation(tenant?.context.rol ?? 'cliente', tenant?.token ?? '', tenant?.context.establecimiento_id ?? '');
   if (!tenant) return null;
-  const items = [...navigationForRole(tenant.context.rol), ...hotelItems];
+  const role = tenant.context.rol;
+  // Lo del hotel va junto al destino principal del rol; «Mi turno», al final.
+  const [roleHome, ...rest] = navigationForRole(role);
+  const items = [...(roleHome ? [roleHome] : []), ...hotelItems, ...rest, ...(role === 'admin' ? [] : [myShiftNavigation])];
 
   async function switchContext() {
     // Las recargas en efectivo sin confirmar no se quedan en el navegador al cambiar de acceso.
@@ -192,10 +194,7 @@ function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenC
     // Focus main even while a lazy page is loading. Its h1 will be the next reading stop.
     main.current?.focus();
   }, [location.pathname]);
-  // Hasta cuatro destinos caben en la barra; con más (admin) van los cuatro de siempre y el resto a «Más».
-  const primary = navigation.length > 4
-    ? ['/app', '/app/menu', '/app/pos', '/app/pedidos'].map((path) => navigation.find((item) => item.to === path)!)
-    : navigation;
+  const primary = mobilePrimary(navigation);
   const secondary = navigation.filter((item) => !primary.includes(item));
   const accountActions = <>
     <Button variant="ghost" onClick={onSwitchContext}><ArrowLeftRight aria-hidden="true" />Cambiar acceso</Button>
@@ -448,6 +447,19 @@ function roleLabel(role: string): string {
       mesero: 'Servicio en mesa',
     }[role] ?? role
   );
+}
+
+const ADMIN_MOBILE_PRIMARY = ['/app', '/app/menu', '/app/pos', '/app/pedidos'];
+
+/**
+ * Hasta cuatro destinos caben en la barra móvil. Con más, el admin deja los cuatro de siempre; el
+ * personal deja sus tres primeros (lo de diario) y el resto va a «Más», que ocupa el cuarto lugar.
+ */
+function mobilePrimary(navigation: NavItem[]): NavItem[] {
+  if (navigation.length <= 4) return navigation;
+  const admin = ADMIN_MOBILE_PRIMARY.map((path) => navigation.find((item) => item.to === path));
+  if (admin.every((item): item is NavItem => Boolean(item))) return admin;
+  return navigation.slice(0, 3);
 }
 
 function navigationForRole(role: string): NavItem[] {

@@ -58,8 +58,8 @@ const booking = (patch: Partial<StaffBooking> = {}): StaffBooking => ({
 });
 
 describe('bandera de la agenda', () => {
-  it('viene apagada por defecto', () => {
-    expect(AGENDA_ENABLED).toBe(false);
+  it('está prendida en develop', () => {
+    expect(AGENDA_ENABLED).toBe(true);
   });
 });
 
