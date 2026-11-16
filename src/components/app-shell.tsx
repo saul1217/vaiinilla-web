@@ -71,7 +71,6 @@ const adminNavigation: NavItem[] = [
   { to: '/app/flujo', label: 'Flujo de mi tienda', icon: Workflow },
   { to: '/app/espacios', label: 'Mesas y espacios', icon: Table2 },
   // La página dice si el negocio no es boliche; editar pistas solo lo ve admin.
-  ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas de boliche', icon: Table2 } satisfies NavItem] : []),
   { to: '/app/invitaciones', label: 'Personal e invitaciones', icon: UserPlus },
   // Admin solo consulta el saldo; recargar es de Caja (lo resuelve la página).
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo de clientes', icon: HandCoins } satisfies NavItem] : []),
@@ -85,7 +84,6 @@ const posNavigation: NavItem[] = [
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo', icon: HandCoins } satisfies NavItem] : []),
   ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto', icon: Truck } satisfies NavItem] : []),
   ...agendaNavigation,
-  ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
 ];
 const kitchenNavigation: NavItem[] = [
   { to: '/app/cocina', label: 'Cocina', icon: ChefHat },
@@ -97,7 +95,6 @@ const myShiftNavigation: NavItem = { to: '/app/mi-turno', label: 'Mi turno', ico
 const waiterNavigation: NavItem[] = [
   { to: '/app/pos', label: 'Mesas', icon: ConciergeBell },
   ...agendaNavigation,
-  ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
 ];
 
 /**
@@ -120,6 +117,24 @@ function useHotelStaffNavigationLive(role: OperationalRole, token: string, store
   ];
 }
 const noHotelStaffNavigation = (): NavItem[] => [];
+
+const BOWLING_ROLES: OperationalRole[] = ['admin', 'cajero', 'mesero'];
+/**
+ * «Pistas» solo en un boliche. La sesión no trae el tipo de negocio; la disponibilidad de
+ * reservas sí (`tipo_establecimiento`) y la contesta cualquier rol del personal.
+ */
+function useBowlingNavigationLive(role: OperationalRole, token: string, storeId: string): NavItem[] {
+  const allowed = BOWLING_ROLES.includes(role);
+  const day = useQuery({
+    queryKey: ['boliche', storeId, 'tipo'],
+    enabled: Boolean(token) && Boolean(storeId) && allowed,
+    queryFn: () => api.courtAvailability(token),
+    staleTime: 10 * 60_000,
+  });
+  if (!allowed || day.data?.tipo_establecimiento !== 'boliche') return [];
+  return [{ to: '/app/boliche', label: role === 'admin' ? 'Pistas de boliche' : 'Pistas', icon: Table2 }];
+}
+const useBowlingNavigation = BOWLING_ADMIN_ENABLED ? useBowlingNavigationLive : noHotelStaffNavigation;
 const useHotelStaffNavigation = HOTEL_STAFF_ENABLED ? useHotelStaffNavigationLive : noHotelStaffNavigation;
 
 const platformNavigation: NavItem[] = [
@@ -134,11 +149,12 @@ export function TenantShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
 
   const hotelItems = useHotelStaffNavigation(tenant?.context.rol ?? 'cliente', tenant?.token ?? '', tenant?.context.establecimiento_id ?? '');
+  const bowlingItems = useBowlingNavigation(tenant?.context.rol ?? 'cliente', tenant?.token ?? '', tenant?.context.establecimiento_id ?? '');
   if (!tenant) return null;
   const role = tenant.context.rol;
   // Lo del hotel va junto al destino principal del rol; «Mi turno», al final.
   const [roleHome, ...rest] = navigationForRole(role);
-  const items = [...(roleHome ? [roleHome] : []), ...hotelItems, ...rest, ...(role === 'admin' ? [] : [myShiftNavigation])];
+  const items = [...(roleHome ? [roleHome] : []), ...hotelItems, ...rest, ...bowlingItems, ...(role === 'admin' ? [] : [myShiftNavigation])];
 
   async function switchContext() {
     // Las recargas en efectivo sin confirmar no se quedan en el navegador al cambiar de acceso.

@@ -3,6 +3,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { TenantShell } from './app-shell';
 
+// El enlace «Pistas» pregunta el tipo de negocio; aquí no es lo que se prueba.
+vi.mock('../lib/bowling-admin-feature', () => ({ BOWLING_ADMIN_ENABLED: false }));
+
 // Con la bandera de reparto prendida: admin y Caja lo ven; mesero y Cocina no.
 vi.mock('../lib/reparto-feature', () => ({ REPARTO_ENABLED: true }));
 
