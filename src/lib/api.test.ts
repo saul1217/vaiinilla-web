@@ -829,22 +829,30 @@ describe('Vaiinilla API client', () => {
     await expect(api.accountingReport('tenant-token', '2026-11-01', '2026-11-04')).resolves.toMatchObject({ resumen: { ventas: 100 } });
   });
 
-  it('envía la conversación al asistente de configuración', async () => {
+  it('envía la conversación al asistente de configuración como trabajo y espera su respuesta', async () => {
     const messages = [{ rol: 'dueno' as const, texto: 'Tengo una cafetería' }];
-    server.use(http.post(`${baseUrl}/establecimiento/asistente`, async ({ request }) => {
-      await expect(request.json()).resolves.toEqual({ mensajes: messages });
-      return HttpResponse.json({ data: { mensaje: '¿Qué horario manejas?', opciones: ['Mañana', 'Tarde'] }, meta: {}, error: null });
-    }));
+    server.use(
+      http.post(`${baseUrl}/establecimiento/asistente/trabajos`, async ({ request }) => {
+        await expect(request.json()).resolves.toEqual({ mensajes: messages });
+        return HttpResponse.json({ data: { trabajo_id: 'j1', estado: 'pensando' }, meta: {}, error: null }, { status: 202 });
+      }),
+      http.get(`${baseUrl}/establecimiento/asistente/trabajos/j1`, () =>
+        HttpResponse.json({ data: { trabajo_id: 'j1', estado: 'listo', respuesta: { mensaje: '¿Qué horario manejas?', opciones: ['Mañana', 'Tarde'] } }, meta: {}, error: null })),
+    );
     await expect(api.askStoreAssistant('tenant-token', messages)).resolves.toMatchObject({ mensaje: '¿Qué horario manejas?' });
   });
 
   it('manda los Excel del asistente en archivos', async () => {
     const messages = [{ rol: 'dueno' as const, texto: 'Mi inventario [excel1]' }];
     const files = [{ id: 'excel1', nombre: 'Inventario.xlsx', contenido: 'UEsDBA==' }];
-    server.use(http.post(`${baseUrl}/establecimiento/asistente`, async ({ request }) => {
-      await expect(request.json()).resolves.toEqual({ mensajes: messages, archivos: files });
-      return HttpResponse.json({ data: { mensaje: 'Leí tu Excel', opciones: [], propuesta: null, sigue: false, quedan_mensajes: 58 }, meta: {}, error: null });
-    }));
+    server.use(
+      http.post(`${baseUrl}/establecimiento/asistente/trabajos`, async ({ request }) => {
+        await expect(request.json()).resolves.toEqual({ mensajes: messages, archivos: files });
+        return HttpResponse.json({ data: { trabajo_id: 'j2', estado: 'pensando' }, meta: {}, error: null }, { status: 202 });
+      }),
+      http.get(`${baseUrl}/establecimiento/asistente/trabajos/j2`, () =>
+        HttpResponse.json({ data: { trabajo_id: 'j2', estado: 'listo', respuesta: { mensaje: 'Leí tu Excel', opciones: [], propuesta: null, sigue: false, quedan_mensajes: 58 } }, meta: {}, error: null })),
+    );
     await expect(api.askStoreAssistant('tenant-token', messages, files)).resolves.toMatchObject({ quedan_mensajes: 58 });
   });
 
