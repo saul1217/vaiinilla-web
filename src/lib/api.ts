@@ -17,6 +17,7 @@ import type {
   AccountDeletion,
   CashDrawerReport,
   CashLastClose,
+  InventoryAlerts,
   MyShift,
   CashSession,
   CashPaymentResult,
@@ -551,6 +552,11 @@ export const api = {
       )
     ).data;
     return { efectivo_esperado: data?.efectivo_esperado ?? null };
+  },
+
+  /** Aviso de insumos para el personal: agotados, lo que no alcanza para mañana y lo bajo el mínimo. */
+  async inventoryAlerts(token: string): Promise<InventoryAlerts> {
+    return (await request<InventoryAlerts>('/inventario/avisos', { token, cache: 'no-store' })).data;
   },
 
   async operationalStatus(token: string): Promise<OperationalStatus> {

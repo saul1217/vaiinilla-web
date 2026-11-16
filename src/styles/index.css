@@ -7233,6 +7233,40 @@ html[data-admin-theme='oscuro'] .tenant-app :is(.app-identity, .app-rail__brand)
 .cashier-search__results { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .cashier-search__empty { margin: 4px 0; color: var(--color-muted); }
 
+/* Cocina: deshacer «lista» (N02), «¿Qué se acabó?» (N03), «Para mañana» (K05) y el aviso de insumos (AI3). */
+.kitchen-undo { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.kitchen-undo__item {
+  position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px 10px 16px; border-radius: 18px; background: var(--color-ink, #16150f); color: #fff; font-weight: 700;
+}
+.kitchen-undo__item > span:not(.kitchen-undo__fill) { position: relative; }
+.kitchen-undo__item .button { position: relative; }
+.kitchen-undo__fill { position: absolute; inset: 0 auto 0 0; background: var(--color-lime); opacity: 0.28; transition: width 250ms linear; }
+@media (prefers-reduced-motion: reduce) { .kitchen-undo__fill { transition: none; } }
+.kitchen-sold-out, .kitchen-reserved { display: grid; gap: 12px; }
+.kitchen-sold-out__list, .kitchen-reserved__list { display: grid; margin: 0; padding: 0 14px; list-style: none; border: 1px solid var(--line-strong); border-radius: 18px; }
+.kitchen-sold-out__list li, .kitchen-reserved__list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+.kitchen-sold-out__list li + li, .kitchen-reserved__list li + li { border-top: 1px solid var(--line-strong); }
+.kitchen-sold-out__item--off > span { color: var(--color-muted); text-decoration: line-through; }
+.kitchen-sold-out__switch {
+  min-width: 96px; min-height: 40px; padding: 0 14px; border-radius: 999px; font-weight: 800;
+  border: 1px solid var(--line-strong); background: rgba(132, 180, 40, 0.16); color: var(--color-lime-text);
+}
+.kitchen-sold-out__switch[aria-checked='false'] { background: rgba(224, 92, 76, 0.14); color: #c2473a; }
+.kitchen-reserved__list li { justify-content: flex-start; }
+.kitchen-reserved__list strong { min-width: 2.5ch; font-size: 1.125rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.kitchen-reserved__list small { margin-left: auto; color: var(--color-muted); }
+.kitchen-reserved__summary { margin: 0; font-weight: 700; }
+.kitchen-stock-alert { display: grid; gap: 4px; padding: 14px 16px; border-radius: 18px; background: rgba(255, 209, 91, 0.16); }
+.kitchen-stock-alert--urgent { background: rgba(224, 92, 76, 0.12); }
+.kitchen-stock-alert strong { color: #9a6a00; }
+.kitchen-stock-alert--urgent strong { color: #c2473a; }
+.kitchen-stock-alert p { margin: 0; }
+.kitchen-stock-alert small { color: var(--color-muted); }
+.kitchen-stock-alert__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+html[data-admin-theme='oscuro'] .kitchen-stock-alert strong { color: #ffd15b; }
+html[data-admin-theme='oscuro'] .kitchen-stock-alert--urgent strong, html[data-admin-theme='oscuro'] .kitchen-sold-out__switch[aria-checked='false'] { color: #f08a7d; }
+
 /* Mi turno (Doop N07): propinas de hoy en grande, sus números y la semana en barras. */
 .my-shift__hero {
   display: grid; gap: 4px; padding: 20px; border-radius: 28px;

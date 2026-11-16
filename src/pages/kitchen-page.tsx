@@ -2,6 +2,7 @@ import { AppPageHeader } from '../components/app-page-header';
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
   type InfiniteData,
 } from '@tanstack/react-query';
@@ -15,7 +16,12 @@ import {
   UtensilsCrossed,
   XCircle,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { KitchenSoldOut } from '../components/kitchen-sold-out';
+import { KitchenReserved } from '../components/kitchen-reserved';
+import { KitchenInventoryAlert } from '../components/kitchen-inventory-alert';
+import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
+import { PendingReadyQueue, UNDO_WINDOW_MS, type PendingReady } from '../lib/kitchen-extras';
 import { KitchenWorkView } from '../components/kitchen-work-view';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { RejectOrderDialog, type RejectTarget } from '../components/reject-order-dialog';
@@ -49,6 +55,16 @@ export function KitchenPage() {
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
   useStaffTheme();
   const ordersQueryKey = ['orders', 'kitchen', scopeId] as const;
+  const [soldOutOpen, setSoldOutOpen] = useState(false);
+  const [reservedOpen, setReservedOpen] = useState(false);
+  // «Para mañana» solo en una escuela; lo dice el estado operativo, que Cocina sí puede leer.
+  const status = useQuery({
+    queryKey: ['operational-status', 'cocina', scopeId],
+    enabled: Boolean(token) && role === 'cocina',
+    queryFn: () => api.operationalStatus(token),
+    staleTime: 5 * 60_000,
+  });
+  const isSchool = status.data?.modo_escuela === true;
 
   const orders = useInfiniteQuery({
     queryKey: ordersQueryKey,
@@ -94,6 +110,48 @@ export function KitchenPage() {
     },
   });
 
+  // «Lista» espera 10 s antes de mandarse para poder deshacerla (Doop N02). Al salir se manda ya.
+  const readyQueue = useRef(new PendingReadyQueue());
+  const [waitingReady, setWaitingReady] = useState<PendingReady[]>([]);
+  const [clock, setClock] = useState(() => Date.now());
+  const sendReady = useCallback((items: PendingReady[]) => {
+    for (const item of items) {
+      void api.transitionOrder(token, item.orderId, 'listo', item.version)
+        .then((updated) => setNotice(`Pedido ${updated.folio} marcado como listo.`))
+        .catch((error: unknown) => setNotice(`No se pudo marcar como listo el pedido ${item.folio}: ${errorMessage(error)}`))
+        .finally(() => void queryClient.invalidateQueries({ queryKey: ['orders', 'kitchen', scopeId] }));
+    }
+  }, [token, queryClient, scopeId]);
+  useEffect(() => {
+    if (waitingReady.length === 0) return;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setClock(now);
+      const due = readyQueue.current.takeDue(now);
+      if (due.length) {
+        setWaitingReady(readyQueue.current.list());
+        sendReady(due);
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [waitingReady.length, sendReady]);
+  useEffect(() => {
+    const queue = readyQueue.current;
+    const flush = () => sendReady(queue.takeAll());
+    window.addEventListener('pagehide', flush);
+    return () => { window.removeEventListener('pagehide', flush); flush(); };
+  }, [sendReady]);
+  const markReady = useCallback((order: OrderDetail) => {
+    const now = Date.now();
+    readyQueue.current.add(order, now);
+    setClock(now);
+    setNotice(null);
+    setWaitingReady(readyQueue.current.list());
+  }, []);
+  const undoReady = useCallback((orderId: string) => {
+    if (readyQueue.current.undo(orderId)) setWaitingReady(readyQueue.current.list());
+  }, []);
+
   // Cocina rechaza lo que no puede preparar (el pedido o un artículo); el cliente ve el motivo.
   async function onRejected(order: OrderDetail, target: RejectTarget, result: ItemRejectionResult | null) {
     setRejecting(null);
@@ -135,9 +193,10 @@ export function KitchenPage() {
     () => allOrders.filter((order) => order.estado === 'por_cobrar' || order.estado === 'cobrado'),
     [allOrders],
   );
+  const waitingIds = useMemo(() => new Set(waitingReady.map((item) => item.orderId)), [waitingReady]);
   const preparing = useMemo(
-    () => allOrders.filter((order) => order.estado === 'preparando'),
-    [allOrders],
+    () => allOrders.filter((order) => order.estado === 'preparando' && !waitingIds.has(order.id)),
+    [allOrders, waitingIds],
   );
   const ready = useMemo(
     () => allOrders.filter((order) => order.estado === 'listo'),
@@ -176,7 +235,27 @@ export function KitchenPage() {
           <RefreshCw aria-hidden="true" className={isRefreshing ? 'kitchen-refresh__icon--active' : ''} />
           {isRefreshing ? 'Actualizando' : 'Actualizar'}
         </Button>
+        <Button type="button" variant="secondary" onClick={() => setSoldOutOpen(true)}>¿Qué se acabó?</Button>
+        {isSchool && <Button type="button" variant="secondary" onClick={() => setReservedOpen(true)}>Para mañana</Button>}
       </div>
+      <KitchenSoldOut token={token} scopeId={scopeId} open={soldOutOpen} onOpenChange={setSoldOutOpen} />
+      {isSchool && <KitchenReserved token={token} scopeId={scopeId} open={reservedOpen} onOpenChange={setReservedOpen} />}
+      {INVENTARIO_ENABLED && role === 'cocina' && <KitchenInventoryAlert token={token} scopeId={scopeId} />}
+
+      {waitingReady.length > 0 && (
+        <ul className="kitchen-undo" aria-label="Listos por mandar">
+          {waitingReady.map((item) => {
+            const left = Math.max(0, item.deadlineMs - clock);
+            return (
+              <li key={item.orderId} className="kitchen-undo__item">
+                <span className="kitchen-undo__fill" style={{ width: `${(left / UNDO_WINDOW_MS) * 100}%` }} aria-hidden="true" />
+                <span>Pedido {item.folio} listo · se manda en {Math.ceil(left / 1000)} s</span>
+                <Button type="button" variant="secondary" onClick={() => undoReady(item.orderId)} aria-label={`Deshacer listo del pedido ${item.folio}`}>Deshacer</Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <details className="kitchen-overview">
         <summary id="kitchen-overview-title">Carga actual · {!orders.data ? (orders.isError ? 'Sin datos disponibles' : 'Cargando…') : `${allOrders.length} ${allOrders.length === 1 ? 'comanda activa' : 'comandas activas'}`}</summary>
@@ -254,7 +333,7 @@ export function KitchenPage() {
           actions={(order, stage) => stage === 'ready' ? null : <>
             <Button className="kitchen-ticket__button"
               loading={changingOrderId === order.id} disabled={transition.isPending}
-              onClick={() => transition.mutate({ order, target: stage === 'pending' ? 'preparando' : 'listo' })}>
+              onClick={() => (stage === 'pending' ? transition.mutate({ order, target: 'preparando' }) : markReady(order))}>
               {stage === 'pending' ? <><Flame aria-hidden="true" /> Comenzar preparación</> : <><CheckCircle2 aria-hidden="true" /> Marcar como listo</>}
             </Button>
             {rejectButton(order)}
