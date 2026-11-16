@@ -8340,3 +8340,22 @@ html[data-admin-theme='oscuro'] .student-counter__allergy { color: #f08a7d; }
   background: var(--color-lime); color: var(--color-lime-text); font-weight: 900;
 }
 .staff-manual__done { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 700; }
+
+/* «Caja» del dueño */
+.admin-cash { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; }
+.admin-cash__hint { margin: 0; color: var(--color-muted); font-size: 0.875rem; }
+.admin-cash__rows { display: grid; gap: 6px; margin: 0; }
+.admin-cash__rows div,
+.admin-cash__charges li { display: flex; justify-content: space-between; gap: 12px; }
+.admin-cash__rows dt { color: var(--color-muted); }
+.admin-cash__rows dd { margin: 0; font-weight: 800; }
+.admin-cash__hero { display: grid; gap: 2px; padding: 14px; border-radius: 14px; background: var(--color-ink); color: var(--color-white-warm); }
+.admin-cash__hero strong { font-size: 2rem; letter-spacing: -0.02em; }
+.admin-cash__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.admin-cash__tiles div { padding: 10px; border-radius: 12px; background: var(--color-cream-2); }
+.admin-cash__tiles dt { font-size: 0.8rem; color: var(--color-muted); }
+.admin-cash__tiles dd { margin: 0; font-weight: 800; }
+.admin-cash__subtitle { margin: 4px 0 0; font-size: 0.95rem; }
+.admin-cash__charges { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.admin-cash__charges span { display: grid; }
+.admin-cash__charges small { color: var(--color-muted); }

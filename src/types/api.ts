@@ -159,6 +159,8 @@ export interface CashDrawerSummary {
   salidas: string;
   devoluciones_efectivo: string;
   efectivo_esperado: string;
+  /** Lo cobrado con terminal en la sesión: no entra al cajón. Un back anterior no lo manda. */
+  cobros_tarjeta?: string;
 }
 
 export interface CashDrawerReport {
