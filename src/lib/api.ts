@@ -15,6 +15,8 @@ import type {
   ApiEnvelope,
   ApiErrorEnvelope,
   AccountDeletion,
+  CashDrawerReport,
+  CashLastClose,
   CashSession,
   CashPaymentResult,
   MixedPaymentResult,
@@ -509,6 +511,40 @@ export const api = {
         body: { monto_final: montoFinal },
       })
     ).data;
+  },
+
+  /** Con la caja cerrada: el último cierre del negocio, o null si nunca se ha cerrado. Caja y admin. */
+  async lastCashClose(token: string): Promise<CashLastClose | null> {
+    return (await request<CashLastClose | null>('/sesiones-caja/ultimo-cierre', { token, cache: 'no-store' })).data;
+  },
+
+  /** Renglones y totales del cajón de un turno: cuánto debe haber y de dónde sale. Caja y admin. */
+  async cashDrawer(token: string, sessionId: string): Promise<CashDrawerReport> {
+    return (
+      await request<CashDrawerReport>(`/sesiones-caja/${encodeURIComponent(sessionId)}/movimientos`, {
+        token,
+        cache: 'no-store',
+      })
+    ).data;
+  },
+
+  /**
+   * Caja mete o saca efectivo con un motivo (3 a 160 caracteres). La llave la da quien llama y se
+   * repite en un reintento del mismo movimiento, para que no se anote dos veces.
+   */
+  async registerCashDrawerMovement(
+    token: string,
+    sessionId: string,
+    movement: { tipo: 'entrada' | 'salida'; monto: string; motivo: string },
+    idempotencyKey: string,
+  ): Promise<{ efectivo_esperado: string | null }> {
+    const data = (
+      await request<{ efectivo_esperado?: string | null }>(
+        `/sesiones-caja/${encodeURIComponent(sessionId)}/movimientos`,
+        { method: 'POST', token, idempotencyKey, body: movement },
+      )
+    ).data;
+    return { efectivo_esperado: data?.efectivo_esperado ?? null };
   },
 
   async operationalStatus(token: string): Promise<OperationalStatus> {

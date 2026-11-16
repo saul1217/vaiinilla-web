@@ -135,6 +135,44 @@ export interface CashSession {
   cierre_automatico: boolean;
 }
 
+/** Un renglón del cajón (`GET /sesiones-caja/:id/movimientos`). Un cobro llega ya sin el cambio. */
+export interface CashDrawerMovement {
+  id: string;
+  /** apertura, cobro, propina, wallet_recharge, ajuste_entrada o ajuste_salida. */
+  tipo: string;
+  /** true solo en las salidas: a mano o por una devolución. */
+  sale: boolean;
+  monto: string;
+  motivo: string | null;
+  registrado_por: { nombre: string } | null;
+  pedido: { id: string; folio: number | null; espacio: string | null } | null;
+  devolucion_id: string | null;
+  creado_en: string;
+}
+
+export interface CashDrawerSummary {
+  fondo: string;
+  cobros_efectivo: string;
+  propinas: string;
+  recargas: string;
+  entradas: string;
+  salidas: string;
+  devoluciones_efectivo: string;
+  efectivo_esperado: string;
+}
+
+export interface CashDrawerReport {
+  resumen: CashDrawerSummary;
+  movimientos: CashDrawerMovement[];
+}
+
+/** El último cierre (`GET /sesiones-caja/ultimo-cierre`): la sesión cerrada con su arqueo. */
+export interface CashLastClose extends CashSession {
+  efectivo_esperado?: string | null;
+  diferencia?: string;
+  ventas_efectivo?: string | null;
+}
+
 export interface OperationalStatus {
   recibiendo_pedidos: boolean;
   local_sin_conexion?: boolean;
