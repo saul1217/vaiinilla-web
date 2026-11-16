@@ -1,7 +1,8 @@
 // «Mi turno y mis propinas» (Doop N07): lo de quien consulta, hoy y en la semana.
 // Contrato: GET /reportes/mi-turno de vaiinilla_back (admin, cajero, mesero y cocina).
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, BookOpen } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { AppPageHeader } from '../components/app-page-header';
 import { Card, LoadingState, VaiButton, VaiEmptyState } from '../components/vai';
 import { useSessions } from '../context/session-context';
@@ -25,7 +26,8 @@ export function MyShiftPage() {
 
   return (
     <main className="page-stack admin-screen my-shift">
-      <AppPageHeader eyebrow={subtitle || 'Personal'} title="Mi turno" description="Lo que llevas hoy y tus propinas de la semana. La propina es del negocio: aquí solo se informa." />
+      <AppPageHeader eyebrow={subtitle || 'Personal'} title="Mi turno" description="Lo que llevas hoy y tus propinas de la semana. La propina es del negocio: aquí solo se informa."
+        action={<Link className="button button--secondary" to="/app/manual"><BookOpen aria-hidden="true" className="size-4" /> Paso a paso</Link>} />
       {shift.isPending ? (
         <LoadingState label="Consultando tu turno…" cards={2} />
       ) : shift.isError ? (
