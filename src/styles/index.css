@@ -8359,3 +8359,9 @@ html[data-admin-theme='oscuro'] .student-counter__allergy { color: #f08a7d; }
 .admin-cash__charges { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .admin-cash__charges span { display: grid; }
 .admin-cash__charges small { color: var(--color-muted); }
+
+/* «Sugerir alérgenos» */
+.allergen-suggestion { display: grid; gap: 8px; justify-items: start; }
+.allergen-suggestion__card { display: grid; gap: 6px; width: 100%; padding: 12px; border: 1px solid var(--color-lime-dark); border-radius: 14px; }
+.allergen-suggestion__card p { margin: 0; color: var(--color-muted); font-size: 0.875rem; }
+.allergen-suggestion__chips { display: flex; flex-wrap: wrap; gap: 6px; }

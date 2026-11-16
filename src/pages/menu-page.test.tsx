@@ -16,6 +16,7 @@ const apiMock = vi.hoisted(() => ({
   deleteProductImage: vi.fn(),
   listManagedSpaces: vi.fn(),
   cardPayments: vi.fn(),
+  suggestAllergens: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
@@ -198,6 +199,26 @@ describe('administración del menú', () => {
     expect(await screen.findByRole('heading', { name: 'No hay coincidencias' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Limpiar búsqueda y filtros' }));
     expect(await screen.findByRole('heading', { name: 'Chocolate frío' })).toBeVisible();
+  });
+
+  it('sugiere alérgenos con nombre e ingredientes y agrega solo los que faltan', async () => {
+    apiMock.suggestAllergens.mockReset().mockResolvedValue({ alergenos: ['lacteos', 'gluten', 'soya'], motivo: 'Lleva leche y galleta.' });
+    apiMock.updateProduct.mockResolvedValue(product);
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+    await screen.findByRole('heading', { name: 'Chocolate frío' });
+    await user.click(screen.getByRole('button', { name: 'Editar Chocolate frío' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Ingredientes'), 'leche, galleta');
+    await user.click(within(dialog).getByRole('button', { name: /Sugerir alérgenos/ }));
+
+    expect(await within(dialog).findByText('Lleva leche y galleta. Revísalo antes de guardar.')).toBeInTheDocument();
+    expect(apiMock.suggestAllergens).toHaveBeenCalledWith('tenant-token', expect.objectContaining({ nombre: 'Chocolate frío', ingredientes: 'leche, galleta', productoId: 101 }));
+    await user.click(within(dialog).getByRole('button', { name: '+ Gluten' }));
+    expect(within(dialog).getByLabelText('Alérgenos')).toHaveValue('Leche, Gluten');
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar todos' }));
+    expect(within(dialog).getByLabelText('Alérgenos')).toHaveValue('Leche, Gluten, Lácteos, Soya');
+    expect(within(dialog).getByText('Ya marcaste todo lo que sugirió.')).toBeInTheDocument();
   });
 
   it('abre edición con los datos actuales y guarda el payload completo existente', async () => {

@@ -788,6 +788,26 @@ export const api = {
     return (await request<CatalogResponse>('/catalogo', { token })).data;
   },
 
+  /** El asistente sugiere alérgenos por nombre e ingredientes (y la receta, si el producto ya tiene). */
+  async suggestAllergens(
+    token: string,
+    input: { nombre: string; ingredientes?: string | null; descripcion?: string | null; productoId?: number | null },
+  ): Promise<{ alergenos: string[]; motivo: string | null }> {
+    const data = (
+      await request<{ alergenos?: string[]; motivo?: string | null }>('/catalogo/productos/alergenos-sugeridos', {
+        method: 'POST',
+        token,
+        body: {
+          nombre: input.nombre.trim(),
+          ...(input.descripcion?.trim() ? { descripcion: input.descripcion.trim() } : {}),
+          ...(input.ingredientes?.trim() ? { ingredientes: input.ingredientes.trim() } : {}),
+          ...(input.productoId ? { producto_id: input.productoId } : {}),
+        },
+      })
+    ).data;
+    return { alergenos: [...new Set((data.alergenos ?? []).map(String))], motivo: data.motivo?.trim() || null };
+  },
+
   async createCategory(token: string, input: CatalogCategoryInput, idempotencyKey?: string): Promise<CatalogCategory> {
     return (
       await request<CatalogCategory>('/catalogo/categorias', {
