@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyShift } from '../types/api';
 import { MyShiftPage } from './my-shift-page';
@@ -20,7 +21,7 @@ vi.mock('../context/session-context', () => ({
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return <QueryClientProvider client={client}><MemoryRouter>{children}</MemoryRouter></QueryClientProvider>;
 }
 
 // La forma real de la respuesta de Railway development, con otras cifras.
@@ -38,6 +39,7 @@ describe('Mi turno', () => {
   it('enseña las propinas de hoy, sus números y la semana', async () => {
     apiMock.myShift.mockResolvedValue(shift());
     render(<MyShiftPage />, { wrapper });
+    expect(screen.getByRole('link', { name: /Paso a paso/ })).toHaveAttribute('href', '/app/manual');
 
     const hoy = await screen.findByRole('region', { name: 'Hoy' });
     expect(within(hoy).getByText('$85.50')).toBeInTheDocument();

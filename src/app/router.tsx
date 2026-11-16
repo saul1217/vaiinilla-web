@@ -55,6 +55,7 @@ const LegalDocumentPage = lazy(() => import('../pages/legal-document-page').then
 const AccountDeletionPage = lazy(() => import('../pages/account-deletion-page').then((module) => ({ default: module.AccountDeletionPage })));
 const StripeOnboardingReturnPage = lazy(() => import('../pages/stripe-onboarding-return-page').then((module) => ({ default: module.StripeOnboardingReturnPage })));
 const StudentCounterPage = lazy(() => import('../pages/student-counter-page').then((module) => ({ default: module.StudentCounterPage })));
+const StaffManualPage = lazy(() => import('../pages/staff-manual-page').then((module) => ({ default: module.StaffManualPage })));
 const MyShiftPage = lazy(() => import('../pages/my-shift-page').then((module) => ({ default: module.MyShiftPage })));
 const VilloPage = lazy(() => import('../pages/villo-page').then((module) => ({ default: module.VilloPage })));
 
@@ -133,6 +134,7 @@ function TenantArea() {
             </RoleGuard>
           </Route>
           <Route path="/app/alumnos"><RoleGuard allowed={['admin', 'cajero']}><StudentCounterPage /></RoleGuard></Route>
+          <Route path="/app/manual"><RoleGuard allowed={['admin', 'cajero', 'mesero', 'cocina']}><StaffManualPage /></RoleGuard></Route>
           <Route path="/app/mi-turno"><RoleGuard allowed={['cajero', 'mesero', 'cocina']}><MyShiftPage /></RoleGuard></Route>
           <Route path="/app/cocina">
             <RoleGuard allowed={['cocina']}>
