@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { AlertTriangle, ReceiptText, ServerOff } from 'lucide-react';
+import { AlertTriangle, Download, ReceiptText, ServerOff } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { AppPageHeader } from '../components/app-page-header';
 import { Card, Chip, ChipRow, LoadingState, VaiButton, VaiEmptyState } from '../components/vai';
@@ -33,10 +33,11 @@ export function CortesReportePage() {
   useCortesSessionIsolation(scope);
   if (!tenant || !scope) return null;
   // La llave remonta la pantalla al cambiar de sesión: fecha, turno y pestaña vuelven a empezar.
-  return <CortesReporteContent key={`${scope.establecimientoId}|${scope.membresiaId}|${scope.usuarioId}`} scope={scope} token={tenant.token} />;
+  return <CortesReporteContent key={`${scope.establecimientoId}|${scope.membresiaId}|${scope.usuarioId}`} scope={scope} token={tenant.token} cashierOnly={tenant.context.rol === 'cajero'} />;
 }
 
-function CortesReporteContent({ scope, token }: { scope: CortesScope; token: string }) {
+/** `cashierOnly`: Caja ve el corte del día y de cada turno; el reporte contable es solo de admin (el servidor le da 403). */
+function CortesReporteContent({ scope, token, cashierOnly = false }: { scope: CortesScope; token: string; cashierOnly?: boolean }) {
   const [date, setDate] = useState(today);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
@@ -58,7 +59,7 @@ function CortesReporteContent({ scope, token }: { scope: CortesScope; token: str
   });
   const report = useQuery({
     queryKey: cortesKeys.accounting(scope, from, to),
-    enabled: tab === 'contador' && validPeriod,
+    enabled: !cashierOnly && tab === 'contador' && validPeriod,
     queryFn: async ({ signal }) => parseAccountingReport(await api.accountingReport(token, from, to, signal)),
   });
 
@@ -68,12 +69,14 @@ function CortesReporteContent({ scope, token }: { scope: CortesScope; token: str
   };
 
   return <main className="page-stack admin-screen admin-overview">
-    <AppPageHeader eyebrow="Administración · Caja" title="Cortes y reporte" description="Consulta el cierre del día o prepara la información para contabilidad." />
-    <ChipRow label="Tipo de reporte">
+    {cashierOnly
+      ? <AppPageHeader eyebrow="Caja" title="Corte de caja" description="El corte del día y de cada turno: lo que entró, lo que salió y lo que debe haber." />
+      : <AppPageHeader eyebrow="Administración · Caja" title="Cortes y reporte" description="Consulta el cierre del día o prepara la información para contabilidad." />}
+    {!cashierOnly && <ChipRow label="Tipo de reporte">
       <Chip selected={tab === 'caja'} onClick={() => { setTab('caja'); setSelectedShift(''); }}>Corte del día</Chip>
       <Chip selected={tab === 'contador'} onClick={() => setTab('contador')}>Contabilidad</Chip>
-    </ChipRow>
-    {tab === 'caja' ? <Card aria-busy={cut.isLoading || shift.isLoading}>
+    </ChipRow>}
+    {cashierOnly || tab === 'caja' ? <Card aria-busy={cut.isLoading || shift.isLoading}>
       <div className="flex flex-wrap items-end gap-3">
         <label>Fecha operativa<input aria-label="Fecha operativa" type="date" value={date} onChange={(e) => changeDate(e.target.value)} /></label>
         {shiftId && <VaiButton variant="quiet" onClick={() => setSelectedShift('')}>Volver al día</VaiButton>}
@@ -97,6 +100,7 @@ function CortesReporteContent({ scope, token }: { scope: CortesScope; token: str
       <div className="flex flex-wrap items-end gap-3">
         <label>Desde<input aria-label="Desde" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
         <label>Hasta<input aria-label="Hasta" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+        <CsvDownload token={token} from={from} to={to} disabled={!validPeriod} />
       </div>
       {!validPeriod ? <p className="vai-card__description" role="alert">La fecha «Desde» debe ser igual o anterior a «Hasta».</p> : <QueryView query={report}>{(data) => <>
         <h2 className="vai-card__title">Ventas del periodo{data.negocio ? ` · ${data.negocio}` : ''}</h2>
@@ -104,6 +108,37 @@ function CortesReporteContent({ scope, token }: { scope: CortesScope; token: str
       </>}</QueryView>}
     </Card>}
   </main>;
+}
+
+/** El CSV del reporte contable para el contador, tal como lo arma el servidor (Doop CR4). */
+function CsvDownload({ token, from, to, disabled }: { token: string; from: string; to: string; disabled: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const download = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const blob = await api.accountingReportCsv(token, from, to);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `reporte-contable-${from}-a-${to}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <>
+    <VaiButton variant="secondary" onClick={() => void download()} disabled={disabled || busy} aria-busy={busy || undefined}>
+      <Download aria-hidden="true" /> {busy ? 'Preparando CSV…' : 'Descargar CSV para el contador'}
+    </VaiButton>
+    {error && <p className="vai-card__description" role="alert">{error}</p>}
+  </>;
 }
 
 const ERROR_COPY = {

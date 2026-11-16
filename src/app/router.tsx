@@ -88,7 +88,7 @@ function TenantArea() {
               <OrdersPage />
             </RoleGuard>
           </Route>
-          {CORTES_REPORTE_ENABLED && <Route path="/app/cortes"><RoleGuard allowed={['admin']}><CortesReportePage /></RoleGuard></Route>}
+          {CORTES_REPORTE_ENABLED && <Route path="/app/cortes"><RoleGuard allowed={['admin', 'cajero']}><CortesReportePage /></RoleGuard></Route>}
           <Route path="/app/menu">
             <RoleGuard allowed={['admin']}>
               <MenuPage />
