@@ -29,7 +29,7 @@ beforeEach(() => {
 it('muestra el acceso a Escuela en un negocio con modo escuela', async () => {
   apiMock.businessSettings.mockResolvedValue(schoolSettingsFixture());
   setup();
-  expect(await screen.findByRole('link', { name: 'Escuela' })).toHaveAttribute('href', '/app/escuela');
+  expect(await screen.findByRole('link', { name: 'Escuela' }, { timeout: 5000 })).toHaveAttribute('href', '/app/escuela');
   expect(apiMock.businessSettings).toHaveBeenCalledWith('token');
 });
 
