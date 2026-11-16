@@ -270,6 +270,27 @@ function params(values: Record<string, string | number | undefined>): string {
   return query ? `?${query}` : '';
 }
 
+/** Cada cuánto se pregunta por un trabajo del asistente de la tienda. */
+export const ASSISTANT_POLL_MS = 2000;
+
+interface StoreAssistantJob {
+  trabajo_id: string;
+  /** pensando, listo o error. */
+  estado: string;
+  respuesta?: StoreAssistantReply;
+  error?: { code?: string; message?: string } | null;
+}
+
+function waitOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cancelled = () => new DOMException('Cancelado', 'AbortError');
+    if (signal?.aborted) return reject(cancelled());
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(timer); reject(cancelled()); };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 export const api = {
   /** Intento sin confirmar del pedido para esta sesión (entorno, negocio y usuario), si hay. */
   pendingMixedPayment(owner: MixedPaymentOwner, orderId: string): MixedPaymentAttempt | null {
@@ -1327,7 +1348,16 @@ export const api = {
     signal?: AbortSignal,
   ): Promise<StoreAssistantReply> {
     const body = files.length ? { mensajes: messages, archivos: files } : { mensajes: messages };
-    return (await request<StoreAssistantReply>('/establecimiento/asistente', { method: 'POST', token, body, signal })).data;
+    // Como Expo: se manda como trabajo en segundo plano y se pregunta cada 2 s hasta que conteste.
+    // Así una respuesta larga (un menú completo, un Excel) no se corta por el tiempo de la petición.
+    const started = (await request<{ trabajo_id: string; estado: string }>('/establecimiento/asistente/trabajos', { method: 'POST', token, body, signal })).data;
+    if (typeof started?.trabajo_id !== 'string') throw new Error('La respuesta no trae trabajo_id.');
+    for (;;) {
+      await waitOrAbort(ASSISTANT_POLL_MS, signal);
+      const job = (await request<StoreAssistantJob>(`/establecimiento/asistente/trabajos/${encodeURIComponent(started.trabajo_id)}`, { token, signal, cache: 'no-store' })).data;
+      if (job.estado === 'listo' && job.respuesta) return job.respuesta;
+      if (job.estado === 'error') throw new Error(job.error?.message?.trim() || 'El asistente no pudo contestar. Vuelve a intentarlo.');
+    }
   },
 
   /** Insumos activos del inventario (GET /inventario/insumos). */
