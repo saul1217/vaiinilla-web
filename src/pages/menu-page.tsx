@@ -1,3 +1,5 @@
+import { AllergenSuggestion } from '../components/allergen-suggestion';
+import { addAllergens } from '../lib/allergens';
 import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -375,6 +377,7 @@ function ProductFormModal({
     name: 'grupos_opcion',
     keyName: 'fieldKey',
   });
+  const allergensText = useWatch({ control: form.control, name: 'alergenos' }) ?? '';
   const counterPrice = useWatch({
     control: form.control,
     name: 'precio_mostrador',
@@ -583,6 +586,13 @@ function ProductFormModal({
               maxLength={500}
               error={form.formState.errors.alergenos?.message}
               registration={form.register('alergenos')}
+            />
+            <AllergenSuggestion
+              token={token}
+              productId={product?.id ?? null}
+              current={allergensText}
+              getInput={() => ({ nombre: form.getValues('nombre'), ingredientes: form.getValues('ingredientes'), descripcion: form.getValues('descripcion') })}
+              onUse={(labels) => form.setValue('alergenos', addAllergens(form.getValues('alergenos'), labels).slice(0, 500), { shouldDirty: true, shouldValidate: true })}
             />
           </div>
         </section>
