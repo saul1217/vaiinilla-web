@@ -58,8 +58,10 @@ describe('vista previa del flujo', () => {
       'Cobra si fue efectivo',
       'Prepara y marca listo',
       'En mesa entrega sin QR; para llevar valida el QR',
+      // Con Cashback prendido, el flujo dice que se acredita al cobrar.
+      'Acredita el cashback',
     ]);
-    expect(flowSummary(steps)).toEqual({ works: 5, soon: 0 });
+    expect(flowSummary(steps)).toEqual({ works: 6, soon: 0 });
   });
 
   it('pagar al final: cocina prepara sin esperar el cobro y se cobra la cuenta al irse', () => {
