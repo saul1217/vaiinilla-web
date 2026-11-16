@@ -111,7 +111,8 @@ describe('AgendaPage', () => {
     const log: string[] = [];
     server.use(...baseHandlers(log));
     renderPage();
-    const list = await screen.findByRole('list', { name: 'Reservas de Cancha 1' });
+    // La primera prueba del archivo paga la carga de la página; en CI, con dos procesos, pasa del segundo.
+    const list = await screen.findByRole('list', { name: 'Reservas de Cancha 1' }, { timeout: 5000 });
     const rows = within(list).getAllByRole('listitem');
     expect(rows).toHaveLength(2);
     expect(within(rows[0]!).getByText('08:00–09:30')).toBeInTheDocument();
