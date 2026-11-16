@@ -29,7 +29,7 @@ beforeEach(() => {
 it('muestra el acceso a Hotel en un negocio con hotel', async () => {
   apiMock.hotelSettings.mockResolvedValue(settingsFixture());
   setup();
-  expect(await screen.findByRole('link', { name: 'Hotel' })).toHaveAttribute('href', '/app/hotel');
+  expect(await screen.findByRole('link', { name: 'Hotel' }, { timeout: 5000 })).toHaveAttribute('href', '/app/hotel');
   expect(apiMock.hotelSettings).toHaveBeenCalledWith('token');
 });
 

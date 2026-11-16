@@ -14,6 +14,7 @@ import { errorMessage, VaiinillaApiError } from '../lib/api-error';
 import { api } from '../lib/api';
 import {
   completeTotpSignIn,
+  googleSignIn,
   passwordSignIn,
 } from '../lib/firebase';
 
@@ -35,6 +36,7 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [submittingTotp, setSubmittingTotp] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [platformPreparationUser, setPlatformPreparationUser] = useState<User | null>(null);
 
   const {
@@ -88,6 +90,26 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
       if (result.user) await finish(result.user);
     } catch (caught) {
       setError(authErrorMessage(caught));
+    }
+  }
+
+  async function signInWithGoogle() {
+    setError(null);
+    setNotice(null);
+    setGoogleBusy(true);
+    try {
+      const result = await googleSignIn();
+      if (result.mfaResolver) {
+        setResolver(result.mfaResolver);
+        return;
+      }
+      if (result.user) await finish(result.user);
+    } catch (caught) {
+      // Cerrar la ventana de Google no es un error que haya que enseñar.
+      if (caught instanceof FirebaseError && (caught.code === 'auth/popup-closed-by-user' || caught.code === 'auth/cancelled-popup-request')) return;
+      setError(authErrorMessage(caught));
+    } finally {
+      setGoogleBusy(false);
     }
   }
 
@@ -255,6 +277,11 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
               <Button type="submit" className="w-full" loading={isSubmitting} disabled={!configured}>
                 {isPlatform ? 'Continuar con segundo factor' : 'Iniciar sesión'}
               </Button>
+              {!isPlatform && (
+                <Button type="button" variant="secondary" className="w-full" loading={googleBusy} disabled={!configured || isSubmitting} onClick={() => void signInWithGoogle()}>
+                  <GoogleMark /> Entrar con Google
+                </Button>
+              )}
               <button
                 type="button"
                 className="text-link mx-auto block"
@@ -279,6 +306,17 @@ export function AuthPage({ surface }: { surface: 'tenant' | 'platform' }) {
   );
 }
 
+function GoogleMark() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 48 48" className="size-5">
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
+  );
+}
+
 function authErrorMessage(error: unknown): string {
   if (!(error instanceof FirebaseError)) return errorMessage(error);
   return (
@@ -288,6 +326,10 @@ function authErrorMessage(error: unknown): string {
       'auth/too-many-requests': 'Hay demasiados intentos. Espera un momento antes de continuar.',
       'auth/invalid-verification-code': 'El código TOTP no es válido o ya cambió.',
       'auth/network-request-failed': 'No fue posible contactar Firebase. Revisa tu conexión.',
+      'auth/popup-blocked': 'El navegador bloqueó la ventana de Google. Permite ventanas emergentes e intenta otra vez.',
+      'auth/unauthorized-domain': 'Este sitio todavía no está autorizado para entrar con Google. Entra con tu correo y contraseña.',
+      'auth/account-exists-with-different-credential': 'Ese correo ya tiene cuenta con contraseña. Entra con tu correo y contraseña.',
+      'auth/operation-not-allowed': 'Entrar con Google no está activo. Entra con tu correo y contraseña.',
     }[error.code] ?? 'No fue posible iniciar sesión. Intenta nuevamente.'
   );
 }
