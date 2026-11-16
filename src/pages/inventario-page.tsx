@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PackageOpen } from 'lucide-react';
 import { useState } from 'react';
 import { AppPageHeader } from '../components/app-page-header';
+import { InventorySupplies } from '../components/inventory-supplies';
 import { Feedback } from '../components/ui';
-import { Card, LoadingState, VaiButton, VaiEmptyState } from '../components/vai';
+import { Card, LoadingState, VaiButton } from '../components/vai';
 import { useSessions } from '../context/session-context';
 import { api } from '../lib/api';
 import { VaiinillaApiError, errorMessage } from '../lib/api-error';
@@ -98,9 +98,7 @@ function InventoryScreen({ scope }: { scope: Scope }) {
       </label>
       {kitchenPermission.isError && <Feedback tone="error">{errorMessage(kitchenPermission.error)}</Feedback>}
     </Card>}
-    <Card title="Insumos" description="Existencias" aria-busy={overviewQuery.isLoading || productsQuery.isLoading}>
-      {overviewQuery.isLoading ? <LoadingState label="Cargando inventario…" cards={2} /> : supplies.length === 0 ? <VaiEmptyState icon={<PackageOpen />} title="Sin insumos" message={overviewQuery.isError ? 'No se pudieron cargar los insumos.' : 'No hay insumos registrados todavía.'} /> : <div className="product-grid">{supplies.map(item => <article className="product-card" key={label(item.id)}><div className="product-card__body"><h3>{label(item.nombre)}</h3><p>{label(item.existencia)} {label(item.unidad)}</p><small>{item.bajo_minimo ? 'Bajo mínimo' : 'Disponible'}</small></div></article>)}</div>}
-    </Card>
+    <InventorySupplies token={token} overviewKey={keys.all} overview={{ data: overviewQuery.data, isLoading: overviewQuery.isLoading }} canEdit={canEdit} showCosts={role !== 'cocina'} products={products} />
     <Card title="Receta por producto" description="Producción">
       <label>Producto<select value={selected ?? ''} onChange={event => { setSelected(event.target.value ? Number(event.target.value) : null); setDraft(null); save.reset(); }}><option value="">Elige un producto</option>{products.map(item => <option key={label(item.id)} value={label(item.id)}>{label(item.nombre)}</option>)}</select></label>
       {save.isError && <Feedback tone="error">
