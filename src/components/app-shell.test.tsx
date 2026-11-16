@@ -104,7 +104,7 @@ it('Admin alcanza sus destinos (cashback oculto por flag) sin asignar aria-curre
 
 it.each([
   ['mesero', ['Mesas', 'Agenda de reservas', 'Mi turno']],
-  ['cocina', ['Cocina', 'Mi turno']],
+  ['cocina', ['Cocina', 'Inventario', 'Mi turno']],
 ] as const)('%s ve sus destinos en la barra móvil, con «Mi turno» al final', (role, labels) => {
   session.role = role;
   render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);

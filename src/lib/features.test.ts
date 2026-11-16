@@ -7,7 +7,7 @@ describe('feature flags del panel', () => {
     expect(CASHBACK_ENABLED).toBe(false);
   });
 
-  it('sin internet queda apagado hasta que QA lo libere', () => {
-    expect(SIN_INTERNET_ENABLED).toBe(false);
+  it('sin internet está prendido en develop', () => {
+    expect(SIN_INTERNET_ENABLED).toBe(true);
   });
 });
