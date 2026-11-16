@@ -29,6 +29,7 @@ import { QrTokenField } from '../components/qr-token-field';
 import { StaffOrderForm } from '../components/staff-order-form';
 import { Button, Feedback, Field } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
+import { AdminCashSummary } from '../components/admin-cash-summary';
 import { AccountAbonoForm } from '../components/account-abono-form';
 import { WaiterBoard } from '../components/waiter-board';
 import { useStaffTheme } from '../lib/staff-ui';
@@ -620,6 +621,10 @@ export function PosPage() {
             <div><p>Tipo de apertura</p><strong className="text-xl">{active.cierre_automatico ? 'Automática' : 'Manual'}</strong></div>
           </article>
         </section>
+      )}
+
+      {role === 'admin' && !session.isPending && !session.isError && (
+        <AdminCashSummary token={token} active={active ?? null} lastClose={lastClose.data} />
       )}
 
       {role === 'admin' && (
