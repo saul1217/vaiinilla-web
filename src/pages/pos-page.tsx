@@ -47,7 +47,8 @@ import { deliveryRequiresQr } from '../lib/delivery-policy';
 import { printOrderTicket } from '../lib/order-ticket-print';
 import type { OrderDetail, StaffOrderResult } from '../types/api';
 import type { AccountAbonoResult, CashLastClose } from '../types/api';
-import { isPosMixedPaymentsEnabled } from '../lib/features';
+import { CORTES_REPORTE_ENABLED, isPosMixedPaymentsEnabled } from '../lib/features';
+import { Link } from 'react-router-dom';
 
 /** El servidor no tiene la ruta (backend anterior a vaiinilla_back#211); un pedido inexistente no cuenta. */
 function isMixedEndpointMissing(error: unknown): boolean {
@@ -558,6 +559,7 @@ export function PosPage() {
           </div>
           <div className="staff-cashbar__actions">
             {isCashier && active && <Button variant="secondary" onClick={() => setDrawerOpen(true)}>Movimientos del cajón</Button>}
+            {isCashier && CORTES_REPORTE_ENABLED && <Link className="button button--secondary" to="/app/cortes">Corte de caja</Link>}
             <Button variant="secondary" disabled={session.isPending || (session.isError && !active)} onClick={() => setSessionOpen(true)}>{active ? 'Cerrar caja' : 'Abrir Caja'}</Button>
           </div>
           {isCashier && active && <CashDrawer token={token} sessionId={active.id} open={drawerOpen} onOpenChange={setDrawerOpen} />}

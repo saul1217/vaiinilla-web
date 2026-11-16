@@ -5,10 +5,10 @@ import { VaiinillaApiError } from '../lib/api-error';
 import { CORTES_QUERY_ROOT } from '../lib/cortes-reporte';
 import { CortesReportePage } from './cortes-reporte-page';
 
-const apiMock = vi.hoisted(() => ({ cashDayCut: vi.fn(), accountingReport: vi.fn(), cashSessionCut: vi.fn() }));
+const apiMock = vi.hoisted(() => ({ cashDayCut: vi.fn(), accountingReport: vi.fn(), cashSessionCut: vi.fn(), accountingReportCsv: vi.fn() }));
 vi.mock('../lib/api', () => ({ api: apiMock }));
 
-type FakeTenant = { token: string; access: { membresia_id: string }; context: { establecimiento_id: string; membresia_id: string; usuario_id: string } };
+type FakeTenant = { token: string; access: { membresia_id: string }; context: { establecimiento_id: string; membresia_id: string; usuario_id: string; rol?: string } };
 const session = vi.hoisted(() => ({ tenant: null as FakeTenant | null }));
 vi.mock('../context/session-context', () => ({ useSessions: () => ({ tenant: session.tenant }) }));
 
@@ -153,5 +153,42 @@ describe('CortesReportePage', () => {
     session.tenant = tenantOf('negocio-b', 'm-otra');
     act(() => rerenderPage());
     await waitFor(() => expect(apiMock.cashDayCut).toHaveBeenCalledTimes(3));
+  });
+  it('Caja ve el corte de caja sin la pestaña de Contabilidad y nunca pide el reporte contable', async () => {
+    session.tenant = { ...tenantOf('negocio-a'), context: { ...tenantOf('negocio-a').context, rol: 'cajero' } };
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Corte de caja' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /\$150\.00/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Contabilidad' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Descargar CSV/ })).not.toBeInTheDocument();
+    expect(apiMock.accountingReport).not.toHaveBeenCalled();
+  });
+
+  it('el admin descarga el CSV del periodo para el contador', async () => {
+    apiMock.accountingReport.mockResolvedValue({ periodo: { desde: '2026-11-01', hasta: '2026-11-04' }, resumen: { ventas: '0.00' } });
+    apiMock.accountingReportCsv.mockResolvedValue(new Blob(['Reporte contable'], { type: 'text/csv' }));
+    const createUrl = vi.fn(() => 'blob:csv');
+    const revokeUrl = vi.fn();
+    Object.assign(URL, { createObjectURL: createUrl, revokeObjectURL: revokeUrl });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Contabilidad' }));
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-11-01' } });
+    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-11-04' } });
+    fireEvent.click(screen.getByRole('button', { name: /Descargar CSV para el contador/ }));
+    await waitFor(() => expect(apiMock.accountingReportCsv).toHaveBeenCalledWith('token-negocio-a', '2026-11-01', '2026-11-04'));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(revokeUrl).toHaveBeenCalledWith('blob:csv');
+    click.mockRestore();
+  });
+
+  it('si el CSV falla lo dice sin tumbar la pantalla', async () => {
+    apiMock.accountingReport.mockResolvedValue({ resumen: { ventas: '0.00' } });
+    apiMock.accountingReportCsv.mockRejectedValue(new VaiinillaApiError(500, { code: 'INTERNAL_ERROR', message: 'No se pudo armar el CSV.' }));
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Contabilidad' }));
+    fireEvent.click(screen.getByRole('button', { name: /Descargar CSV para el contador/ }));
+    expect(await screen.findByText('No se pudo armar el CSV.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Descargar CSV para el contador/ })).toBeEnabled();
   });
 });

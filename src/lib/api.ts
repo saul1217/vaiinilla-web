@@ -1379,6 +1379,22 @@ export const api = {
     return (await request<Record<string, unknown>>(`/reportes/contable${params({ desde: from, hasta: to })}`, { token, signal })).data;
   },
 
+  /** El mismo reporte contable en CSV (UTF-8 con BOM, listo para Excel). Solo admin. */
+  async accountingReportCsv(token: string, from: string, to: string): Promise<Blob> {
+    const response = await fetch(`${apiUrl}/reportes/contable${params({ desde: from, hasta: to, formato: 'csv' })}`, {
+      headers: { Accept: 'text/csv', Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as ApiErrorEnvelope | null;
+      throw new VaiinillaApiError(
+        response.status,
+        payload?.error ?? { code: 'HTTP_ERROR', message: 'No se pudo descargar el reporte.' },
+      );
+    }
+    return response.blob();
+  },
+
   /**
    * Pantalla de inventario: insumos con existencia y, desde la migración 205, `permisos`
    * (`puede_editar` de esta sesión y `cocina_edita` del negocio). Un backend anterior no los manda.
