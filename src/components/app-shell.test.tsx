@@ -5,6 +5,9 @@ import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { PlatformShell, TenantShell } from './app-shell';
 
+// El enlace «Pistas» pregunta el tipo de negocio; aquí no es lo que se prueba.
+vi.mock('../lib/bowling-admin-feature', () => ({ BOWLING_ADMIN_ENABLED: false }));
+
 const session = vi.hoisted(() => ({ role: 'mesero' }));
 vi.mock('../context/auth-context', () => ({ useAuth: () => ({ signOut: vi.fn() }) }));
 vi.mock('../context/session-context', () => ({

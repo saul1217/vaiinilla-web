@@ -7,6 +7,9 @@ import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { settingsFixture } from '../test/hotel-fixtures';
 import { TenantShell } from './app-shell';
 
+// El enlace «Pistas» pregunta el tipo de negocio; aquí no es lo que se prueba.
+vi.mock('../lib/bowling-admin-feature', () => ({ BOWLING_ADMIN_ENABLED: false }));
+
 // Con la bandera prendida: Recepción para Caja y Administración, Habitaciones para Mesero y Administración, y solo en un hotel.
 vi.mock('../lib/hotel-staff-feature', () => ({ HOTEL_STAFF_ENABLED: true }));
 const session = vi.hoisted(() => ({ role: 'cajero' }));

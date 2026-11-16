@@ -3,6 +3,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TenantShell } from './app-shell';
 
+// El enlace «Pistas» pregunta el tipo de negocio; aquí no es lo que se prueba.
+vi.mock('../lib/bowling-admin-feature', () => ({ BOWLING_ADMIN_ENABLED: false }));
+
 // Con la bandera de la agenda prendida: la ven Administración, Caja y Mesero, no Cocina.
 vi.mock('../lib/agenda-feature', () => ({ AGENDA_ENABLED: true }));
 const session = vi.hoisted(() => ({ role: 'mesero' }));
