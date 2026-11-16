@@ -90,6 +90,9 @@ import type {
   InventoryOverview,
   InventoryStock,
   SupplyProductLink,
+  InventoryMovement,
+  InventoryReport,
+  InventoryAssistantReply,
   InventoryProduct,
   InventorySupply,
   InventorySupplyInput,
@@ -1519,6 +1522,29 @@ export const api = {
   /** Conteo físico de varios insumos; cada renglón lleva su UUID. Regresa cuántos no cuadraron. */
   async registerInventoryCount(token: string, conteos: { id: string; insumo_id: number; cantidad: number }[], nota?: string): Promise<{ con_diferencia: number }> {
     return (await request<{ con_diferencia: number }>('/inventario/conteos', { method: 'POST', token, body: { conteos, ...(nota?.trim() ? { nota: nota.trim() } : {}) } })).data;
+  },
+
+  /** Historial de movimientos; sin fechas el servidor da las últimas 24 h. */
+  async inventoryMovements(token: string, query: { desde?: string; hasta?: string; insumoId?: number | null } = {}): Promise<InventoryMovement[]> {
+    const params = new URLSearchParams({ limite: '300' });
+    if (query.desde) params.set('desde', query.desde);
+    if (query.hasta) params.set('hasta', query.hasta);
+    if (query.insumoId) params.set('insumo_id', String(query.insumoId));
+    return (await request<{ movimientos: InventoryMovement[] }>(`/inventario/movimientos?${params}`, { token })).data.movimientos;
+  },
+
+  /** Reporte por periodo (admin y caja). */
+  async inventoryReport(token: string, query: { desde?: string; hasta?: string } = {}): Promise<InventoryReport> {
+    const params = new URLSearchParams();
+    if (query.desde) params.set('desde', query.desde);
+    if (query.hasta) params.set('hasta', query.hasta);
+    const qs = params.toString();
+    return (await request<InventoryReport>(`/inventario/reporte${qs ? `?${qs}` : ''}`, { token })).data;
+  },
+
+  /** El asistente de inventario contesta con lo que hay, lo que se acaba y lo que falta. */
+  async inventoryAssistant(token: string, mensajes: { rol: 'personal' | 'asistente'; texto: string }[]): Promise<InventoryAssistantReply> {
+    return (await request<InventoryAssistantReply>('/inventario/asistente', { method: 'POST', token, body: { mensajes } })).data;
   },
 
   /** Los productos que gastan un insumo. */

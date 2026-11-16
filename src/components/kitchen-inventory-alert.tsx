@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { inventoryAlertDetail, inventoryAlertHeadline, inventoryAlertSupplier, inventoryAlertsEmpty } from '../lib/kitchen-extras';
 
-export function KitchenInventoryAlert({ token, scopeId }: { token: string; scopeId: string }) {
+export function KitchenInventoryAlert({ token, scopeId, showLink = true }: { token: string; scopeId: string; showLink?: boolean }) {
   const alerts = useQuery({
     queryKey: ['inventario', scopeId, 'avisos'],
     enabled: Boolean(token),
@@ -22,7 +22,7 @@ export function KitchenInventoryAlert({ token, scopeId }: { token: string; scope
       {supplier && <small>{[supplier.nombre, supplier.telefono].filter(Boolean).join(' · ')}</small>}
       <div className="kitchen-stock-alert__actions">
         {supplier?.telefono && <a className="button button--secondary" href={`tel:${supplier.telefono.replace(/[^0-9+]/g, '')}`}>Llamar</a>}
-        <Link className="button button--secondary" to="/app/inventario">Ver insumos</Link>
+        {showLink && <Link className="button button--secondary" to="/app/inventario">Ver insumos</Link>}
       </div>
     </section>
   );
