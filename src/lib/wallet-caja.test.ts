@@ -37,8 +37,8 @@ const record = (patch: Partial<PendingRecharge> = {}): PendingRecharge => ({
 afterEach(() => window.localStorage.clear());
 
 describe('bandera de saldo en Caja', () => {
-  it('viene apagada por defecto', () => {
-    expect(WALLET_CAJA_ENABLED).toBe(false);
+  it('está prendida en develop', () => {
+    expect(WALLET_CAJA_ENABLED).toBe(true);
   });
 });
 
