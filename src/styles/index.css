@@ -8365,3 +8365,30 @@ html[data-admin-theme='oscuro'] .student-counter__allergy { color: #f08a7d; }
 .allergen-suggestion__card { display: grid; gap: 6px; width: 100%; padding: 12px; border: 1px solid var(--color-lime-dark); border-radius: 14px; }
 .allergen-suggestion__card p { margin: 0; color: var(--color-muted); font-size: 0.875rem; }
 .allergen-suggestion__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Inventario: insumos */
+.inventory-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 0 0 10px; }
+.inventory-figures div { padding: 10px 12px; border-radius: 12px; background: var(--color-cream-2); }
+.inventory-figures div[data-alert='true'] { background: var(--color-danger-soft); }
+.inventory-figures dt { font-size: 0.8rem; color: var(--color-muted); }
+.inventory-figures dd { margin: 0; font-weight: 900; font-size: 1.25rem; }
+.inventory-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+.inventory-hint { margin: 0; color: var(--color-muted); }
+.inventory-supplies,
+.inventory-count,
+.inventory-uses { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.inventory-supplies li {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center;
+  padding: 12px; border: 1px solid var(--line); border-radius: 14px;
+}
+.inventory-supplies li[data-low='true'] { border-color: var(--color-danger); }
+.inventory-supplies li[data-inactive='true'] { opacity: 0.6; }
+.inventory-supplies__main,
+.inventory-supplies__qty { display: grid; gap: 2px; }
+.inventory-supplies__qty { text-align: right; }
+.inventory-supplies small { color: var(--color-muted); }
+.inventory-supplies h3 { margin: 0; font-size: 1rem; }
+.inventory-supplies__actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.inventory-uses li { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; justify-content: space-between; }
+.inventory-uses li > span { flex: 1 1 100%; font-weight: 700; }
+.inventory-uses__add { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }

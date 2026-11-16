@@ -690,12 +690,21 @@ export interface InventoryStock extends InventorySupply {
   existencia?: number | null;
   minimo?: number | null;
   bajo_minimo?: boolean;
+  categoria?: string | null;
+  costo_unitario?: number | null;
+  /** Existencia por costo. */
+  valor?: number | null;
+  proveedor_nombre?: string | null;
+  proveedor_telefono?: string | null;
+  /** Cuántos productos lo gastan (sus recetas). */
+  productos_que_lo_usan?: number;
 }
 
 /** GET /inventario/insumos completo; `permisos` falta si el backend no tiene la 205. */
 export interface InventoryOverview {
   insumos: InventoryStock[];
   permisos?: InventoryPermissions;
+  resumen?: { total?: number; bajo_minimo?: number; valor_total?: number };
 }
 
 export interface InventorySupplyInput {
@@ -704,13 +713,18 @@ export interface InventorySupplyInput {
   minimo: number;
   costo_unitario?: number;
   existencia_inicial?: number;
+  /** "" la borra. */
+  categoria?: string;
+  proveedor_nombre?: string;
+  proveedor_telefono?: string;
+  activo?: boolean;
 }
 
 export interface InventoryMovementInput {
   /** UUID; el mismo en un reintento para que el servidor no lo registre dos veces. */
   id: string;
   insumo_id: number;
-  tipo: 'entrada' | 'merma' | 'conteo';
+  tipo: 'entrada' | 'merma' | 'conteo' | 'ajuste';
   cantidad: number;
   costo_unitario?: number;
   nota?: string;
@@ -719,6 +733,16 @@ export interface InventoryMovementInput {
 export interface InventoryProduct {
   id: number;
   nombre: string;
+  categoria?: string;
+}
+
+/** Un producto que gasta un insumo (GET /inventario/insumos/:id/productos). */
+export interface SupplyProductLink {
+  producto_id: number;
+  nombre: string;
+  categoria_id: number;
+  categoria_nombre: string;
+  cantidad: number;
 }
 
 /** Una línea de la receta de un producto (GET /inventario/productos/{id}/receta). */

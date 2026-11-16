@@ -88,6 +88,8 @@ import type {
   StoreAssistantReply,
   InventoryMovementInput,
   InventoryOverview,
+  InventoryStock,
+  SupplyProductLink,
   InventoryProduct,
   InventorySupply,
   InventorySupplyInput,
@@ -1505,8 +1507,28 @@ export const api = {
    * Pantalla de inventario: insumos con existencia y, desde la migración 205, `permisos`
    * (`puede_editar` de esta sesión y `cocina_edita` del negocio). Un backend anterior no los manda.
    */
-  async inventoryOverview(token: string): Promise<InventoryOverview> {
-    return (await request<InventoryOverview>('/inventario/insumos', { token })).data;
+  async inventoryOverview(token: string, includeInactive = false): Promise<InventoryOverview> {
+    return (await request<InventoryOverview>(`/inventario/insumos${includeInactive ? '?inactivos=true' : ''}`, { token })).data;
+  },
+
+  /** Edita un insumo: nombre, etiqueta, unidad, mínimo, costo, proveedor o darlo de baja. */
+  async updateInventorySupply(token: string, id: number, input: Partial<InventorySupplyInput>): Promise<InventoryStock> {
+    return (await request<InventoryStock>(`/inventario/insumos/${id}`, { method: 'PATCH', token, idempotent: true, body: input })).data;
+  },
+
+  /** Conteo físico de varios insumos; cada renglón lleva su UUID. Regresa cuántos no cuadraron. */
+  async registerInventoryCount(token: string, conteos: { id: string; insumo_id: number; cantidad: number }[], nota?: string): Promise<{ con_diferencia: number }> {
+    return (await request<{ con_diferencia: number }>('/inventario/conteos', { method: 'POST', token, body: { conteos, ...(nota?.trim() ? { nota: nota.trim() } : {}) } })).data;
+  },
+
+  /** Los productos que gastan un insumo. */
+  async supplyProducts(token: string, supplyId: number): Promise<SupplyProductLink[]> {
+    return (await request<SupplyProductLink[]>(`/inventario/insumos/${supplyId}/productos`, { token })).data;
+  },
+
+  /** El insumo queda exactamente en esos productos, con lo que gasta cada uno. */
+  async saveSupplyProducts(token: string, supplyId: number, productos: { producto_id: number; cantidad: number }[]): Promise<SupplyProductLink[]> {
+    return (await request<SupplyProductLink[]>(`/inventario/insumos/${supplyId}/productos`, { method: 'PUT', token, idempotent: true, body: { productos, categorias: [] } })).data;
   },
 
   /** Solo admin: deja o no a Cocina editar el inventario (`cocina_edita_inventario`, migración 205). */
