@@ -1062,6 +1062,29 @@ export const api = {
     ).data;
   },
 
+  /**
+   * Abre la cuenta de un espacio libre. Con `duracionMin` abre un turno con fin (cancha sin precio).
+   * La llave se repite en el reintento del mismo toque para no abrir dos veces.
+   */
+  async openSpaceSession(token: string, spaceId: number, idempotencyKey: string, duracionMin?: number): Promise<void> {
+    await request(`/espacios/${spaceId}/sesion`, {
+      method: 'POST',
+      token,
+      idempotencyKey,
+      body: duracionMin ? { duracion_min: duracionMin } : {},
+    });
+  },
+
+  /** Alarga el turno abierto de un espacio; `version` evita alargar una sesión que ya cambió. */
+  async extendSpaceSession(token: string, spaceId: number, minutos: number, version: number | undefined, idempotencyKey: string): Promise<void> {
+    await request(`/espacios/${spaceId}/sesion/extensiones`, {
+      method: 'POST',
+      token,
+      idempotencyKey,
+      body: { minutos, ...(version ? { version } : {}) },
+    });
+  },
+
   /** Libera el espacio. El backend lo rechaza con pedidos sin cobrar. */
   async releaseSpace(token: string, spaceId: number, version?: number, force = false, note?: string): Promise<void> {
     await request(`/espacios/${spaceId}/sesion/cierres`, {

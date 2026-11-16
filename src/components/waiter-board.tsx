@@ -7,7 +7,7 @@ import { WaiterBoardHeader } from './waiter-board-header';
 // listo → activa → libre). Sondea cada 5 s. Al tocar una mesa se abre su detalle con las
 // acciones Voy / Atendida / Entregar y su cuenta (cobrar, rentar, liberar).
 // Contrato: docs/mesero-backend.md.
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Bell, BellOff, CheckCircle2, ScanLine, Table2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, EmptyState, Feedback } from './ui';
@@ -22,6 +22,8 @@ import { QrTokenField } from './qr-token-field';
 import { api } from '../lib/api';
 import { deliveryRequiresQr as orderRequiresQr } from '../lib/delivery-policy';
 import { errorMessage } from '../lib/api-error';
+import { formatMoney } from '../lib/money';
+import { accountDue, ordersSignature } from '../lib/waiter-dues';
 import { mustCollectBeforeDelivery, mensajeCobroAntesDeEntregar } from '../lib/cashier-queue';
 import type { SpaceAvailability } from '../types/api';
 import {
@@ -234,6 +236,21 @@ export function WaiterBoard({
     });
     return () => cancelAnimationFrame(frame);
   }, [open, onSheetOpenChange, sheetOpen]);
+  // Lo que falta cobrar de cada mesa con pedidos. El tablero no trae importes: la cuenta se
+  // pide solo cuando cambian los pedidos de esa mesa (la firma va en la llave).
+  const withOrders = tables.filter((table) => table.pedidos.length > 0);
+  const dueQueries = useQueries({
+    queries: withOrders.map((table) => ({
+      queryKey: ['mesero-due', table.espacio.id, ordersSignature(table.pedidos)],
+      queryFn: () => api.spaceSession(token, table.espacio.id),
+      enabled: Boolean(token),
+      staleTime: Infinity,
+      gcTime: 60_000,
+      retry: false,
+      select: accountDue,
+    })),
+  });
+  const dues = new Map(withOrders.map((table, index) => [table.espacio.id, dueQueries[index]?.data ?? null]));
   const calling = tables.filter((table) => stateOf(table) === 'call').length;
   const ready = tables.reduce((sum, table) => sum + table.pedidos.filter((order) => order.estado === 'listo').length, 0);
   const active = tables.filter((table) => stateOf(table, spaces.get(table.espacio.id)) === 'active').length;
@@ -250,6 +267,8 @@ export function WaiterBoard({
       return `${table.llamada.estado === 'en_camino' ? `Va ${table.llamada.tomada_por?.nombre ?? 'alguien'}` : 'Llamando'} · ${since(table.llamada.creado_en, now)}`;
     }
     if (state === 'ready') return `#${readyOrders.map((order) => order.folio).join(', #')} listo`;
+    const due = dues.get(table.espacio.id);
+    if (state === 'active' && due) return `Cuenta ${formatMoney(due)}`;
     if (state === 'active') {
       return table.pedidos.length
         ? `${table.pedidos.length} ${table.pedidos.length === 1 ? 'pedido' : 'pedidos'}`
@@ -374,9 +393,17 @@ export function WaiterBoard({
                   </p>
                 </div>
                 {open.llamada.estado === 'pendiente' ? (
-                  <Button loading={transition.isPending} onClick={() => transition.mutate({ call: open.llamada!, target: 'en_camino' })}>
-                    <Bell aria-hidden="true" className="size-5" /> Voy
-                  </Button>
+                  <div className="mesero-call__actions">
+                    <Button loading={transition.isPending && transition.variables?.target === 'en_camino'} disabled={transition.isPending}
+                      onClick={() => transition.mutate({ call: open.llamada!, target: 'en_camino' })}>
+                      <Bell aria-hidden="true" className="size-5" /> Voy
+                    </Button>
+                    {/* Ya se resolvió en la mesa: se cierra sin pasar por «Voy». */}
+                    <Button variant="secondary" loading={transition.isPending && transition.variables?.target === 'atendida'} disabled={transition.isPending}
+                      onClick={() => transition.mutate({ call: open.llamada!, target: 'atendida' })}>
+                      <CheckCircle2 aria-hidden="true" className="size-5" /> Atendida
+                    </Button>
+                  </div>
                 ) : (
                   <Button loading={transition.isPending} onClick={() => transition.mutate({ call: open.llamada!, target: 'atendida' })}>
                     <CheckCircle2 aria-hidden="true" className="size-5" /> Atendida

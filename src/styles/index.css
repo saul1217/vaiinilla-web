@@ -6517,6 +6517,7 @@ tbody tr:last-child td {
 }
 
 .space-account__rent,
+.space-account__open,
 .space-account__bill {
   display: grid;
   gap: 10px;
@@ -8268,4 +8269,10 @@ html[data-admin-theme] .kitchen-ticket__note-empty {
   html:not([data-admin-theme]) .auth-page .field__control::placeholder {
     color: #aaa596;
   }
+}
+
+.mesero-call__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }

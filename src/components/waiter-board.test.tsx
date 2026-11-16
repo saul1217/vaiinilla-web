@@ -177,6 +177,29 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     expect(screen.getByRole('heading', { name: 'Mesa 67' })).toHaveFocus();
   });
 
+  it('el mosaico de una mesa con pedidos en curso dice lo que falta cobrar', async () => {
+    state.call = null;
+    waiterClient.board.mockResolvedValue({
+      callsEnabled: true,
+      tables: [{ ...table(), llamada: null, pedidos: [{ ...table().pedidos[0], estado: 'preparando' }] }],
+    });
+    render(<WaiterBoard token="t" role="mesero" />, { wrapper: TestProvider });
+
+    expect(await screen.findByText('Cuenta $90.00 MXN')).toBeInTheDocument();
+  });
+
+  it('una llamada pendiente se puede cerrar como atendida sin pasar por Voy', async () => {
+    const user = userEvent.setup();
+    render(<WaiterBoard token="t" role="mesero" />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Mesa 67\. Llamando/ }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Atendida' }));
+
+    await waitFor(() => expect(waiterClient.transitionCall).toHaveBeenCalledWith(expect.objectContaining({ id: 'call-67' }), 'atendida'));
+    expect(waiterClient.transitionCall).not.toHaveBeenCalledWith(expect.anything(), 'en_camino');
+  });
+
   it('usa siempre los mosaicos nuevos y permite filtrar mesas por atender', async () => {
     const { container } = render(<WaiterBoard token="staff-token" role="mesero" />, { wrapper: TestProvider });
     const tile = await screen.findByRole('button', { name: /Mesa 67\./ });
