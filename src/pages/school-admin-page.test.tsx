@@ -41,8 +41,8 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 describe('bandera del admin de Escuela', () => {
-  it('viene apagada por defecto', () => {
-    expect(SCHOOL_ADMIN_ENABLED).toBe(false);
+  it('está prendida en develop', () => {
+    expect(SCHOOL_ADMIN_ENABLED).toBe(true);
   });
 });
 
