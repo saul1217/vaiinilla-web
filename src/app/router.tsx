@@ -54,6 +54,7 @@ const LegalIndexPage = lazy(() => import('../pages/legal-index-page').then((modu
 const LegalDocumentPage = lazy(() => import('../pages/legal-document-page').then((module) => ({ default: module.LegalDocumentPage })));
 const AccountDeletionPage = lazy(() => import('../pages/account-deletion-page').then((module) => ({ default: module.AccountDeletionPage })));
 const StripeOnboardingReturnPage = lazy(() => import('../pages/stripe-onboarding-return-page').then((module) => ({ default: module.StripeOnboardingReturnPage })));
+const MyShiftPage = lazy(() => import('../pages/my-shift-page').then((module) => ({ default: module.MyShiftPage })));
 const VilloPage = lazy(() => import('../pages/villo-page').then((module) => ({ default: module.VilloPage })));
 
 function LoadingRoute() {
@@ -130,6 +131,7 @@ function TenantArea() {
               <SpacesPage />
             </RoleGuard>
           </Route>
+          <Route path="/app/mi-turno"><RoleGuard allowed={['cajero', 'mesero', 'cocina']}><MyShiftPage /></RoleGuard></Route>
           <Route path="/app/cocina">
             <RoleGuard allowed={['cocina']}>
               <KitchenPage />

@@ -173,6 +173,19 @@ export interface CashLastClose extends CashSession {
   ventas_efectivo?: string | null;
 }
 
+/** «Mi turno» (`GET /reportes/mi-turno`): lo de quien consulta, hoy y de lunes a domingo. */
+export interface MyShift {
+  hoy: {
+    propinas: string;
+    entregas: number;
+    mesas: number;
+    llamadas_atendidas: number;
+    /** Minutos promedio entre que llaman al mesero y alguien toma la llamada; null sin llamadas. */
+    respuesta_min: string | null;
+  };
+  semana: { propinas: string; por_dia: { fecha: string; propinas: string }[] };
+}
+
 export interface OperationalStatus {
   recibiendo_pedidos: boolean;
   local_sin_conexion?: boolean;

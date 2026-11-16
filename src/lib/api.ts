@@ -17,6 +17,7 @@ import type {
   AccountDeletion,
   CashDrawerReport,
   CashLastClose,
+  MyShift,
   CashSession,
   CashPaymentResult,
   MixedPaymentResult,
@@ -511,6 +512,11 @@ export const api = {
         body: { monto_final: montoFinal },
       })
     ).data;
+  },
+
+  /** Mi turno: propinas que cobré, entregas, mesas y llamadas de hoy, y propinas de la semana. Personal y admin. */
+  async myShift(token: string): Promise<MyShift> {
+    return (await request<MyShift>('/reportes/mi-turno', { token, cache: 'no-store' })).data;
   },
 
   /** Con la caja cerrada: el último cierre del negocio, o null si nunca se ha cerrado. Caja y admin. */

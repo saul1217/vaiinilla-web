@@ -20,9 +20,10 @@ it.each([['mesero', 'Mesas'], ['cajero', 'Caja']])('%s ve su destino y la agenda
   session.role = role;
   render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
   const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
-  expect(within(mobile).getAllByRole('link')).toHaveLength(2);
+  expect(within(mobile).getAllByRole('link')).toHaveLength(3);
   expect(within(mobile).getByRole('link', { name: label })).toBeInTheDocument();
   expect(within(mobile).getByRole('link', { name: 'Agenda de reservas' })).toHaveAttribute('href', '/app/agenda');
+  expect(within(mobile).getByRole('link', { name: 'Mi turno' })).toHaveAttribute('href', '/app/mi-turno');
   expect(screen.queryByRole('button', { name: 'Más' })).not.toBeInTheDocument();
 });
 

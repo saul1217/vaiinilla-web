@@ -7233,6 +7233,27 @@ html[data-admin-theme='oscuro'] .tenant-app :is(.app-identity, .app-rail__brand)
 .cashier-search__results { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .cashier-search__empty { margin: 4px 0; color: var(--color-muted); }
 
+/* Mi turno (Doop N07): propinas de hoy en grande, sus números y la semana en barras. */
+.my-shift__hero {
+  display: grid; gap: 4px; padding: 20px; border-radius: 28px;
+  background: var(--color-lime); color: #16150f;
+}
+.my-shift__hero > span { font-size: 0.8125rem; font-weight: 800; opacity: 0.75; }
+.my-shift__hero > strong { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.my-shift__tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0 0; }
+.my-shift__tiles > div { padding: 10px; border-radius: 16px; background: rgba(24, 32, 8, 0.1); }
+.my-shift__tiles dt { font-size: 0.6875rem; font-weight: 800; opacity: 0.7; }
+.my-shift__tiles dd { margin: 0; font-size: 1rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .my-shift__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.my-shift__week-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.my-shift__week-head strong { font-size: 1.125rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.my-shift__bars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; height: 120px; margin: 12px 0 0; padding: 0; list-style: none; }
+.my-shift__day { display: grid; grid-template-rows: 1fr auto; align-items: end; justify-items: stretch; gap: 6px; min-height: 0; }
+.my-shift__bar { display: block; border-radius: 8px 8px 4px 4px; background: var(--line-strong); }
+.my-shift__day--today .my-shift__bar { background: var(--color-lime); }
+.my-shift__letter { text-align: center; font-size: 0.6875rem; font-weight: 800; color: var(--color-muted); }
+.my-shift__day--today .my-shift__letter { color: var(--color-lime-text); }
+
 /* Movimientos del cajón (Doop N11): lo que debe haber, los renglones del turno y meter o sacar dinero. */
 .cash-drawer { display: grid; gap: 14px; }
 .cash-drawer__expected {
