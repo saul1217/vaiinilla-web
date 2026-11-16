@@ -8278,3 +8278,44 @@ html[data-admin-theme] .kitchen-ticket__note-empty {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Caja › Alumnos sin teléfono */
+.student-counter__find,
+.student-counter__results,
+.student-counter__today,
+.student-counter__sell,
+.student-counter__charge { display: grid; gap: 10px; }
+.student-counter__credential { display: grid; gap: 8px; }
+.student-counter__hint { margin: 0; color: var(--color-muted); font-size: 0.875rem; display: flex; align-items: center; gap: 6px; }
+.student-counter__list,
+.student-counter__today ul,
+.student-counter__products { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.student-counter__list button {
+  width: 100%; display: grid; gap: 2px; text-align: left; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--color-white-warm); color: inherit; cursor: pointer;
+}
+.student-counter__list button:hover { border-color: var(--line-strong); }
+.student-counter__list small,
+.student-counter__today small,
+.student-counter__products small { color: var(--color-muted); }
+.student-counter__today li,
+.student-counter__products li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px;
+}
+.student-counter__today li > div,
+.student-counter__products li > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.student-counter__products li[data-blocked='true'] { opacity: 0.7; }
+.student-counter__stepper { display: flex; align-items: center; gap: 6px; }
+.student-counter__stepper span { min-width: 1.5em; text-align: center; font-weight: 800; }
+.student-counter__budget { display: grid; gap: 2px; padding: 16px; border-radius: 16px; background: var(--color-cream-2); }
+.student-counter__budget strong { font-size: 2rem; letter-spacing: -0.02em; }
+.student-counter__budget span,
+.student-counter__budget small { color: var(--color-muted); }
+.student-counter__allergy { margin: 0; display: flex; align-items: center; gap: 8px; font-weight: 700; color: #c2473a; }
+html[data-admin-theme='oscuro'] .student-counter__allergy { color: #f08a7d; }
+.student-counter__options { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+.student-counter__options legend { font-weight: 800; margin-bottom: 4px; }
+.student-counter__options label { display: flex; align-items: center; gap: 8px; }
+.student-counter__options small { margin-left: auto; color: var(--color-muted); }
+.student-counter__qr { display: block; width: min(260px, 80%); margin: 0 auto; image-rendering: pixelated; }

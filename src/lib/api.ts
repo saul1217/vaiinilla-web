@@ -1,5 +1,6 @@
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
+import type { StudentCard, StudentCredential, StudentPurchaseItem } from './student-counter';
 import {
   clearMixedPaymentAttempt,
   isCompleteScope,
@@ -720,6 +721,56 @@ export const api = {
           estado_objetivo: targetStatus,
           version_esperada: expectedVersion,
           ...(pickupToken ? { qr_token: pickupToken } : {}),
+        },
+      })
+    ).data;
+  },
+
+  /** Caja › Alumnos: busca por nombre o matrícula (2 a 80 letras). */
+  async searchStudents(token: string, query: string, signal?: AbortSignal): Promise<StudentCard[]> {
+    return (await request<StudentCard[]>(`/alumnos?q=${encodeURIComponent(query.trim())}`, { token, signal })).data;
+  },
+
+  /** El alumno de una credencial QR o de una tarjeta NFC; null si no es de nadie. */
+  async findStudentByCredential(token: string, credential: string): Promise<StudentCard | null> {
+    return (await request<StudentCard[]>(`/alumnos?credencial=${encodeURIComponent(credential.trim())}`, { token })).data[0] ?? null;
+  },
+
+  /** Cobra de su saldo y manda el pedido a cocina. El PIN solo si su tutor lo puso. */
+  async studentPurchase(token: string, studentId: string, items: StudentPurchaseItem[], pin: string | null, idempotencyKey: string): Promise<OrderDetail> {
+    return (
+      await request<OrderDetail>(`/alumnos/${encodeURIComponent(studentId)}/compras`, {
+        method: 'POST',
+        token,
+        idempotencyKey,
+        body: { items, ...(pin ? { pin } : {}) },
+      })
+    ).data;
+  },
+
+  /** Hace su credencial QR (la anterior deja de servir) o le liga una tarjeta NFC por su número de serie. */
+  async assignStudentCredential(token: string, studentId: string, tipo: 'qr' | 'nfc', valor: string | null, idempotencyKey: string): Promise<StudentCredential> {
+    return (
+      await request<{ credencial: StudentCredential }>(`/alumnos/${encodeURIComponent(studentId)}/credenciales`, {
+        method: 'POST',
+        token,
+        idempotencyKey,
+        body: { tipo, ...(tipo === 'nfc' && valor ? { valor } : {}) },
+      })
+    ).data.credencial;
+  },
+
+  /** Entrega el pedido del alumno; su credencial escaneada hace de QR del pedido. */
+  async deliverStudentOrder(token: string, orderId: string, expectedVersion: number, credential: string | null): Promise<OrderDetail> {
+    return (
+      await request<OrderDetail>(`/pedidos/${orderId}/transiciones`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: {
+          estado_objetivo: 'entregado',
+          version_esperada: expectedVersion,
+          ...(credential ? { credencial_alumno: credential } : {}),
         },
       })
     ).data;
