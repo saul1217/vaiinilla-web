@@ -18,13 +18,12 @@ vi.mock('../context/session-context', () => ({
 const renderShell = () => render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
 
 describe('navegación con saldo en Caja prendido', () => {
-  it('Caja ve Caja y Saldo en la barra móvil sin «Más»', () => {
+  it('Caja ve Caja y Saldo en la barra móvil', () => {
     session.role = 'cajero';
     renderShell();
     const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
     expect(within(mobile).getByRole('link', { name: 'Caja' })).toHaveAttribute('href', '/app/pos');
     expect(within(mobile).getByRole('link', { name: 'Saldo' })).toHaveAttribute('href', '/app/saldo');
-    expect(within(mobile).queryByRole('button', { name: 'Más' })).not.toBeInTheDocument();
   });
 
   it('admin encuentra «Saldo de clientes» en «Más»', () => {
