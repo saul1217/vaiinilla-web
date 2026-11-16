@@ -16,16 +16,25 @@ vi.mock('../context/session-context', () => ({
 
 afterEach(() => cleanup());
 
-it.each([['mesero', 'Mesas', 3], ['cajero', 'Caja', 4]] as const)('%s ve su destino y la agenda en la barra móvil', (role, label, links) => {
-  session.role = role;
+it('mesero ve su destino y la agenda en la barra móvil', () => {
+  session.role = 'mesero';
   render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
   const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
-  // Cajero también tiene «Saldo»; caben hasta cuatro, así que no aparece «Más».
-  expect(within(mobile).getAllByRole('link')).toHaveLength(links);
-  expect(within(mobile).getByRole('link', { name: label })).toBeInTheDocument();
+  expect(within(mobile).getAllByRole('link')).toHaveLength(3);
+  expect(within(mobile).getByRole('link', { name: 'Mesas' })).toBeInTheDocument();
   expect(within(mobile).getByRole('link', { name: 'Agenda de reservas' })).toHaveAttribute('href', '/app/agenda');
   expect(within(mobile).getByRole('link', { name: 'Mi turno' })).toHaveAttribute('href', '/app/mi-turno');
   expect(screen.queryByRole('button', { name: 'Más' })).not.toBeInTheDocument();
+});
+
+it('cajero encuentra la agenda en «Más» cuando no cabe en la barra', () => {
+  session.role = 'cajero';
+  render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
+  const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
+  expect(within(mobile).getByRole('link', { name: 'Caja' })).toBeInTheDocument();
+  fireEvent.click(within(mobile).getByRole('button', { name: 'Más' }));
+  const more = screen.getByRole('navigation', { name: 'Más destinos' });
+  expect(within(more).getByRole('link', { name: 'Agenda de reservas' })).toHaveAttribute('href', '/app/agenda');
 });
 
 it('Administración encuentra la agenda en Más', () => {

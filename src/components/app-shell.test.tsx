@@ -93,8 +93,8 @@ it('Admin alcanza sus destinos (cashback oculto por flag) sin asignar aria-curre
   expect(more).not.toHaveAttribute('aria-current');
   fireEvent.click(more);
   const links = within(screen.getByRole('navigation', { name: 'Más destinos' })).getAllByRole('link');
-  // Con Saldo de clientes y Agenda prendidos, «Más» suma esos destinos (y Cashback si se prende).
-  expect(links).toHaveLength(CASHBACK_ENABLED ? 6 : 5);
+  // Con Saldo de clientes, Reparto y Agenda prendidos, «Más» suma esos destinos (y Cashback si se prende).
+  expect(links).toHaveLength(CASHBACK_ENABLED ? 7 : 6);
   expect(links.find((link) => link.getAttribute('href') === '/app/saldo')).toHaveTextContent('Saldo de clientes');
   expect(links.find((link) => link.getAttribute('href') === '/app/espacios')).toHaveAttribute('aria-current', 'page');
 });
@@ -102,7 +102,6 @@ it('Admin alcanza sus destinos (cashback oculto por flag) sin asignar aria-curre
 it.each([
   ['mesero', ['Mesas', 'Agenda de reservas', 'Mi turno']],
   ['cocina', ['Cocina', 'Mi turno']],
-  ['cajero', ['Caja', 'Saldo', 'Agenda de reservas', 'Mi turno']],
 ] as const)('%s ve sus destinos en la barra móvil, con «Mi turno» al final', (role, labels) => {
   session.role = role;
   render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
@@ -110,6 +109,16 @@ it.each([
   expect(within(mobile).getAllByRole('link').map((link) => link.textContent)).toEqual([...labels]);
   expect(within(mobile).getByRole('link', { name: 'Mi turno' })).toHaveAttribute('href', '/app/mi-turno');
   expect(screen.queryByRole('button', { name: 'Más' })).not.toBeInTheDocument();
+});
+
+it('cajero deja Caja, Saldo y Reparto en la barra y lo demás en «Más»', () => {
+  session.role = 'cajero';
+  render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
+  const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
+  expect(within(mobile).getAllByRole('link').map((link) => link.textContent)).toEqual(['Caja', 'Saldo', 'Reparto']);
+  fireEvent.click(within(mobile).getByRole('button', { name: 'Más' }));
+  const more = screen.getByRole('navigation', { name: 'Más destinos' });
+  expect(within(more).getAllByRole('link').map((link) => link.textContent)).toEqual(['Agenda de reservas', 'Mi turno']);
 });
 
 it('mueve foco a main al navegar y no lo roba por un refresco de contenido', () => {
