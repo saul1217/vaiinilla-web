@@ -97,12 +97,13 @@ it('Admin alcanza sus destinos (cashback oculto por flag) sin asignar aria-curre
   expect(links.find((link) => link.getAttribute('href') === '/app/espacios')).toHaveAttribute('aria-current', 'page');
 });
 
-it.each([['mesero', 'Mesas'], ['cajero', 'Caja'], ['cocina', 'Cocina']])('%s solo expone su destino', (role, label) => {
+it.each([['mesero', 'Mesas'], ['cajero', 'Caja'], ['cocina', 'Cocina']])('%s solo expone su destino y su turno', (role, label) => {
   session.role = role;
   render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
   const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
-  expect(within(mobile).getAllByRole('link')).toHaveLength(1);
+  expect(within(mobile).getAllByRole('link')).toHaveLength(2);
   expect(within(mobile).getByRole('link', { name: label })).toBeInTheDocument();
+  expect(within(mobile).getByRole('link', { name: 'Mi turno' })).toHaveAttribute('href', '/app/mi-turno');
   expect(screen.queryByRole('button', { name: 'Más' })).not.toBeInTheDocument();
 });
 

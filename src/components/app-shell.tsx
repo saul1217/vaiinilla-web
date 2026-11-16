@@ -5,6 +5,7 @@ import {
   BadgePercent,
   Building2,
   ChefHat,
+  Coins,
   PackageCheck,
   ClipboardList,
   ConciergeBell,
@@ -85,16 +86,19 @@ const posNavigation: NavItem[] = [
   ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto', icon: Truck } satisfies NavItem] : []),
   ...agendaNavigation,
   ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
+  { to: '/app/mi-turno', label: 'Mi turno', icon: Coins },
 ];
 const kitchenNavigation: NavItem[] = [
   { to: '/app/cocina', label: 'Cocina', icon: ChefHat },
   // Cocina ve el inventario; editarlo depende de `cocina_edita_inventario` (lo resuelve la página).
   ...(INVENTARIO_ENABLED ? [{ to: '/app/inventario', label: 'Inventario', icon: PackageCheck } satisfies NavItem] : []),
+  { to: '/app/mi-turno', label: 'Mi turno', icon: Coins },
 ];
 const waiterNavigation: NavItem[] = [
   { to: '/app/pos', label: 'Mesas', icon: ConciergeBell },
   ...agendaNavigation,
   ...(BOWLING_ADMIN_ENABLED ? [{ to: '/app/boliche', label: 'Pistas', icon: Table2 } satisfies NavItem] : []),
+  { to: '/app/mi-turno', label: 'Mi turno', icon: Coins },
 ];
 
 /**
