@@ -1181,7 +1181,7 @@ export type RefundMethod = 'efectivo' | 'terminal' | 'otro';
 /** Dinero que el negocio debe regresar a mano; Caja lo confirma al devolverlo. */
 export interface PendingRefund {
   id: string;
-  origen: 'sobrante_cuenta' | 'rechazo_articulo' | 'cancelacion';
+  origen: 'sobrante_cuenta' | 'rechazo_articulo' | 'cancelacion' | 'reserva_cancelada';
   espacio_id: number | null;
   pedido_id: string | null;
   /** efectivo, terminal, saldo o una mezcla ("efectivo+terminal"). */

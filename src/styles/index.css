@@ -7410,6 +7410,8 @@ html[data-admin-theme='oscuro'] .space-account__chip--due { background: rgba(224
 .pending-refund > svg { width: 22px; height: 22px; color: #c2473a; margin-top: 2px; }
 .pending-refund p { margin: 2px 0 0; color: var(--color-muted); font-size: 0.875rem; }
 .pending-refund__actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.pending-refund__hint { flex-basis: 100%; margin: 0; color: var(--color-muted); font-size: 0.85rem; }
+.pending-refund__other { flex-basis: 100%; display: grid; gap: 8px; }
 html[data-admin-theme='oscuro'] .pending-refund > svg { color: #f08a7d; }
 
 /* Pedido de invitado (compra sin cuenta): solo dio su nombre. */
