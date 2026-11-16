@@ -3,7 +3,8 @@
 // que ya tiene el back (no hay ruta de reprogramar). Mismo criterio que ReservationSlots de Android.
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
-import type { CourtAvailabilityCourt, CourtAvailabilityDay, OperationalRole, StaffBooking, StaffBookingInput } from '../types/api';
+import { formatMoney } from './money';
+import type { BookingCancelRefund, CourtAvailabilityCourt, CourtAvailabilityDay, OperationalRole, StaffBooking, StaffBookingInput } from '../types/api';
 
 /** Roles que el back deja crear y cancelar reservas (reservas.routes.js), menos `cliente`. */
 export const AGENDA_ROLES: OperationalRole[] = ['admin', 'cajero', 'mesero'];
@@ -142,9 +143,9 @@ export interface MoveTarget {
 
 export interface MoveDeps {
   create: (input: StaffBookingInput) => Promise<{ id: string }>;
-  markCashLater: (bookingId: string) => Promise<void>;
+  markCashLater: (bookingId: string) => Promise<unknown>;
   /** Con la misma llave el back repite la respuesta en vez de cancelar dos veces, así que se puede reintentar. */
-  cancel: (bookingId: string, idempotencyKey: string) => Promise<void>;
+  cancel: (bookingId: string, idempotencyKey: string) => Promise<unknown>;
   newKey?: () => string;
   wait?: (ms: number) => Promise<void>;
 }
@@ -254,4 +255,48 @@ export async function moveBooking(deps: MoveDeps, booking: StaffBooking, target:
     return fail('No se pudo soltar el horario original.', error);
   }
   return created;
+}
+
+const REFUND_METHOD: Record<string, string> = { efectivo: 'efectivo', saldo: 'saldo', tarjeta: 'tarjeta' };
+
+/**
+ * Qué pasó con el dinero según la respuesta de la cancelación (`reembolso.salida` y `metodo`),
+ * no según lo que se escribió en el formulario: el monto es el que registró el back.
+ */
+export function refundSummary(refund: BookingCancelRefund): { amount: string; route: string } {
+  const method = REFUND_METHOD[refund.metodo] ?? refund.metodo;
+  const amount = `${formatMoney(refund.monto)} de ${formatMoney(refund.monto_pagado)} pagados (${method})`;
+  switch (refund.salida) {
+    case 'ninguna':
+      return { amount, route: 'Sin reembolso: solo quedó el registro con el motivo.' };
+    case 'cartera':
+      return {
+        amount,
+        route: `Regresó a la cartera del cliente.${refund.saldo_nuevo ? ` Su saldo ahora es ${formatMoney(refund.saldo_nuevo)}.` : ''}`,
+      };
+    case 'caja':
+      return { amount, route: 'Sale en efectivo de la caja abierta: entrégalo al cliente.' };
+    case 'devolucion_pendiente':
+      return {
+        amount,
+        route: refund.metodo === 'efectivo'
+          ? 'No había caja abierta: quedó como devolución pendiente en efectivo, para entregarla desde Caja.'
+          : 'Quedó como devolución pendiente: Caja la confirma en Devoluciones.',
+      };
+    default:
+      return { amount, route: `Salida: ${refund.salida}.` };
+  }
+}
+
+/** Mensaje de un error al cancelar, con el tope que manda el back en `REFUND_AMOUNT_EXCEEDS_PAID`. */
+export function cancelErrorMessage(code: string | undefined, details: unknown): string | null {
+  if (code === 'RESERVATION_NOT_CANCELLABLE') return 'Esta reserva ya estaba cancelada o cambió de estado. Actualizamos la agenda.';
+  if (code === 'RESERVATION_EXPIRED') return 'Esta reserva ya venció: el horario quedó libre. Actualizamos la agenda.';
+  if (code === 'REFUND_ALREADY_DONE') return 'Esta reserva ya se reembolsó. Actualizamos la agenda.';
+  if (code === 'REFUND_AMOUNT_EXCEEDS_PAID') {
+    const first = Array.isArray(details) ? details[0] as { monto_pagado?: unknown } | undefined : undefined;
+    const cap = typeof first?.monto_pagado === 'string' || typeof first?.monto_pagado === 'number' ? String(first.monto_pagado) : null;
+    return cap ? `El reembolso no puede ser mayor a lo pagado (${formatMoney(cap)}).` : 'El reembolso no puede ser mayor a lo pagado.';
+  }
+  return null;
 }

@@ -9,9 +9,10 @@ import type { CourtAvailabilityDay, StaffBooking } from '../types/api';
 import { AgendaPage } from './agenda-page';
 
 vi.mock('../lib/agenda-feature', () => ({ AGENDA_ENABLED: true }));
-vi.mock('../context/session-context', () => ({
-  useSessions: () => ({ tenant: { token: 'tenant-token', context: { rol: 'cajero', establecimiento_id: 'e-1', membresia_id: 'm-1' } } }),
+const session = vi.hoisted(() => ({
+  tenant: { token: 'tenant-token', context: { rol: 'cajero', establecimiento_id: 'e-1', membresia_id: 'm-1' } },
 }));
+vi.mock('../context/session-context', () => ({ useSessions: () => ({ tenant: session.tenant }) }));
 
 const baseUrl = 'https://vaiinillaback-development.up.railway.app/api/v1';
 const server = setupServer();
@@ -72,11 +73,37 @@ function baseHandlers(log: string[]) {
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<MemoryRouter><QueryClientProvider client={client}><AgendaPage /></QueryClientProvider></MemoryRouter>);
+  const tree = () => <MemoryRouter><QueryClientProvider client={client}><AgendaPage /></QueryClientProvider></MemoryRouter>;
+  const view = render(tree());
+  return { ...view, rerender: () => view.rerender(tree()) };
+}
+
+const fail = (status: number, code: string, message: string, details?: unknown) =>
+  HttpResponse.json({ data: null, meta: {}, error: { code, message, ...(details ? { details } : {}) } }, { status });
+
+const cashRefund = {
+  id: 'rb-1', metodo: 'efectivo', monto: '200.00', monto_pagado: '450.00', salida: 'caja', saldo_nuevo: null,
+  creado_en: '2099-11-10T06:00:00.000Z', devolucion_id: null, sesion_caja_id: 'cs-1',
+};
+
+async function openPaidCancel(user: ReturnType<typeof userEvent.setup>) {
+  const list = await screen.findByRole('list', { name: 'Reservas de Cancha 1' });
+  await user.click(within(list).getByRole('button', { name: 'Cancelar y reembolsar' }));
+  return screen.findByRole('dialog', { name: 'Cancelar reserva pagada' });
+}
+
+async function fillRefund(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement, amount: string, reason = 'Lluvia') {
+  const field = within(dialog).getByLabelText('Monto a reembolsar');
+  await user.clear(field);
+  await user.type(field, amount);
+  await user.type(within(dialog).getByLabelText('Motivo (3 a 240 caracteres)'), reason);
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  session.tenant = { token: 'tenant-token', context: { rol: 'cajero', establecimiento_id: 'e-1', membresia_id: 'm-1' } };
+});
 afterAll(() => server.close());
 
 describe('AgendaPage', () => {
@@ -221,13 +248,15 @@ describe('AgendaPage', () => {
     expect(calls).toEqual([]);
   });
 
-  it('cancela una pagada con monto de reembolso y motivo', async () => {
+  it('cancela una pagada con monto de reembolso y motivo, y muestra en el modal la vía y el monto que registró el back', async () => {
     const bodies: unknown[] = [];
+    const log: string[] = [];
     server.use(
-      ...baseHandlers([]),
+      ...baseHandlers(log),
       http.post(`${baseUrl}/reservas/:id/cancelacion`, async ({ params, request }) => {
         bodies.push({ id: params.id, ...(await request.json() as object) });
-        return ok({ id: params.id, estado: 'cancelada', reembolso: null });
+        // El back registra 150 aunque se pidieron 200: el modal debe enseñar lo que respondió.
+        return ok({ id: params.id, estado: 'cancelada', reembolso: { ...cashRefund, monto: '150.00' } });
       }),
     );
     const user = userEvent.setup();
@@ -242,8 +271,256 @@ describe('AgendaPage', () => {
     await user.type(amount, '200');
     await user.type(within(dialog).getByLabelText('Motivo (3 a 240 caracteres)'), 'Lluvia');
     await user.click(confirm);
+    const result = await screen.findByRole('dialog', { name: 'Reserva cancelada' });
+    expect(within(result).getByText('Reembolso: $150.00 MXN de $450.00 MXN pagados (efectivo)')).toBeInTheDocument();
+    expect(within(result).getByText('Sale en efectivo de la caja abierta: entrégalo al cliente.')).toBeInTheDocument();
+    // La agenda se actualiza detrás mientras el modal enseña el reembolso.
+    await waitFor(() => expect(log.filter((line) => line === 'GET reservas 2099-11-10')).toHaveLength(2));
+    await user.click(within(result).getByRole('button', { name: 'Listo' }));
     expect(await screen.findByText('Reserva cancelada y reembolso registrado.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(bodies).toEqual([{ id: 'r-2', motivo: 'Lluvia', monto_reembolso: '200.00' }]);
+  });
+
+  it('muestra la devolución pendiente de tarjeta y el saldo nuevo de la cartera', async () => {
+    let refund: object = { ...cashRefund, metodo: 'tarjeta', salida: 'devolucion_pendiente', sesion_caja_id: null, devolucion_id: 'd-1' };
+    server.use(
+      ...baseHandlers([]),
+      http.post(`${baseUrl}/reservas/:id/cancelacion`, ({ params }) => ok({ id: params.id, estado: 'cancelada', reembolso: refund })),
+    );
+    const user = userEvent.setup();
+    const view = renderPage();
+    let dialog = await openPaidCancel(user);
+    await fillRefund(user, dialog, '200');
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, cancelar reserva' }));
+    let result = await screen.findByRole('dialog', { name: 'Reserva cancelada' });
+    expect(within(result).getByText('Reembolso: $200.00 MXN de $450.00 MXN pagados (tarjeta)')).toBeInTheDocument();
+    expect(within(result).getByText('Quedó como devolución pendiente: Caja la confirma en Devoluciones.')).toBeInTheDocument();
+    await user.click(within(result).getByRole('button', { name: 'Listo' }));
+    view.unmount();
+
+    refund = { ...cashRefund, metodo: 'saldo', salida: 'cartera', saldo_nuevo: '980.00', sesion_caja_id: null };
+    renderPage();
+    dialog = await openPaidCancel(user);
+    await fillRefund(user, dialog, '200');
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, cancelar reserva' }));
+    result = await screen.findByRole('dialog', { name: 'Reserva cancelada' });
+    expect(within(result).getByText('Reembolso: $200.00 MXN de $450.00 MXN pagados (saldo)')).toBeInTheDocument();
+    expect(within(result).getByText('Regresó a la cartera del cliente. Su saldo ahora es $980.00 MXN.')).toBeInTheDocument();
+  });
+
+  it('no deja reembolsar más de lo pagado y enseña el tope que manda el back', async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      ...baseHandlers([]),
+      http.post(`${baseUrl}/reservas/:id/cancelacion`, async ({ request }) => {
+        bodies.push(await request.json());
+        return fail(422, 'REFUND_AMOUNT_EXCEEDS_PAID', 'El reembolso supera lo pagado.', [{ monto_pagado: '400.00' }]);
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const dialog = await openPaidCancel(user);
+    const confirm = within(dialog).getByRole('button', { name: 'Sí, cancelar reserva' });
+    expect(within(dialog).getByText(/El tope es orientativo: el servidor revisa lo que se pagó y decide el monto final/)).toBeInTheDocument();
+    await fillRefund(user, dialog, '450.01');
+    expect(within(dialog).getByText('El reembolso no puede ser mayor a lo pagado.')).toBeInTheDocument();
+    expect(confirm).toBeDisabled();
+    const amount = within(dialog).getByLabelText('Monto a reembolsar');
+    await user.clear(amount);
+    await user.type(amount, '450');
+    expect(within(dialog).queryByText('El reembolso no puede ser mayor a lo pagado.')).not.toBeInTheDocument();
+    expect(confirm).toBeEnabled();
+    // Si el back tiene otro total pagado, su 422 manda el tope real.
+    await user.click(confirm);
+    expect(await within(dialog).findByText('El reembolso no puede ser mayor a lo pagado ($400.00 MXN).')).toBeInTheDocument();
+    expect(bodies).toEqual([{ motivo: 'Lluvia', monto_reembolso: '450.00' }]);
+    // Ya enviado, el monto queda fijo aunque el back lo rechace: se cambia abriendo otra cancelación.
+    expect(within(dialog).getByLabelText('Monto a reembolsar')).toHaveAttribute('readonly');
+  });
+
+  it('reintentar la cancelación en el mismo modal manda la misma Idempotency-Key, y otro modal manda otra', async () => {
+    const keys: (string | null)[] = [];
+    const bodies: unknown[] = [];
+    server.use(
+      ...baseHandlers([]),
+      http.post(`${baseUrl}/reservas/:id/cancelacion`, async ({ params, request }) => {
+        keys.push(request.headers.get('Idempotency-Key'));
+        bodies.push(await request.json());
+        if (keys.length === 1) return fail(503, 'SERVICE_UNAVAILABLE', 'El servidor no respondió.');
+        if (keys.length === 2) return HttpResponse.error();
+        return ok({ id: params.id, estado: 'cancelada', reembolso: cashRefund });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    let dialog = await openPaidCancel(user);
+    await fillRefund(user, dialog, '200');
+    const confirm = within(dialog).getByRole('button', { name: 'Sí, cancelar reserva' });
+    await user.click(confirm);
+    expect(await within(dialog).findByText('El servidor no respondió.')).toBeInTheDocument();
+    // Monto y motivo quedan fijos: escribir en ellos no cambia lo que se reenvía con la misma llave.
+    const amount = within(dialog).getByLabelText('Monto a reembolsar');
+    const reason = within(dialog).getByLabelText('Motivo (3 a 240 caracteres)');
+    expect(amount).toHaveAttribute('readonly');
+    expect(reason).toHaveAttribute('readonly');
+    expect(within(dialog).getByText(/quedan fijos para reintentar sin reembolsar dos veces/)).toBeInTheDocument();
+    await user.type(amount, '9');
+    await user.type(reason, ' y granizo');
+    expect(amount).toHaveValue('200.00');
+    expect(reason).toHaveValue('Lluvia');
+    await user.click(confirm);
+    await waitFor(() => expect(keys).toHaveLength(2));
+    await waitFor(() => expect(confirm).toBeEnabled());
+    // Cerrar y volver a abrir es otra cancelación: llave nueva.
+    await user.click(within(dialog).getByRole('button', { name: 'No, conservar' }));
+    dialog = await openPaidCancel(user);
+    await fillRefund(user, dialog, '200');
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, cancelar reserva' }));
+    await screen.findByRole('dialog', { name: 'Reserva cancelada' });
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keys[2]).not.toBe(keys[0]);
+    expect(bodies[1]).toEqual(bodies[0]);
+    expect(bodies[0]).toEqual({ motivo: 'Lluvia', monto_reembolso: '200.00' });
+  });
+
+  it('con 409 de reserva ya cancelada lo dice y actualiza la agenda', async () => {
+    const log: string[] = [];
+    server.use(
+      ...baseHandlers(log),
+      http.post(`${baseUrl}/reservas/:id/cancelacion`, () =>
+        fail(409, 'RESERVATION_NOT_CANCELLABLE', 'Esta reserva ya no se puede cancelar.', [{ estado_actual: 'cancelada' }])),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const list = await screen.findByRole('list', { name: 'Reservas de Cancha 1' });
+    await user.click(within(list).getByRole('button', { name: 'Cancelar' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Cancelar reserva' });
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, cancelar reserva' }));
+    expect(await within(dialog).findByText('Esta reserva ya estaba cancelada o cambió de estado. Actualizamos la agenda.')).toBeInTheDocument();
+    await waitFor(() => expect(log.filter((line) => line === 'GET reservas 2099-11-10')).toHaveLength(2));
+    expect(screen.queryByText(/Reserva cancelada/)).not.toBeInTheDocument();
+  });
+
+  it('al cambiar de membresía cierra el modal y vuelve a leer la agenda con la sesión nueva', async () => {
+    const tokens: string[] = [];
+    server.use(
+      http.get(`${baseUrl}/reservas/disponibilidad`, ({ request }) => {
+        tokens.push(`disponibilidad ${request.headers.get('Authorization')}`);
+        return ok(dayFixture());
+      }),
+      http.get(`${baseUrl}/reservas`, ({ request }) => {
+        const token = request.headers.get('Authorization');
+        tokens.push(`reservas ${token}`);
+        return ok(token === 'Bearer tenant-token' ? [pending, paid] : []);
+      }),
+    );
+    const user = userEvent.setup();
+    const view = renderPage();
+    await openPaidCancel(user);
+    session.tenant = { token: 'other-token', context: { rol: 'admin', establecimiento_id: 'e-2', membresia_id: 'm-2' } };
+    view.rerender();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText('Sin reservas este día.')).toBeInTheDocument();
+    expect(screen.queryByText(/Luis/)).not.toBeInTheDocument();
+    expect(tokens).toEqual([
+      'disponibilidad Bearer tenant-token', 'reservas Bearer tenant-token',
+      'disponibilidad Bearer other-token', 'reservas Bearer other-token',
+    ]);
+  });
+
+  it('pinta como texto un nombre de cliente con HTML, en la fila y en el modal', async () => {
+    const evil = '<img src=x onerror="window.__agendaXss=1"><script>window.__agendaXss=1</script>';
+    server.use(
+      // Antes que los de base: en MSW gana el primero que coincide.
+      http.get(`${baseUrl}/reservas`, () => ok([{ ...paid, nombre_cliente: evil }])),
+      ...baseHandlers([]),
+      http.post(`${baseUrl}/reservas/:id/cancelacion`, ({ params }) => ok({ id: params.id, estado: 'cancelada', reembolso: cashRefund })),
+    );
+    const user = userEvent.setup();
+    const { container } = renderPage();
+    const list = await screen.findByRole('list', { name: 'Reservas de Cancha 1' });
+    expect(within(list).getByText((text) => text.startsWith(evil))).toBeInTheDocument();
+    const dialog = await openPaidCancel(user);
+    expect(within(dialog).getByText((text) => text.includes(evil))).toBeInTheDocument();
+    await fillRefund(user, dialog, '200');
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, cancelar reserva' }));
+    const result = await screen.findByRole('dialog', { name: 'Reserva cancelada' });
+    expect(within(result).getByText((text) => text.includes(evil))).toBeInTheDocument();
+    expect(container.querySelector('img, script')).toBeNull();
+    expect(document.body.querySelector('img, script')).toBeNull();
+    expect((window as { __agendaXss?: number }).__agendaXss).toBeUndefined();
+  });
+
+  it('reintentar Apartar en el mismo modal reusa las llaves del apartado', async () => {
+    const keys: (string | null)[] = [];
+    let createCalls = 0;
+    server.use(
+      ...baseHandlers([]),
+      http.post(`${baseUrl}/reservas`, ({ request }) => {
+        keys.push(`crear ${request.headers.get('Idempotency-Key')}`);
+        createCalls += 1;
+        return createCalls === 1 ? HttpResponse.error() : ok({ id: 'r-9', estado: 'pendiente_pago' }, 201);
+      }),
+      http.post(`${baseUrl}/reservas/:id/pago`, ({ request }) => {
+        keys.push(`pago ${request.headers.get('Idempotency-Key')}`);
+        return ok({}, 201);
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const free = await screen.findByRole('group', { name: 'Horarios libres de Cancha 1' });
+    await user.click(within(free).getByRole('button', { name: '09:30' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nueva reserva' });
+    const save = within(dialog).getByRole('button', { name: 'Apartar' });
+    await user.click(save);
+    await waitFor(() => expect(createCalls).toBe(1));
+    await waitFor(() => expect(save).toBeEnabled());
+    await user.click(save);
+    expect(await screen.findByText(/Reserva creada en Cancha 1/)).toBeInTheDocument();
+    const [first, second, pay] = keys;
+    expect(second).toBe(first);
+    expect(pay?.startsWith('pago ')).toBe(true);
+    expect(pay?.slice(5)).not.toBe(first?.slice(6));
+  });
+
+  it('al mover, si el apartado nuevo se soltó, el siguiente intento usa llaves nuevas', async () => {
+    const calls: string[] = [];
+    let cancelOriginal = 0;
+    server.use(
+      ...baseHandlers([]),
+      http.post(`${baseUrl}/reservas`, ({ request }) => { calls.push(`crear ${request.headers.get('Idempotency-Key')}`); return ok({ id: `r-new${calls.length}` }, 201); }),
+      http.post(`${baseUrl}/reservas/:id/pago`, ({ request }) => { calls.push(`pago ${request.headers.get('Idempotency-Key')}`); return ok({}, 201); }),
+      http.post(`${baseUrl}/reservas/:id/cancelacion`, ({ params, request }) => {
+        calls.push(`cancelar ${String(params.id)} ${request.headers.get('Idempotency-Key')}`);
+        // Un 409 no se reintenta dentro de moveBooking (un 500 sí, con las esperas de #158).
+        if (params.id === 'r-1' && ++cancelOriginal === 1) {
+          return fail(409, 'RESERVATION_NOT_CANCELLABLE', 'Esta reserva ya no se puede cancelar.', [{ estado_actual: 'en_curso' }]);
+        }
+        return ok({ id: params.id, estado: 'cancelada', reembolso: null });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    const list = await screen.findByRole('list', { name: 'Reservas de Cancha 1' });
+    await user.click(within(list).getByRole('button', { name: 'Mover' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Mover reserva' });
+    await user.selectOptions(within(dialog).getByLabelText('Empieza'), '2099-11-10T09:30:00.000Z');
+    await user.click(within(dialog).getByRole('button', { name: 'Mover reserva' }));
+    expect(await within(dialog).findByText('No se pudo soltar el horario original. La reserva sigue en su horario original.')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Mover reserva' }));
+    expect(await screen.findByText(/Reserva movida a Cancha 1/)).toBeInTheDocument();
+    const key = (line: string) => line.split(' ').at(-1);
+    // Primer intento: crear, pago, cancelar original (falla) y soltar el nuevo, cada uno con su llave.
+    expect(calls.map((line) => line.split(' ').slice(0, -1).join(' '))).toEqual([
+      'crear', 'pago', 'cancelar r-1', 'cancelar r-new1', 'crear', 'pago', 'cancelar r-1',
+    ]);
+    const firstTry = calls.slice(0, 4).map(key);
+    expect(new Set(firstTry).size).toBe(4);
+    const secondTry = calls.slice(4).map(key);
+    for (const value of secondTry) expect(firstTry).not.toContain(value);
   });
 
   it('cancela una pendiente sin cuerpo de reembolso', async () => {
