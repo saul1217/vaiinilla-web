@@ -1,6 +1,7 @@
 import { CashierHome } from '../components/cashier-home';
 import { CashierQueue } from '../components/cashier-queue';
 import { AppSheet } from '../components/app-sheet';
+import { CashDrawer } from '../components/cash-drawer';
 import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -43,7 +44,7 @@ import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeferredDeliver
 import { deliveryRequiresQr } from '../lib/delivery-policy';
 import { printOrderTicket } from '../lib/order-ticket-print';
 import type { OrderDetail, StaffOrderResult } from '../types/api';
-import type { AccountAbonoResult } from '../types/api';
+import type { AccountAbonoResult, CashLastClose } from '../types/api';
 import { isPosMixedPaymentsEnabled } from '../lib/features';
 
 /** El servidor no tiene la ruta (backend anterior a vaiinilla_back#211); un pedido inexistente no cuenta. */
@@ -274,6 +275,7 @@ export function PosPage() {
   const focusClosingSummary = useCallback((node: HTMLDivElement | null) => node?.focus(), []);
   const [sessionOpen, setSessionOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
   const usuarioId = tenant?.context.usuario_id ?? '';
   const mixedPaymentOwner = useMemo<MixedPaymentOwner>(() => ({ establecimientoId: scopeId, usuarioId }), [scopeId, usuarioId]);
@@ -323,6 +325,13 @@ export function PosPage() {
     enabled: Boolean(token),
     queryFn: () => api.activeCashSession(token),
     refetchInterval: 15_000,
+  });
+
+  // Con la caja cerrada, Caja ve cuánto contó el último cierre antes de volver a abrir.
+  const lastClose = useQuery({
+    queryKey: ['cash-last-close', scopeId],
+    enabled: Boolean(token) && canOperateSession && session.isSuccess && !session.data,
+    queryFn: () => api.lastCashClose(token),
   });
 
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
@@ -537,11 +546,15 @@ export function PosPage() {
               <small>
                 {active
                   ? `Desde ${formatDate(active.abierta_en)} · fondo $${active.monto_inicial}`
-                  : session.isPending ? 'Consultando sesión operativa.' : session.isError ? 'No se pudo consultar la sesión.' : 'Abre la caja para recibir pedidos.'}
+                  : session.isPending ? 'Consultando sesión operativa.' : session.isError ? 'No se pudo consultar la sesión.' : lastClose.data ? lastCloseLabel(lastClose.data) : 'Abre la caja para recibir pedidos.'}
               </small>
             </div>
           </div>
-          <Button variant="secondary" disabled={session.isPending || (session.isError && !active)} onClick={() => setSessionOpen(true)}>{active ? 'Cerrar caja' : 'Abrir Caja'}</Button>
+          <div className="staff-cashbar__actions">
+            {isCashier && active && <Button variant="secondary" onClick={() => setDrawerOpen(true)}>Movimientos del cajón</Button>}
+            <Button variant="secondary" disabled={session.isPending || (session.isError && !active)} onClick={() => setSessionOpen(true)}>{active ? 'Cerrar caja' : 'Abrir Caja'}</Button>
+          </div>
+          {isCashier && active && <CashDrawer token={token} sessionId={active.id} open={drawerOpen} onOpenChange={setDrawerOpen} />}
           <AppSheet open={sessionOpen} onOpenChange={(open) => { setSessionOpen(open); if (!open) setClosingAmount(null); }} title={closingAmount !== null ? '¿Cerrar la caja?' : active ? 'Cerrar caja' : 'Abrir Caja'} description={closingAmount !== null ? 'Los pedidos en efectivo que sigan por cobrar se cancelarán y ya no se recibirán pedidos.' : 'Sesión operativa de Caja'}>
             <div hidden={closingAmount !== null}>
               {openMutation.isError && <Feedback tone="error">{errorMessage(openMutation.error)}</Feedback>}
@@ -904,6 +917,17 @@ function pageDescription(role: string | undefined): string {
 function roleLabel(role: string | undefined): string {
   return ({ cajero: 'Caja', cocina: 'Cocina', mesero: 'Servicio en mesa' } as Record<string, string>)[role ?? '']
     ?? 'El dispositivo';
+}
+
+/** «Último cierre: contó $1,250.00 · 15 nov 2026, 22:10», y si cuadró o no contra lo esperado. */
+function lastCloseLabel(close: CashLastClose): string {
+  const parts = [`Último cierre: contó ${formatMoney(close.monto_final ?? '0.00')}`];
+  if (close.cerrada_en) parts.push(formatDate(close.cerrada_en));
+  const diff = close.diferencia != null ? moneyToCents(close.diferencia.replace(/^-/, '')) : null;
+  if (diff !== null && close.diferencia != null) {
+    parts.push(diff === 0n ? 'cuadró' : close.diferencia.startsWith('-') ? `faltaron ${formatMoney(centsToMoney(diff))}` : `sobraron ${formatMoney(centsToMoney(diff))}`);
+  }
+  return parts.join(' · ');
 }
 
 function formatDate(value: string): string {

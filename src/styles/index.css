@@ -7217,6 +7217,42 @@ html[data-admin-theme='oscuro'] .tenant-app :is(.app-identity, .app-rail__brand)
 .staff-cashbar__close[open] .staff-cashbar__when-closed { display: none; }
 .staff-cashbar__close[open] .staff-cashbar__when-open { display: inline; }
 
+.staff-cashbar__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Movimientos del cajón (Doop N11): lo que debe haber, los renglones del turno y meter o sacar dinero. */
+.cash-drawer { display: grid; gap: 14px; }
+.cash-drawer__expected {
+  display: grid; gap: 2px; padding: 16px; border: 1px solid var(--line-strong); border-radius: 18px;
+}
+.cash-drawer__expected span { color: var(--color-muted); font-size: 0.8125rem; font-weight: 600; }
+.cash-drawer__expected strong { font-size: 2rem; font-weight: 900; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.cash-drawer__expected small { color: var(--color-muted); font-size: 0.8125rem; }
+.cash-drawer__caption {
+  margin: 4px 4px 0; color: var(--color-muted); font-size: 0.6875rem; font-weight: 800;
+  letter-spacing: 0.14em; text-transform: uppercase;
+}
+.cash-drawer__empty { margin: 0; color: var(--color-muted); }
+.cash-drawer__list { display: grid; margin: 0; padding: 0 14px; list-style: none; border: 1px solid var(--line-strong); border-radius: 18px; }
+.cash-drawer__row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 0; }
+.cash-drawer__row + .cash-drawer__row { border-top: 1px solid var(--line-strong); }
+.cash-drawer__row div { display: grid; min-width: 0; }
+.cash-drawer__row small { color: var(--color-muted); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.cash-drawer__sign {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
+  background: rgba(132, 180, 40, 0.16); color: var(--color-lime-text);
+}
+.cash-drawer__sign svg { width: 16px; height: 16px; }
+.cash-drawer__row--out .cash-drawer__sign { background: rgba(224, 92, 76, 0.14); color: #c2473a; }
+.cash-drawer__amount { font-weight: 900; font-variant-numeric: tabular-nums; color: var(--color-lime-text); }
+.cash-drawer__row--out .cash-drawer__amount { color: #c2473a; }
+.cash-drawer__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cash-drawer__actions .button { min-height: 48px; }
+.cash-drawer__hint { margin: 0; color: var(--color-muted); font-size: 0.8125rem; text-align: center; }
+html[data-admin-theme='oscuro'] .cash-drawer__row--out .cash-drawer__sign,
+html[data-admin-theme='oscuro'] .cash-drawer__row--out .cash-drawer__amount { color: #f08a7d; }
+html[data-admin-theme='oscuro'] .cash-drawer__sign,
+html[data-admin-theme='oscuro'] .cash-drawer__amount { color: #bfe06a; }
+
 /* Aviso flotante de Caja: uno a la vez, visible aunque se haya desplazado la página. */
 .pos-toast {
   position: fixed;
