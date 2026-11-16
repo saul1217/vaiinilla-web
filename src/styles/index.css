@@ -7219,6 +7219,20 @@ html[data-admin-theme='oscuro'] .tenant-app :is(.app-identity, .app-rail__brand)
 
 .staff-cashbar__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
+.pos-orders__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+
+/* Buscar un pedido en Caja (Doop N05). */
+.cashier-search { display: grid; gap: 12px; }
+.cashier-search__field {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px;
+  border: 1px solid var(--line-strong); border-radius: 18px;
+}
+.cashier-search__field svg { width: 18px; height: 18px; flex: none; color: var(--color-muted); }
+.cashier-search__field input { flex: 1; min-width: 0; height: 50px; border: 0; background: transparent; font-size: 1rem; font-weight: 600; color: inherit; outline: none; }
+.cashier-search__field:focus-within { outline: 2px solid var(--color-lime); outline-offset: 2px; }
+.cashier-search__results { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.cashier-search__empty { margin: 4px 0; color: var(--color-muted); }
+
 /* Movimientos del cajón (Doop N11): lo que debe haber, los renglones del turno y meter o sacar dinero. */
 .cash-drawer { display: grid; gap: 14px; }
 .cash-drawer__expected {

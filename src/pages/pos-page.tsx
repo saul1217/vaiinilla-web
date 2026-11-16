@@ -2,6 +2,7 @@ import { CashierHome } from '../components/cashier-home';
 import { CashierQueue } from '../components/cashier-queue';
 import { AppSheet } from '../components/app-sheet';
 import { CashDrawer } from '../components/cash-drawer';
+import { CashierSearch } from '../components/cashier-search';
 import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +12,7 @@ import {
   Clock3,
   ReceiptText,
   ScanLine,
+  Search,
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
@@ -276,6 +278,8 @@ export function PosPage() {
   const [sessionOpen, setSessionOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [queuePick, setQueuePick] = useState<{ id: string; seq: number } | null>(null);
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
   const usuarioId = tenant?.context.usuario_id ?? '';
   const mixedPaymentOwner = useMemo<MixedPaymentOwner>(() => ({ establecimientoId: scopeId, usuarioId }), [scopeId, usuarioId]);
@@ -470,6 +474,8 @@ export function PosPage() {
     () => queuedOrders.filter(isCashierDeliveryOrder),
     [queuedOrders],
   );
+  // Lo que se puede abrir en el ticket de la fila: lo que está por cobrar o listo para entregar.
+  const searchableOrders = useMemo(() => [...cashOrders, ...readyOrders], [cashOrders, readyOrders]);
   const updateQrToken = useCallback((value: string) => setQrToken(value), []);
 
   function beginCash(order: OrderDetail) {
@@ -632,10 +638,24 @@ export function PosPage() {
               <p className="eyebrow">Atención en Caja</p>
               <h2 id="cashier-orders-title">Pedidos pendientes</h2>
             </div>
-            <span className={`live-indicator ${heartbeat.isSuccess ? 'live-indicator--online' : ''}`}>
-              <span /> {heartbeat.isSuccess ? 'Caja en línea' : 'Conectando'}
-            </span>
+            <div className="pos-orders__tools">
+              <Button variant="secondary" onClick={() => setSearchOpen(true)} disabled={!searchableOrders.length}>
+                <Search aria-hidden="true" className="size-5" /> Buscar un pedido
+              </Button>
+              <span className={`live-indicator ${heartbeat.isSuccess ? 'live-indicator--online' : ''}`}>
+                <span /> {heartbeat.isSuccess ? 'Caja en línea' : 'Conectando'}
+              </span>
+            </div>
           </div>
+          <CashierSearch
+            open={searchOpen}
+            onOpenChange={setSearchOpen}
+            orders={searchableOrders}
+            onPick={(order) => {
+              setSearchOpen(false);
+              setQueuePick((previous) => ({ id: order.id, seq: (previous?.seq ?? 0) + 1 }));
+            }}
+          />
 
           {cashierQueue.isError && (
             <Feedback tone="error">No se pudo actualizar la fila de pedidos. {errorMessage(cashierQueue.error)}</Feedback>
@@ -644,7 +664,7 @@ export function PosPage() {
           {cashierQueue.isError && !cashierQueue.data ? null : cashierQueue.isPending ? (
             <div className="orders-loading" role="status">Actualizando la fila de Caja…</div>
           ) : (
-            <CashierQueue cashOrders={cashOrders} readyOrders={readyOrders} actions={(order, group) => group === 'cash' ? (<>
+            <CashierQueue cashOrders={cashOrders} readyOrders={readyOrders} pick={queuePick} actions={(order, group) => group === 'cash' ? (<>
                         <Button disabled={!active} onClick={() => beginCash(order)}>
                           <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order) ? 'Abonar cuenta' : mixedFlowActive ? 'Pago mixto' : 'Cobrar'}
                         </Button>
