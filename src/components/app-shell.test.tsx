@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe('tema compartido en la navegación', () => {
-  it('admin no muestra cashback cuando el feature flag está apagado', () => {
+  it('admin encuentra «Cashback y wallet» en «Más» con la bandera prendida', () => {
     session.role = 'admin';
     render(
       <MemoryRouter>
@@ -34,9 +34,8 @@ describe('tema compartido en la navegación', () => {
       </MemoryRouter>,
     );
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Navegación móvil' })).getByRole('button', { name: 'Más' }));
-    expect(screen.queryByRole('link', { name: 'Cashback y wallet' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /cashback/i })).not.toBeInTheDocument();
-    expect(CASHBACK_ENABLED).toBe(false);
+    expect(screen.getByRole('link', { name: 'Cashback y wallet' })).toHaveAttribute('href', '/app/cashback');
+    expect(CASHBACK_ENABLED).toBe(true);
   });
 
   it.each(['mesero', 'cajero', 'cocina', 'admin'])('%s recorre y recuerda los tres temas desde el menú móvil', (role) => {
