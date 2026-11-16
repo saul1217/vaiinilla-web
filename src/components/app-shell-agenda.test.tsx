@@ -16,11 +16,12 @@ vi.mock('../context/session-context', () => ({
 
 afterEach(() => cleanup());
 
-it.each([['mesero', 'Mesas'], ['cajero', 'Caja']])('%s ve su destino y la agenda en la barra móvil', (role, label) => {
+it.each([['mesero', 'Mesas', 3], ['cajero', 'Caja', 4]] as const)('%s ve su destino y la agenda en la barra móvil', (role, label, links) => {
   session.role = role;
   render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
   const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
-  expect(within(mobile).getAllByRole('link')).toHaveLength(3);
+  // Cajero también tiene «Saldo»; caben hasta cuatro, así que no aparece «Más».
+  expect(within(mobile).getAllByRole('link')).toHaveLength(links);
   expect(within(mobile).getByRole('link', { name: label })).toBeInTheDocument();
   expect(within(mobile).getByRole('link', { name: 'Agenda de reservas' })).toHaveAttribute('href', '/app/agenda');
   expect(within(mobile).getByRole('link', { name: 'Mi turno' })).toHaveAttribute('href', '/app/mi-turno');

@@ -93,16 +93,29 @@ it('Admin alcanza sus destinos (cashback oculto por flag) sin asignar aria-curre
   expect(more).not.toHaveAttribute('aria-current');
   fireEvent.click(more);
   const links = within(screen.getByRole('navigation', { name: 'Más destinos' })).getAllByRole('link');
-  expect(links).toHaveLength(CASHBACK_ENABLED ? 4 : 3);
+  // Con Saldo de clientes prendido, «Más» suma ese destino (y Cashback si se prende).
+  expect(links).toHaveLength(CASHBACK_ENABLED ? 5 : 4);
+  expect(links.find((link) => link.getAttribute('href') === '/app/saldo')).toHaveTextContent('Saldo de clientes');
   expect(links.find((link) => link.getAttribute('href') === '/app/espacios')).toHaveAttribute('aria-current', 'page');
 });
 
-it.each([['mesero', 'Mesas'], ['cajero', 'Caja'], ['cocina', 'Cocina']])('%s solo expone su destino y su turno', (role, label) => {
+it.each([['mesero', 'Mesas'], ['cocina', 'Cocina']])('%s solo expone su destino y su turno', (role, label) => {
   session.role = role;
   render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
   const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
   expect(within(mobile).getAllByRole('link')).toHaveLength(2);
   expect(within(mobile).getByRole('link', { name: label })).toBeInTheDocument();
+  expect(within(mobile).getByRole('link', { name: 'Mi turno' })).toHaveAttribute('href', '/app/mi-turno');
+  expect(screen.queryByRole('button', { name: 'Más' })).not.toBeInTheDocument();
+});
+
+it('cajero expone Caja, el saldo de clientes y su turno', () => {
+  session.role = 'cajero';
+  render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
+  const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
+  expect(within(mobile).getAllByRole('link')).toHaveLength(3);
+  expect(within(mobile).getByRole('link', { name: 'Caja' })).toBeInTheDocument();
+  expect(within(mobile).getByRole('link', { name: 'Saldo' })).toHaveAttribute('href', '/app/saldo');
   expect(within(mobile).getByRole('link', { name: 'Mi turno' })).toHaveAttribute('href', '/app/mi-turno');
   expect(screen.queryByRole('button', { name: 'Más' })).not.toBeInTheDocument();
 });
