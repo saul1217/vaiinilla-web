@@ -8392,3 +8392,23 @@ html[data-admin-theme='oscuro'] .student-counter__allergy { color: #f08a7d; }
 .inventory-uses li { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; justify-content: space-between; }
 .inventory-uses li > span { flex: 1 1 100%; font-weight: 700; }
 .inventory-uses__add { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+
+/* Inventario: historial, reporte y asistente */
+.inventory-period { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.inventory-history { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.inventory-history li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.inventory-history li > span { display: grid; gap: 2px; min-width: 0; }
+.inventory-history small { color: var(--color-muted); }
+.inventory-history__qty { text-align: right; flex: none; }
+.inventory-history__qty strong[data-negative='true'] { color: var(--color-danger); }
+.inventory-report__scroll { overflow-x: auto; margin-top: 10px; }
+.inventory-report { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.inventory-report th, .inventory-report td { padding: 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.inventory-report th[scope='row'], .inventory-report thead th:first-child { text-align: left; }
+.inventory-report tr[data-low='true'] th { color: var(--color-danger); }
+.inventory-chat { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
+.inventory-chat li { max-width: 85%; padding: 10px 12px; border-radius: 14px; background: var(--color-cream-2); white-space: pre-wrap; }
+.inventory-chat li[data-from='personal'] { justify-self: end; background: var(--color-lime); color: var(--color-lime-text); }
+.inventory-chat__options { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.inventory-chat__form { display: grid; gap: 8px; }
+.inventory-chat__form button { justify-self: start; }

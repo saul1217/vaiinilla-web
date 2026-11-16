@@ -736,6 +736,52 @@ export interface InventoryProduct {
   categoria?: string;
 }
 
+/** Un renglón del historial (GET /inventario/movimientos). */
+export interface InventoryMovement {
+  id: string;
+  insumo_id: number;
+  insumo: string;
+  unidad: InventoryUnit;
+  /** venta, cancelacion, entrada, merma, conteo, ajuste o inicial. */
+  tipo: string;
+  cantidad: number;
+  existencia_resultante: number;
+  existencia_esperada: number | null;
+  nota: string | null;
+  folio: number | null;
+  registrado_por: string | null;
+  creado_en: string;
+}
+
+/** GET /inventario/reporte: lo que pasó con cada insumo en el periodo. */
+export interface InventoryReport {
+  desde: string;
+  hasta: string;
+  insumos: {
+    id: number;
+    nombre: string;
+    unidad: InventoryUnit;
+    inicial: number;
+    entradas: number;
+    vendido: number;
+    mermas: number;
+    diferencias: number;
+    final: number;
+    bajo_minimo: boolean;
+    costo_vendido: number;
+    costo_mermas: number;
+    costo_diferencias: number;
+  }[];
+  totales?: { costo_vendido?: number; costo_mermas?: number; costo_diferencias?: number; compras_monto?: number };
+}
+
+/** POST /inventario/asistente. */
+export interface InventoryAssistantReply {
+  mensaje: string;
+  opciones?: string[];
+  quedan_mensajes?: number;
+}
+
 /** Un producto que gasta un insumo (GET /inventario/insumos/:id/productos). */
 export interface SupplyProductLink {
   producto_id: number;

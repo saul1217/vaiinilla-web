@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { AppPageHeader } from '../components/app-page-header';
 import { InventorySupplies } from '../components/inventory-supplies';
+import { InventoryAssistant, InventoryHistory, InventoryReportCard } from '../components/inventory-insights';
+import { KitchenInventoryAlert } from '../components/kitchen-inventory-alert';
 import { Feedback } from '../components/ui';
 import { Card, LoadingState, VaiButton } from '../components/vai';
 import { useSessions } from '../context/session-context';
@@ -33,6 +35,7 @@ export function InventarioPage() {
 function InventoryScreen({ scope }: { scope: Scope }) {
   const { token, role } = scope;
   const keys = inventoryKeys(scope);
+  const scopeId = `${scope.storeId}|${scope.membershipId}`;
   const client = useQueryClient();
   const overviewQuery = useQuery({ queryKey: keys.overview, enabled: !!token, queryFn: () => api.inventoryOverview(token) });
   const productsQuery = useQuery({ queryKey: keys.products, enabled: !!token, queryFn: () => api.inventoryProducts(token) });
@@ -98,6 +101,7 @@ function InventoryScreen({ scope }: { scope: Scope }) {
       </label>
       {kitchenPermission.isError && <Feedback tone="error">{errorMessage(kitchenPermission.error)}</Feedback>}
     </Card>}
+    <KitchenInventoryAlert token={token} scopeId={scopeId} showLink={false} />
     <InventorySupplies token={token} overviewKey={keys.all} overview={{ data: overviewQuery.data, isLoading: overviewQuery.isLoading }} canEdit={canEdit} showCosts={role !== 'cocina'} products={products} />
     <Card title="Receta por producto" description="Producción">
       <label>Producto<select value={selected ?? ''} onChange={event => { setSelected(event.target.value ? Number(event.target.value) : null); setDraft(null); save.reset(); }}><option value="">Elige un producto</option>{products.map(item => <option key={label(item.id)} value={label(item.id)}>{label(item.nombre)}</option>)}</select></label>
@@ -113,5 +117,8 @@ function InventoryScreen({ scope }: { scope: Scope }) {
         {save.isSuccess && <Feedback tone="success">Receta guardada.</Feedback>}
       </form>)}
     </Card>
+    <InventoryHistory token={token} scope={scopeId} supplies={overviewQuery.data?.insumos ?? []} />
+    {(role === 'admin' || role === 'cajero') && <InventoryReportCard token={token} scope={scopeId} />}
+    <InventoryAssistant token={token} />
   </main>;
 }
