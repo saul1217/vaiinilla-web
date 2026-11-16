@@ -6,8 +6,15 @@ import { Button } from './ui';
 import { CashierReceipt } from './cashier-receipt';
 
 type Group = 'cash' | 'ready';
-export function CashierQueue({ cashOrders, readyOrders, actions }: { cashOrders: OrderDetail[]; readyOrders: OrderDetail[]; actions: (order: OrderDetail, group: Group) => ReactNode }) {
+/** `pick` abre en el ticket el pedido que Caja eligió desde «Buscar un pedido»; `seq` distingue dos elecciones del mismo pedido. */
+export function CashierQueue({ cashOrders, readyOrders, actions, pick }: { cashOrders: OrderDetail[]; readyOrders: OrderDetail[]; actions: (order: OrderDetail, group: Group) => ReactNode; pick?: { id: string; seq: number } | null }) {
   const [selection, setSelection] = useState<{ id: string; group: Group } | null>(null);
+  const [handledPick, setHandledPick] = useState(0);
+  if (pick && pick.seq !== handledPick) {
+    setHandledPick(pick.seq);
+    const pickedGroup: Group | null = cashOrders.some(order => order.id === pick.id) ? 'cash' : readyOrders.some(order => order.id === pick.id) ? 'ready' : null;
+    if (pickedGroup) setSelection({ id: pick.id, group: pickedGroup });
+  }
   const ticket = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const hadTicketFocus = useRef(false);
@@ -20,6 +27,12 @@ export function CashierQueue({ cashOrders, readyOrders, actions }: { cashOrders:
     if (previousId.current && previousId.current !== selected?.id && hadTicketFocus.current) heading.current?.focus();
     previousId.current = selected?.id;
   }, [selected?.id]);
+  // Lo elegido en la búsqueda queda a la vista y con el foco en el ticket.
+  useLayoutEffect(() => {
+    if (!handledPick) return;
+    ticket.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    heading.current?.focus({ preventScroll: true });
+  }, [handledPick]);
   return <div className="cashier-queue" onFocusCapture={event => { hadTicketFocus.current = Boolean(ticket.current?.contains(event.target)); }} onBlurCapture={event => { if (event.relatedTarget) hadTicketFocus.current = Boolean(ticket.current?.contains(event.relatedTarget as Node)); }}>
     <h2 ref={heading} tabIndex={-1} className="cashier-queue__heading">Fila de Caja</h2>
     {selected && <div ref={ticket} className="cashier-queue__ticket"><CashierReceipt order={selected} actions={actions(selected, group)} /></div>}
