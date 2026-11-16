@@ -186,8 +186,30 @@ export interface MyShift {
   semana: { propinas: string; por_dia: { fecha: string; propinas: string }[] };
 }
 
+/** Un insumo en el aviso de Cocina (GET /inventario/avisos). */
+export interface InventoryAlertSupply {
+  id: number;
+  nombre: string;
+  unidad: string;
+  existencia: number | string;
+  minimo?: number | string | null;
+  consumo_diario?: number | string | null;
+  proveedor?: { nombre?: string | null; telefono?: string | null } | null;
+}
+
+/** GET /inventario/avisos: lo agotado, lo que no alcanza para mañana y lo bajo el mínimo. */
+export interface InventoryAlerts {
+  dias_consumo?: number;
+  agotados: { id: number; nombre: string; faltan: string[] }[];
+  para_manana: InventoryAlertSupply[];
+  bajo_minimo: InventoryAlertSupply[];
+  total?: number;
+}
+
 export interface OperationalStatus {
   recibiendo_pedidos: boolean;
+  /** El negocio opera como escuela (padres e hijos): Cocina ve «Para mañana». Un back anterior no lo manda. */
+  modo_escuela?: boolean;
   local_sin_conexion?: boolean;
   sesion_caja_abierta: boolean;
   caja_en_linea: boolean;
