@@ -1179,6 +1179,8 @@ export interface CatalogCategory {
   id: number;
   nombre: string;
   orden: number;
+  /** Con `incluir_archivados` el back puede mandar las archivadas. */
+  archivada?: boolean;
 }
 
 export interface CatalogOption {
@@ -1209,6 +1211,8 @@ export interface CatalogProduct {
   disponible: boolean;
   imagen_url: string | null;
   grupos_opcion: CatalogOptionGroup[];
+  /** Solo llega con `incluir_archivados` (admin): el producto salió del menú pero se puede restaurar. */
+  archivado?: boolean;
 }
 
 export interface CatalogResponse {
