@@ -810,8 +810,18 @@ export const api = {
     });
   },
 
-  async catalog(token: string): Promise<CatalogResponse> {
-    return (await request<CatalogResponse>('/catalogo', { token })).data;
+  async catalog(token: string, options: { includeArchived?: boolean } = {}): Promise<CatalogResponse> {
+    return (await request<CatalogResponse>(options.includeArchived ? '/catalogo?incluir_archivados=true' : '/catalogo', { token })).data;
+  },
+
+  /** Solo admin. Saca el producto del menú sin borrarlo; los pedidos viejos lo siguen mostrando. */
+  async setProductArchived(token: string, id: number, archived: boolean): Promise<CatalogProduct> {
+    return (await request<CatalogProduct>(`/catalogo/productos/${id}/${archived ? 'archivar' : 'desarchivar'}`, { method: 'POST', token, idempotent: true, body: {} })).data;
+  },
+
+  /** Solo admin. Se archiva solo si ya no le quedan productos activos (409 CATEGORY_NOT_EMPTY). */
+  async archiveCategory(token: string, id: number): Promise<void> {
+    await request(`/catalogo/categorias/${id}/archivar`, { method: 'POST', token, idempotent: true, body: {} });
   },
 
   /** El asistente sugiere alérgenos por nombre e ingredientes (y la receta, si el producto ya tiene). */
