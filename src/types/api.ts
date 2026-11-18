@@ -224,11 +224,6 @@ export interface OperationalStatus {
   dentro_de_franja?: boolean;
   /** false = el personal entrega en el espacio sin pedir el QR. Un backend anterior no lo manda. */
   entrega_requiere_qr?: boolean;
-  /**
-   * Cafeterías (back #265): cada cobro con tarjeta debe ser estrictamente mayor que esto
-   * ("30.00"). null = sin mínimo propio. Un back anterior no lo manda. Ver lib/card-minimum.
-   */
-  tarjeta_minimo?: string | null;
 }
 
 export interface OrderSpace {

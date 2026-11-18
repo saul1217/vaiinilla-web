@@ -1,5 +1,4 @@
 import type { ApiErrorBody } from '../types/api';
-import { cardMinimumErrorText } from './card-minimum';
 
 const friendlyMessages: Record<string, string> = {
   UNAUTHENTICATED: 'Tu sesión terminó. Inicia sesión nuevamente.',
@@ -63,12 +62,7 @@ export class VaiinillaApiError extends Error {
   readonly retryAfter?: number;
 
   constructor(status: number, body: ApiErrorBody, retryAfter?: number) {
-    super(
-      (body.code === 'CARD_MIN_AMOUNT' ? cardMinimumErrorText(body.details) : null) ??
-        friendlyMessages[body.code] ??
-        body.message ??
-        'No fue posible completar la operación.',
-    );
+    super(friendlyMessages[body.code] ?? body.message ?? 'No fue posible completar la operación.');
     this.name = 'VaiinillaApiError';
     this.status = status;
     this.code = body.code;
