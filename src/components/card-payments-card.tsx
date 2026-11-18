@@ -1,15 +1,26 @@
 // Pagos con tarjeta del negocio, para su dueño. Mientras no se active aquí, las apps y la
-// web de compra no muestran "tarjeta". Activar exige que Stripe ya permita cobrar.
+// web de compra no muestran "tarjeta". Activar exige que Stripe ya permita cobrar y, en una
+// cafetería, la aprobación vigente de la plataforma (back #266); apagarla se puede siempre.
+// En una cafetería la comisión no se pasa al cliente: su menú con tarjeta ya la considera (F3).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CreditCard, ExternalLink } from 'lucide-react';
 import { Choice } from './choice';
 import { Button, Feedback } from './ui';
 import { api } from '../lib/api';
-import { errorMessage } from '../lib/api-error';
-import { cardPaymentsStep } from '../lib/card-payments';
+import { VaiinillaApiError, errorMessage } from '../lib/api-error';
+import { cardApprovalLabel, cardPaymentsStep } from '../lib/card-payments';
 import type { StripeOnboarding } from '../types/api';
 
-export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: string }) {
+export function CardPaymentsCard({
+  token,
+  scopeId,
+  businessType,
+}: {
+  token: string;
+  scopeId: string;
+  /** `tipo` guardado del negocio; la aprobación y el candado de la comisión solo aplican a cafeterías. */
+  businessType?: string;
+}) {
   const queryClient = useQueryClient();
   const queryKey = ['card-payments', scopeId];
   const query = useQuery({ queryKey, enabled: Boolean(token), queryFn: () => api.cardPayments(token) });
@@ -27,6 +38,13 @@ export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: s
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => api.setCardPayments(token, enabled),
     onSuccess: (data) => queryClient.setQueryData(queryKey, data),
+    // La plataforma pudo revocar mientras la pantalla estaba abierta: se vuelve a consultar
+    // para mostrar el estado real y la tarjeta queda apagada.
+    onError: (error) => {
+      if (error instanceof VaiinillaApiError && error.code === 'STRIPE_PLATFORM_APPROVAL_REQUIRED') {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    },
   });
 
   const commission = useMutation({
@@ -40,6 +58,11 @@ export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: s
 
   const step = cardPaymentsStep(query.data);
   const enabled = Boolean(query.data?.stripe_enabled) && step === 'ready';
+  const cafeteria = businessType === 'cafeteria';
+  // Un back anterior a #266 no manda la aprobación: el panel se ve como antes.
+  const approval = cafeteria ? query.data?.aprobacion_plataforma : undefined;
+  const awaitingApproval = approval !== undefined && !approval.vigente;
+  const passingCommission = Boolean(query.data?.pasar_comision_al_cliente);
 
   return (
     <section className="panel-card grid gap-4 p-5 sm:p-6" aria-labelledby="card-payments-title">
@@ -62,6 +85,21 @@ export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: s
       {toggle.isError && <Feedback tone="error">{errorMessage(toggle.error)}</Feedback>}
       {commission.isError && <Feedback tone="error">{errorMessage(commission.error)}</Feedback>}
       {query.isLoading && <div className="table-loading">Consultando tu cuenta de Stripe…</div>}
+
+      {approval && (
+        <div className="grid gap-1 rounded-2xl bg-cream p-4" aria-live="polite">
+          <p className="text-sm text-ink">
+            Aprobación de la plataforma: <strong>{cardApprovalLabel(approval)}</strong>
+          </p>
+          {awaitingApproval && (
+            <p className="text-sm text-muted">
+              {approval.estado === 'revocada'
+                ? 'La plataforma revocó los pagos con tarjeta de esta cafetería. No puedes activarlos hasta que los vuelva a aprobar.'
+                : 'La plataforma debe aprobar los pagos con tarjeta de esta cafetería antes de que puedas activarlos.'}
+            </p>
+          )}
+        </div>
+      )}
 
       {!query.isLoading && !query.isError && step !== 'ready' && (
         <div className="grid gap-3 rounded-2xl bg-cream p-4">
@@ -87,7 +125,15 @@ export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: s
             if (value !== enabled && !toggle.isPending) toggle.mutate(value);
           }}
           options={[
-            { value: true, label: 'Sí, aceptar tarjeta', hint: 'Tus clientes pueden pagar con tarjeta desde la app o la web.' },
+            {
+              value: true,
+              label: 'Sí, aceptar tarjeta',
+              hint:
+                awaitingApproval && !enabled
+                  ? 'Pendiente de aprobación de la plataforma.'
+                  : 'Tus clientes pueden pagar con tarjeta desde la app o la web.',
+              disabled: awaitingApproval && !enabled,
+            },
             { value: false, label: 'No, solo otros pagos', hint: 'La opción de tarjeta no aparece. Los pedidos ya pagados no cambian.' },
           ]}
         />
@@ -99,9 +145,11 @@ export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: s
       {step === 'ready' && (
         <Choice
           name="¿Quién paga la comisión de la tarjeta?"
-          value={Boolean(query.data?.pasar_comision_al_cliente)}
+          value={passingCommission}
           onChange={(value) => {
-            if (value !== Boolean(query.data?.pasar_comision_al_cliente) && !commission.isPending) commission.mutate(value);
+            if (value === passingCommission || commission.isPending) return;
+            if (value && cafeteria) return;
+            commission.mutate(value);
           }}
           options={[
             {
@@ -112,10 +160,20 @@ export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: s
             {
               value: true,
               label: 'El cliente',
-              hint: 'Con tarjeta, el cliente paga un poco más para cubrir la comisión. Con efectivo o saldo paga el precio de mostrador.',
+              hint: cafeteria
+                ? 'No disponible en cafeterías: el precio del menú con tarjeta ya cubre la comisión.'
+                : 'Con tarjeta, el cliente paga un poco más para cubrir la comisión. Con efectivo o saldo paga el precio de mostrador.',
+              disabled: cafeteria,
             },
           ]}
         />
+      )}
+      {step === 'ready' && cafeteria && (
+        <p className="text-sm text-muted">
+          {passingCommission
+            ? 'Esta cafetería tiene la comisión pasada al cliente, y eso la cobraría dos veces. Elige «Yo, el negocio» para apagarla.'
+            : 'En una cafetería la comisión no se suma al cliente, porque el precio del menú con tarjeta ya la considera.'}
+        </p>
       )}
     </section>
   );
