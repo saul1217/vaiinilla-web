@@ -899,4 +899,43 @@ describe('Vaiinilla API client', () => {
     );
     await expect(api.setInventoryKitchenPermission('tenant-token', true)).resolves.toEqual({ cocina_edita: true });
   });
+
+  it('consulta, aprueba y revoca la tarjeta de un negocio con motivo e Idempotency-Key', async () => {
+    const id = '3d196e4d-9082-4b5d-aa7a-65f0e21ac654';
+    const base = `${baseUrl}/plataforma/establecimientos/${id}/stripe/aprobacion`;
+    const aprobacion = { estado: 'aprobada', vigente: true, origen: 'plataforma', aprobada_en: '2026-11-18T10:00:00Z', revocada_en: null };
+    const posts: { path: string; key: string | null; body: unknown }[] = [];
+    server.use(
+      http.get(base, ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer platform-token');
+        return HttpResponse.json({
+          data: { establecimiento_id: id, tipo: 'cafeteria', aprobable: true, aprobacion, stripe: null, historial: [] },
+          meta: {},
+          error: null,
+        });
+      }),
+      http.post(base, async ({ request }) => {
+        posts.push({ path: 'aprobar', key: request.headers.get('Idempotency-Key'), body: await request.json() });
+        return HttpResponse.json({ data: { establecimiento_id: id, cambio: true, aprobacion, stripe: null }, meta: {}, error: null });
+      }),
+      http.post(`${base}/revocar`, async ({ request }) => {
+        posts.push({ path: 'revocar', key: request.headers.get('Idempotency-Key'), body: await request.json() });
+        return HttpResponse.json(
+          { data: null, meta: {}, error: { code: 'STRIPE_PLATFORM_APPROVAL_REQUIRED', message: 'x' } },
+          { status: 409 },
+        );
+      }),
+    );
+
+    await expect(api.platformCardApproval('platform-token', id)).resolves.toMatchObject({ aprobable: true, aprobacion: { vigente: true } });
+    await expect(api.decidePlatformCardApproval('platform-token', id, 'aprobar', 'Alta', 'key-1')).resolves.toMatchObject({ cambio: true });
+    const revocar = api.decidePlatformCardApproval('platform-token', id, 'revocar', 'Baja', 'key-2');
+    await expect(revocar).rejects.toBeInstanceOf(VaiinillaApiError);
+    await expect(revocar).rejects.toMatchObject({ status: 409, code: 'STRIPE_PLATFORM_APPROVAL_REQUIRED' });
+    expect(posts).toEqual([
+      { path: 'aprobar', key: 'key-1', body: { motivo: 'Alta' } },
+      { path: 'revocar', key: 'key-2', body: { motivo: 'Baja' } },
+    ]);
+  });
 });
+

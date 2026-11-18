@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from '../types/api';
+import { cardMinimumErrorText } from './card-minimum';
 
 const friendlyMessages: Record<string, string> = {
   UNAUTHENTICATED: 'Tu sesión terminó. Inicia sesión nuevamente.',
@@ -49,6 +50,9 @@ const friendlyMessages: Record<string, string> = {
   RESERVATION_IN_PROGRESS: 'La reserva ya inició: no se puede cancelar.',
   ACCOUNT_DELETION_FAILED:
     'No fue posible completar la eliminación. Tu sesión sigue activa; inténtalo nuevamente.',
+  STRIPE_PLATFORM_APPROVAL_REQUIRED:
+    'La plataforma todavía no aprueba los pagos con tarjeta de este negocio. La tarjeta sigue apagada.',
+  STRIPE_APPROVAL_CAFETERIA_ONLY: 'La aprobación de pagos con tarjeta solo aplica a cafeterías.',
 };
 
 export class VaiinillaApiError extends Error {
@@ -58,7 +62,12 @@ export class VaiinillaApiError extends Error {
   readonly retryAfter?: number;
 
   constructor(status: number, body: ApiErrorBody, retryAfter?: number) {
-    super(friendlyMessages[body.code] ?? body.message ?? 'No fue posible completar la operación.');
+    super(
+      (body.code === 'CARD_MIN_AMOUNT' ? cardMinimumErrorText(body.details) : null) ??
+        friendlyMessages[body.code] ??
+        body.message ??
+        'No fue posible completar la operación.',
+    );
     this.name = 'VaiinillaApiError';
     this.status = status;
     this.code = body.code;

@@ -205,7 +205,7 @@ export function StoreFlowPage() {
         title="Pagos con tarjeta"
         returnFocusRef={opener}
       >
-        <CardPaymentsCard token={token} scopeId={scopeId} />
+        <CardPaymentsCard token={token} scopeId={scopeId} businessType={query.data?.tipo} />
       </StoreFlowEditorSheet>
       {query.data && (
         <StoreFlowEditorSheet

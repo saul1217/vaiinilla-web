@@ -224,6 +224,11 @@ export interface OperationalStatus {
   dentro_de_franja?: boolean;
   /** false = el personal entrega en el espacio sin pedir el QR. Un backend anterior no lo manda. */
   entrega_requiere_qr?: boolean;
+  /**
+   * Cafeterías (back #265): cada cobro con tarjeta debe ser estrictamente mayor que esto
+   * ("30.00"). null = sin mínimo propio. Un back anterior no lo manda. Ver lib/card-minimum.
+   */
+  tarjeta_minimo?: string | null;
 }
 
 export interface OrderSpace {
@@ -1106,6 +1111,50 @@ export interface TenantCardPayments {
   estado_onboarding: StripeOnboardingStatus;
   /** Si es true, el pago con tarjeta suma la comisión al precio; si no, el cliente paga el de mostrador. */
   pasar_comision_al_cliente?: boolean;
+  /** Aprobación de la plataforma (back #266). Un back anterior no la manda. */
+  aprobacion_plataforma?: CardPlatformApproval;
+}
+
+/** Aprobación de la plataforma para cobrar con tarjeta. `estado: null` = nunca aprobada. */
+export interface CardPlatformApproval {
+  estado: 'aprobada' | 'revocada' | null;
+  vigente: boolean;
+  /** `backfill` = heredada de la migración 217, no la decidió una persona. */
+  origen?: 'plataforma' | 'backfill' | null;
+  aprobada_en?: string | null;
+  revocada_en?: string | null;
+}
+
+export interface CardApprovalHistoryEntry {
+  id: string;
+  accion: 'aprobar' | 'revocar' | 'backfill' | (string & {});
+  actor_tipo?: string | null;
+  autoridad_id?: string | null;
+  estado_antes?: 'aprobada' | 'revocada' | null;
+  estado_despues?: 'aprobada' | 'revocada' | null;
+  stripe_enabled_antes?: boolean | null;
+  stripe_enabled_despues?: boolean | null;
+  motivo?: string | null;
+  creado_en: string;
+}
+
+/** GET /plataforma/establecimientos/{id}/stripe/aprobacion (solo Super Admin). */
+export interface PlatformCardApproval {
+  establecimiento_id: string;
+  tipo?: string;
+  /** Solo las cafeterías se pueden aprobar. */
+  aprobable: boolean;
+  aprobacion: CardPlatformApproval;
+  stripe: StripePlatformConfiguration | null;
+  historial?: CardApprovalHistoryEntry[];
+}
+
+/** POST .../stripe/aprobacion y .../aprobacion/revocar. */
+export interface PlatformCardApprovalDecision {
+  establecimiento_id: string;
+  cambio: boolean;
+  aprobacion: CardPlatformApproval;
+  stripe: StripePlatformConfiguration | null;
 }
 
 export interface StripeOnboarding {
@@ -1123,6 +1172,7 @@ export interface StripePlatformConfiguration {
   charges_enabled: boolean;
   payouts_enabled: boolean;
   estado_onboarding: StripeOnboardingStatus;
+  aprobacion_plataforma?: CardPlatformApproval;
 }
 
 export interface PlatformEstablishment {

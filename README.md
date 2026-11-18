@@ -88,6 +88,19 @@ regresa a `/plataforma/acceso`, conserva el establecimiento seleccionado en la p
 vuelve a `/plataforma/establecimientos` después de autenticar de nuevo. Efectivo, saldo,
 wallet y cashback siguen siendo flujos separados.
 
+### Aprobación de tarjeta en cafeterías (back #266) y mínimo por cobro (back #265)
+
+- En cada cafetería, Super Admin ve si la tarjeta está aprobada, pendiente o revocada, con el
+  historial reciente, y la aprueba o la revoca con un motivo obligatorio (queda en el historial)
+  e `Idempotency-Key`: `GET`, `POST .../stripe/aprobacion` y `POST .../stripe/aprobacion/revocar`.
+  Aprobar no prende la tarjeta; revocar la apaga y no cancela pagos ya iniciados.
+- En `/app/flujo`, el dueño de una cafetería ve el estado de la aprobación. Sin aprobación no
+  puede activar la tarjeta (solo apagarla). En cafeterías, «¿Quién paga la comisión?» queda en
+  «Yo, el negocio»: el precio del menú con tarjeta ya la considera.
+- `tarjeta_minimo` de `GET /estado-operativo` y el 422 `CARD_MIN_AMOUNT` se leen con
+  `src/lib/card-minimum.ts` (comparación estricta en centavos, por cobro). La Web no crea
+  cobros con tarjeta de Stripe; el aviso en el carrito vive en la landing.
+
 ## Seguridad
 
 - Firebase conserva únicamente la sesión de identidad del navegador.

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -17,6 +17,8 @@ const apiMock = vi.hoisted(() => ({
   updateEstablishment: vi.fn(),
   changeEstablishmentStatus: vi.fn(),
   inviteFirstAdmin: vi.fn(),
+  platformCardApproval: vi.fn(),
+  decidePlatformCardApproval: vi.fn(),
 }));
 
 const sessionMock = vi.hoisted(() => ({
@@ -264,5 +266,134 @@ describe('crear establecimiento en Super Admin', () => {
     expect(input).toMatchObject({ nombre: 'Pádel Norte', slug: 'padel-norte', tipo: 'padel' });
     expect(input).not.toHaveProperty('identificador_cliente_etiqueta');
     expect(input).not.toHaveProperty('identificador_cliente_obligatorio');
+  });
+});
+
+describe('aprobación de tarjeta en Super Admin (cafeterías)', () => {
+  const cafeteria: PlatformEstablishment = { ...establishment, tipo: 'cafeteria' };
+  const sinAprobar = { estado: null, vigente: false, origen: null, aprobada_en: null, revocada_en: null };
+  const aprobada = {
+    estado: 'aprobada' as const,
+    vigente: true,
+    origen: 'plataforma' as const,
+    aprobada_en: '2026-11-18T10:00:00Z',
+    revocada_en: null,
+  };
+  const revocada = { ...aprobada, estado: 'revocada' as const, vigente: false, revocada_en: '2026-11-18T12:00:00Z' };
+  const consulta = (aprobacion: typeof sinAprobar | typeof aprobada | typeof revocada, historial: unknown[] = []) => ({
+    establecimiento_id: cafeteria.id,
+    tipo: 'cafeteria',
+    aprobable: true,
+    aprobacion,
+    stripe: null,
+    historial,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMock.getPlatformStripeConfiguration.mockResolvedValue(null);
+  });
+
+  it('solo las cafeterías consultan la aprobación', async () => {
+    renderPage({ ...establishment, tipo: 'restaurante' });
+    await screen.findByText('Cafetería Demo A');
+    expect(screen.queryByRole('region', { name: 'Aprobación de tarjeta' })).not.toBeInTheDocument();
+    expect(apiMock.platformCardApproval).not.toHaveBeenCalled();
+  });
+
+  it('aprueba con motivo obligatorio e Idempotency-Key, y muestra el estado nuevo', async () => {
+    apiMock.platformCardApproval
+      .mockResolvedValueOnce(consulta(sinAprobar))
+      .mockResolvedValue(consulta(aprobada, [{ id: '1', accion: 'aprobar', motivo: 'Alta del lunes', creado_en: '2026-11-18T10:00:00Z' }]));
+    apiMock.decidePlatformCardApproval.mockResolvedValue({ establecimiento_id: cafeteria.id, cambio: true, aprobacion: aprobada, stripe: null });
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    expect(await within(panel).findByText('Pendiente de aprobación')).toBeVisible();
+    await user.click(within(panel).getByRole('button', { name: /aprobar tarjeta/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+    expect(await within(dialog).findByText(/escribe el motivo/i)).toBeVisible();
+    expect(apiMock.decidePlatformCardApproval).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText(/motivo/i), '  Alta del lunes  ');
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+
+    await waitFor(() => expect(apiMock.decidePlatformCardApproval).toHaveBeenCalledTimes(1));
+    const [token, id, decision, motivo, key] = apiMock.decidePlatformCardApproval.mock.calls[0] as string[];
+    expect([token, id, decision, motivo]).toEqual(['platform-token', cafeteria.id, 'aprobar', 'Alta del lunes']);
+    expect(key).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(await within(panel).findByText('Aprobada')).toBeVisible();
+    expect(within(panel).getByText('Historial (1)')).toBeInTheDocument();
+    expect(await screen.findByText(/tarjeta aprobada/i)).toBeVisible();
+  });
+
+  it('cancelar la revocación no llama al back', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(aprobada));
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    await user.click(await within(panel).findByRole('button', { name: /revocar aprobación/i }));
+    const dialog = await screen.findByRole('dialog', { name: /revocar la aprobación de tarjeta/i });
+    expect(within(dialog).getByText(/los pagos ya iniciados no se cancelan/i)).toBeVisible();
+    await user.click(within(dialog).getByRole('button', { name: 'Volver' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(apiMock.decidePlatformCardApproval).not.toHaveBeenCalled();
+  });
+
+  it('revoca tras confirmar, vuelve a consultar y deja visible el estado revocado', async () => {
+    apiMock.platformCardApproval.mockResolvedValueOnce(consulta(aprobada)).mockResolvedValue(consulta(revocada));
+    apiMock.decidePlatformCardApproval.mockResolvedValue({ establecimiento_id: cafeteria.id, cambio: true, aprobacion: revocada, stripe: null });
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    await user.click(await within(panel).findByRole('button', { name: /revocar aprobación/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/motivo/i), 'Contracargos');
+    await user.click(within(dialog).getByRole('button', { name: /revocar aprobación/i }));
+
+    await waitFor(() =>
+      expect(apiMock.decidePlatformCardApproval).toHaveBeenCalledWith('platform-token', cafeteria.id, 'revocar', 'Contracargos', expect.any(String)),
+    );
+    expect(await within(panel).findByText('Revocada')).toBeVisible();
+    expect(apiMock.platformCardApproval).toHaveBeenCalledTimes(2);
+    // El listado también se vuelve a pedir: revocar apaga stripe_enabled.
+    await waitFor(() => expect(apiMock.listEstablishments.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('un 409 se explica por código, conserva el estado y el reintento repite la llave', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(sinAprobar));
+    apiMock.decidePlatformCardApproval.mockRejectedValue(
+      new VaiinillaApiError(409, { code: 'STRIPE_APPROVAL_CAFETERIA_ONLY', message: 'x' }),
+    );
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    await user.click(await within(panel).findByRole('button', { name: /aprobar tarjeta/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/motivo/i), 'Alta');
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/solo aplica a cafeterías/i);
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+    await waitFor(() => expect(apiMock.decidePlatformCardApproval).toHaveBeenCalledTimes(2));
+    const keys = apiMock.decidePlatformCardApproval.mock.calls.map((call) => call[4] as string);
+    expect(keys[0]).toBe(keys[1]);
+    expect(within(panel).getByText('Pendiente de aprobación')).toBeVisible();
+  });
+
+  it('un 403 al consultar se muestra sin romper la ficha', async () => {
+    apiMock.platformCardApproval.mockRejectedValue(new VaiinillaApiError(403, { code: 'MFA_REQUIRED', message: 'x' }));
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    expect(await within(panel).findByRole('alert')).toHaveTextContent(/segundo factor/i);
+    expect(screen.getByRole('button', { name: /configurar/i })).toBeVisible();
   });
 });
