@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { VaiinillaApiError } from '../lib/api-error';
 import type { TenantCardPayments } from '../types/api';
 import { CardPaymentsCard } from './card-payments-card';
 
@@ -93,6 +94,69 @@ describe('pagos con tarjeta del negocio', () => {
       expect(await screen.findByRole('radio', { name: /^el cliente/i })).toBeChecked();
       await user.click(screen.getByRole('radio', { name: /yo, el negocio/i }));
       expect(apiMock.setCardCommissionPassThrough).toHaveBeenCalledWith('t', false);
+    });
+
+    describe('cafetería con tarjeta aprobada (F3)', () => {
+      const aprobada = { estado: 'aprobada' as const, vigente: true, origen: 'plataforma', aprobada_en: '2026-11-18T10:00:00Z', revocada_en: null };
+      const cafeteriaAprobada: TenantCardPayments = { ...ready, stripe_enabled: true, aprobacion_plataforma: aprobada };
+
+      it('no deja pasar la comisión al cliente y explica por qué', async () => {
+        apiMock.cardPayments.mockResolvedValue(cafeteriaAprobada);
+        const user = userEvent.setup();
+        render(<CardPaymentsCard token="t" scopeId="e1" businessType="cafeteria" />, { wrapper });
+
+        const cliente = await screen.findByRole('radio', { name: /^el cliente/i });
+        expect(cliente).toBeDisabled();
+        expect(screen.getByRole('radio', { name: /yo, el negocio/i })).toBeChecked();
+        expect(screen.getByText(/la comisión ya va incluida en los precios del menú/i)).toBeVisible();
+        await user.click(cliente);
+        expect(apiMock.setCardCommissionPassThrough).not.toHaveBeenCalled();
+      });
+
+      it('si ya la tenía prendida, la puede apagar y después queda bloqueada', async () => {
+        apiMock.cardPayments.mockResolvedValue({ ...cafeteriaAprobada, pasar_comision_al_cliente: true });
+        apiMock.setCardCommissionPassThrough.mockResolvedValue({ ...cafeteriaAprobada, pasar_comision_al_cliente: false });
+        const user = userEvent.setup();
+        render(<CardPaymentsCard token="t" scopeId="e1" businessType="cafeteria" />, { wrapper });
+
+        expect(await screen.findByRole('radio', { name: /^el cliente/i })).toBeChecked();
+        expect(screen.getByText(/apaga esta opción para no cobrarla dos veces/i)).toBeVisible();
+        await user.click(screen.getByRole('radio', { name: /yo, el negocio/i }));
+        expect(apiMock.setCardCommissionPassThrough).toHaveBeenCalledWith('t', false);
+        await waitFor(() => expect(screen.getByRole('radio', { name: /^el cliente/i })).toBeDisabled());
+      });
+
+      it.each([
+        ['una cafetería sin aprobación', 'cafeteria', { estado: null, vigente: false }],
+        ['una cafetería con la aprobación revocada', 'cafeteria', { estado: 'revocada' as const, vigente: false }],
+        ['un restaurante', 'restaurante', aprobada],
+        ['un backend que todavía no manda la aprobación', 'cafeteria', undefined],
+      ])('%s puede elegir quién paga la comisión', async (_caso, tipo, aprobacion) => {
+        apiMock.cardPayments.mockResolvedValue({ ...ready, stripe_enabled: true, aprobacion_plataforma: aprobacion });
+        render(<CardPaymentsCard token="t" scopeId="e1" businessType={tipo} />, { wrapper });
+
+        expect(await screen.findByRole('radio', { name: /^el cliente/i })).toBeEnabled();
+        expect(screen.queryByText(/la comisión ya va incluida en los precios del menú/i)).not.toBeInTheDocument();
+      });
+
+      it('si el backend responde 422 al prenderla, muestra el motivo sin romper la página y vuelve a consultar', async () => {
+        apiMock.cardPayments.mockResolvedValueOnce({ ...ready, stripe_enabled: true }).mockResolvedValue(cafeteriaAprobada);
+        apiMock.setCardCommissionPassThrough.mockRejectedValue(
+          new VaiinillaApiError(422, {
+            code: 'STRIPE_COMMISSION_CAFETERIA_LOCKED',
+            message: 'Una cafetería con tarjeta aprobada no puede pasar la comisión al cliente.',
+          }),
+        );
+        const user = userEvent.setup();
+        render(<CardPaymentsCard token="t" scopeId="e1" businessType="cafeteria" />, { wrapper });
+
+        await user.click(await screen.findByRole('radio', { name: /^el cliente/i }));
+
+        expect(await screen.findByText(/no puede pasar la comisión al cliente/i)).toBeVisible();
+        expect(screen.getByRole('heading', { name: 'Pagos con tarjeta' })).toBeVisible();
+        await waitFor(() => expect(screen.getByRole('radio', { name: /^el cliente/i })).toBeDisabled());
+        expect(screen.getByRole('radio', { name: /yo, el negocio/i })).toBeChecked();
+      });
     });
 
     it('sin cuenta lista no se ofrece: no hay comisión que pasar', async () => {
