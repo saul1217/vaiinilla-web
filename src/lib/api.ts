@@ -44,6 +44,8 @@ import type {
   PlatformSummary,
   StripeOnboarding,
   StripePlatformConfiguration,
+  PlatformCardApproval,
+  PlatformCardApprovalDecision,
   LegalVersions,
   OperationalRole,
   OperationalStatus,
@@ -1600,6 +1602,36 @@ export const api = {
   /** Solo admin: deja o no a Cocina editar el inventario (`cocina_edita_inventario`, migración 205). */
   async setInventoryKitchenPermission(token: string, allow: boolean): Promise<{ cocina_edita: boolean }> {
     return (await request<{ cocina_edita: boolean }>('/inventario/permisos', { method: 'PATCH', token, body: { cocina_edita: allow } })).data;
+  },
+
+  /** Aprobación de tarjeta del negocio, con su historial reciente (solo Super Admin). */
+  async platformCardApproval(token: string, id: string): Promise<PlatformCardApproval> {
+    return (
+      await request<PlatformCardApproval>(`/plataforma/establecimientos/${id}/stripe/aprobacion`, { token })
+    ).data;
+  },
+
+  /**
+   * Aprobar (solo cafeterías) o revocar la tarjeta. No prende la tarjeta: después la activa el
+   * dueño. Revocar la apaga. El motivo es obligatorio y queda en el historial. Un reintento del
+   * mismo intento debe mandar la misma `idempotencyKey`.
+   */
+  async decidePlatformCardApproval(
+    token: string,
+    id: string,
+    decision: 'aprobar' | 'revocar',
+    motivo: string,
+    idempotencyKey: string,
+  ): Promise<PlatformCardApprovalDecision> {
+    const path = `/plataforma/establecimientos/${id}/stripe/aprobacion${decision === 'revocar' ? '/revocar' : ''}`;
+    return (
+      await request<PlatformCardApprovalDecision>(path, {
+        method: 'POST',
+        token,
+        idempotencyKey,
+        body: { motivo },
+      })
+    ).data;
   },
 
   async configurePlatformStripe(
