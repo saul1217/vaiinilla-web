@@ -1106,6 +1106,17 @@ export interface TenantCardPayments {
   estado_onboarding: StripeOnboardingStatus;
   /** Si es true, el pago con tarjeta suma la comisión al precio; si no, el cliente paga el de mostrador. */
   pasar_comision_al_cliente?: boolean;
+  /** Aprobación de la plataforma para cobrar con tarjeta (cafeterías). Un backend anterior no la manda. */
+  aprobacion_plataforma?: TenantCardPlatformApproval;
+}
+
+/** `estado: null` = la plataforma nunca la aprobó. `vigente` es true solo con `estado: 'aprobada'`. */
+export interface TenantCardPlatformApproval {
+  estado: 'aprobada' | 'revocada' | null;
+  vigente: boolean;
+  origen?: string | null;
+  aprobada_en?: string | null;
+  revocada_en?: string | null;
 }
 
 export interface StripeOnboarding {

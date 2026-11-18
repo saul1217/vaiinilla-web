@@ -6,10 +6,19 @@ import { Choice } from './choice';
 import { Button, Feedback } from './ui';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
-import { cardPaymentsStep } from '../lib/card-payments';
+import { cardPaymentsStep, commissionPassThroughLocked } from '../lib/card-payments';
 import type { StripeOnboarding } from '../types/api';
 
-export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: string }) {
+export function CardPaymentsCard({
+  token,
+  scopeId,
+  businessType,
+}: {
+  token: string;
+  scopeId: string;
+  /** Tipo del negocio (`cafeteria`, `restaurante`...): la cafetería aprobada no pasa la comisión. */
+  businessType?: string | null;
+}) {
   const queryClient = useQueryClient();
   const queryKey = ['card-payments', scopeId];
   const query = useQuery({ queryKey, enabled: Boolean(token), queryFn: () => api.cardPayments(token) });
@@ -36,10 +45,15 @@ export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: s
       // Cambia el precio que ve el cliente con tarjeta: el menú se vuelve a pedir.
       void queryClient.invalidateQueries({ queryKey: ['catalog', scopeId] });
     },
+    // Un 422 puede venir de una aprobación que llegó después de abrir la página: se vuelve a pedir.
+    onError: () => void queryClient.invalidateQueries({ queryKey }),
   });
 
   const step = cardPaymentsStep(query.data);
   const enabled = Boolean(query.data?.stripe_enabled) && step === 'ready';
+  const passThrough = Boolean(query.data?.pasar_comision_al_cliente);
+  // Si ya estaba prendida, se deja apagar; solo se impide prenderla.
+  const passThroughLocked = commissionPassThroughLocked(query.data, businessType);
 
   return (
     <section className="panel-card grid gap-4 p-5 sm:p-6" aria-labelledby="card-payments-title">
@@ -96,12 +110,20 @@ export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: s
       {step === 'ready' && (
         <h3 className="mt-2 text-base font-extrabold text-ink">¿Quién paga la comisión de la tarjeta?</h3>
       )}
+      {step === 'ready' && passThroughLocked && (
+        <p id="card-commission-locked" className="rounded-2xl bg-cream p-4 text-sm text-ink">
+          {passThrough
+            ? 'En una cafetería con tarjeta aprobada, la comisión ya va incluida en los precios del menú. Apaga esta opción para no cobrarla dos veces: después ya no se puede volver a prender.'
+            : 'En una cafetería con tarjeta aprobada, la comisión ya va incluida en los precios del menú, así que no se cobra aparte al cliente. Por eso esta opción queda apagada.'}
+        </p>
+      )}
       {step === 'ready' && (
         <Choice
           name="¿Quién paga la comisión de la tarjeta?"
-          value={Boolean(query.data?.pasar_comision_al_cliente)}
+          value={passThrough}
           onChange={(value) => {
-            if (value !== Boolean(query.data?.pasar_comision_al_cliente) && !commission.isPending) commission.mutate(value);
+            if (value === true && passThroughLocked) return;
+            if (value !== passThrough && !commission.isPending) commission.mutate(value);
           }}
           options={[
             {
@@ -113,6 +135,7 @@ export function CardPaymentsCard({ token, scopeId }: { token: string; scopeId: s
               value: true,
               label: 'El cliente',
               hint: 'Con tarjeta, el cliente paga un poco más para cubrir la comisión. Con efectivo o saldo paga el precio de mostrador.',
+              disabled: passThroughLocked && !passThrough,
             },
           ]}
         />
