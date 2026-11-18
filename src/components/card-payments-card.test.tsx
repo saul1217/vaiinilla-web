@@ -77,7 +77,7 @@ describe('pagos con tarjeta del negocio', () => {
       apiMock.cardPayments.mockResolvedValue({ ...ready, stripe_enabled: true });
       apiMock.setCardCommissionPassThrough.mockResolvedValue({ ...ready, stripe_enabled: true, pasar_comision_al_cliente: true });
       const user = userEvent.setup();
-      render(<CardPaymentsCard token="t" scopeId="e1" />, { wrapper });
+      render(<CardPaymentsCard token="t" scopeId="e1" businessType="restaurante" />, { wrapper });
 
       await user.click(await screen.findByRole('radio', { name: /^el cliente/i }));
 
@@ -187,6 +187,25 @@ describe('pagos con tarjeta del negocio', () => {
       expect(screen.queryByText(/aprobación de la plataforma/i)).not.toBeInTheDocument();
     });
 
+    it('mientras no se sabe el tipo de negocio, sin aprobación vigente no deja activar', async () => {
+      apiMock.cardPayments.mockResolvedValue({ ...ready, aprobacion_plataforma: pendiente });
+      render(<CardPaymentsCard token="t" scopeId="e1" />, { wrapper });
+
+      expect(await screen.findByRole('radio', { name: /sí, aceptar tarjeta/i })).toBeDisabled();
+      // El estado de aprobación solo se rotula cuando ya se sabe que es cafetería.
+      expect(screen.queryByText(/aprobación de la plataforma:/i)).not.toBeInTheDocument();
+    });
+
+    it('al llegar el tipo restaurante, el panel se desbloquea', async () => {
+      apiMock.cardPayments.mockResolvedValue({ ...ready, aprobacion_plataforma: pendiente });
+      const { rerender } = render(<CardPaymentsCard token="t" scopeId="e1" />, { wrapper });
+      expect(await screen.findByRole('radio', { name: /sí, aceptar tarjeta/i })).toBeDisabled();
+
+      rerender(<CardPaymentsCard token="t" scopeId="e1" businessType="restaurante" />);
+      expect(screen.getByRole('radio', { name: /sí, aceptar tarjeta/i })).toBeEnabled();
+      expect(screen.getByRole('radio', { name: /^el cliente/i })).toBeEnabled();
+    });
+
     it('con un back anterior (sin aprobacion_plataforma) la cafetería puede activar como antes', async () => {
       apiMock.cardPayments.mockResolvedValue(ready);
       render(<CardPaymentsCard token="t" scopeId="e1" businessType="cafeteria" />, { wrapper });
@@ -224,6 +243,13 @@ describe('pagos con tarjeta del negocio', () => {
       expect(await screen.findByText(/la cobraría dos veces/i)).toBeVisible();
       await user.click(screen.getByRole('radio', { name: /yo, el negocio/i }));
       expect(apiMock.setCardCommissionPassThrough).toHaveBeenCalledWith('t', false);
+    });
+
+    it('mientras no se sabe el tipo de negocio, la comisión no se puede pasar al cliente', async () => {
+      apiMock.cardPayments.mockResolvedValue({ ...ready, stripe_enabled: true });
+      render(<CardPaymentsCard token="t" scopeId="e1" />, { wrapper });
+      expect(await screen.findByRole('radio', { name: /^el cliente/i })).toBeDisabled();
+      expect(screen.getByRole('radio', { name: /yo, el negocio/i })).toBeEnabled();
     });
 
     it('en un restaurante se puede seguir pasando al cliente', async () => {

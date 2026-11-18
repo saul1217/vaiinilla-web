@@ -18,7 +18,11 @@ export function CardPaymentsCard({
 }: {
   token: string;
   scopeId: string;
-  /** `tipo` guardado del negocio; la aprobación y el candado de la comisión solo aplican a cafeterías. */
+  /**
+   * `tipo` de GET /establecimiento/configuracion: es la misma columna `establecimientos.tipo` con
+   * la que el back decide la aprobación (#266) y el mínimo (#265). La aprobación y el candado de
+   * la comisión solo aplican a cafeterías. `undefined` = todavía no llega o no se pudo leer.
+   */
   businessType?: string;
 }) {
   const queryClient = useQueryClient();
@@ -59,9 +63,13 @@ export function CardPaymentsCard({
   const step = cardPaymentsStep(query.data);
   const enabled = Boolean(query.data?.stripe_enabled) && step === 'ready';
   const cafeteria = businessType === 'cafeteria';
+  // Mientras no se sabe el tipo (cargando o con error) se aplican los candados de cafetería:
+  // un restaurante los ve un momento, pero una cafetería nunca queda sin ellos.
+  const lockAsCafeteria = cafeteria || businessType === undefined;
   // Un back anterior a #266 no manda la aprobación: el panel se ve como antes.
-  const approval = cafeteria ? query.data?.aprobacion_plataforma : undefined;
-  const awaitingApproval = approval !== undefined && !approval.vigente;
+  const rawApproval = query.data?.aprobacion_plataforma;
+  const approval = cafeteria ? rawApproval : undefined;
+  const awaitingApproval = lockAsCafeteria && rawApproval !== undefined && !rawApproval.vigente;
   const passingCommission = Boolean(query.data?.pasar_comision_al_cliente);
 
   return (
@@ -148,7 +156,7 @@ export function CardPaymentsCard({
           value={passingCommission}
           onChange={(value) => {
             if (value === passingCommission || commission.isPending) return;
-            if (value && cafeteria) return;
+            if (value && lockAsCafeteria) return;
             commission.mutate(value);
           }}
           options={[
@@ -163,7 +171,7 @@ export function CardPaymentsCard({
               hint: cafeteria
                 ? 'No disponible en cafeterías: el precio del menú con tarjeta ya cubre la comisión.'
                 : 'Con tarjeta, el cliente paga un poco más para cubrir la comisión. Con efectivo o saldo paga el precio de mostrador.',
-              disabled: cafeteria,
+              disabled: lockAsCafeteria,
             },
           ]}
         />
