@@ -1,14 +1,15 @@
 // Pagos con tarjeta del negocio, para su dueño. Mientras no se active aquí, las apps y la
-// web de compra no muestran "tarjeta". Activar exige que Stripe ya permita cobrar y, en una
-// cafetería, la aprobación vigente de la plataforma (back #266); apagarla se puede siempre.
-// En una cafetería la comisión no se pasa al cliente: su menú con tarjeta ya la considera (F3).
+// web de compra no muestran "tarjeta". Activar exige que Stripe ya permita cobrar, que el negocio
+// sea cafetería (back #268) y la aprobación vigente de la plataforma (back #266); apagarla se
+// puede siempre. En una cafetería aprobada la comisión no se pasa al cliente: su menú con
+// tarjeta ya la considera (F3).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CreditCard, ExternalLink } from 'lucide-react';
 import { Choice } from './choice';
 import { Button, Feedback } from './ui';
 import { api } from '../lib/api';
 import { VaiinillaApiError, errorMessage } from '../lib/api-error';
-import { cardApprovalLabel, cardPaymentsStep } from '../lib/card-payments';
+import { cardApprovalLabel, cardPaymentsStep, commissionPassThroughLocked } from '../lib/card-payments';
 import type { StripeOnboarding } from '../types/api';
 
 export function CardPaymentsCard({
@@ -20,10 +21,10 @@ export function CardPaymentsCard({
   scopeId: string;
   /**
    * `tipo` de GET /establecimiento/configuracion: es la misma columna `establecimientos.tipo` con
-   * la que el back decide la aprobación (#266) y el mínimo (#265). La aprobación y el candado de
-   * la comisión solo aplican a cafeterías. `undefined` = todavía no llega o no se pudo leer.
+   * la que el back decide la aprobación (#266 y #268). `undefined` = todavía no llega o no se
+   * pudo leer.
    */
-  businessType?: string;
+  businessType?: string | null;
 }) {
   const queryClient = useQueryClient();
   const queryKey = ['card-payments', scopeId];
@@ -45,7 +46,10 @@ export function CardPaymentsCard({
     // La plataforma pudo revocar mientras la pantalla estaba abierta: se vuelve a consultar
     // para mostrar el estado real y la tarjeta queda apagada.
     onError: (error) => {
-      if (error instanceof VaiinillaApiError && error.code === 'STRIPE_PLATFORM_APPROVAL_REQUIRED') {
+      if (
+        error instanceof VaiinillaApiError &&
+        (error.code === 'STRIPE_PLATFORM_APPROVAL_REQUIRED' || error.code === 'STRIPE_APPROVAL_CAFETERIA_ONLY')
+      ) {
         void queryClient.invalidateQueries({ queryKey });
       }
     },
@@ -58,19 +62,28 @@ export function CardPaymentsCard({
       // Cambia el precio que ve el cliente con tarjeta: el menú se vuelve a pedir.
       void queryClient.invalidateQueries({ queryKey: ['catalog', scopeId] });
     },
+    // Un 422 puede venir de una aprobación que llegó después de abrir la página: se vuelve a pedir.
+    onError: () => void queryClient.invalidateQueries({ queryKey }),
   });
 
   const step = cardPaymentsStep(query.data);
   const enabled = Boolean(query.data?.stripe_enabled) && step === 'ready';
+  const knownType = typeof businessType === 'string' && businessType !== '';
   const cafeteria = businessType === 'cafeteria';
-  // Mientras no se sabe el tipo (cargando o con error) se aplican los candados de cafetería:
-  // un restaurante los ve un momento, pero una cafetería nunca queda sin ellos.
-  const lockAsCafeteria = cafeteria || businessType === undefined;
-  // Un back anterior a #266 no manda la aprobación: el panel se ve como antes.
+  // Back #268: la tarjeta solo se prende en cafeterías (los demás tipos dan 409
+  // STRIPE_APPROVAL_CAFETERIA_ONLY, decisión de Kikin del 18-nov). Con un back anterior a #266
+  // (sin `aprobacion_plataforma`) el panel se ve como antes.
   const rawApproval = query.data?.aprobacion_plataforma;
+  const cardOnlyInCafeterias = knownType && !cafeteria && rawApproval !== undefined;
   const approval = cafeteria ? rawApproval : undefined;
-  const awaitingApproval = lockAsCafeteria && rawApproval !== undefined && !rawApproval.vigente;
-  const passingCommission = Boolean(query.data?.pasar_comision_al_cliente);
+  // Prender exige la aprobación vigente. Mientras no se sabe el tipo (cargando o con error) el
+  // candado se queda puesto: el back también la exige cuando no conoce el tipo.
+  const awaitingApproval = (cafeteria || !knownType) && rawApproval !== undefined && !rawApproval.vigente;
+  const enableLocked = cardOnlyInCafeterias || awaitingApproval;
+  const passThrough = Boolean(query.data?.pasar_comision_al_cliente);
+  // F3 igual que #204: solo una cafetería con aprobación vigente, y nunca mientras no se conoce el
+  // tipo. Si ya estaba prendida, se deja apagar; solo se impide prenderla.
+  const passThroughLocked = commissionPassThroughLocked(query.data, businessType);
 
   return (
     <section className="panel-card grid gap-4 p-5 sm:p-6" aria-labelledby="card-payments-title">
@@ -109,6 +122,14 @@ export function CardPaymentsCard({
         </div>
       )}
 
+      {cardOnlyInCafeterias && (
+        <p className="rounded-2xl bg-cream p-4 text-sm text-ink" aria-live="polite">
+          {enabled
+            ? 'Por ahora los pagos con tarjeta solo están disponibles en cafeterías. Puedes apagarlos, pero no volver a prenderlos.'
+            : 'Por ahora los pagos con tarjeta solo están disponibles en cafeterías, así que no se pueden activar en este negocio.'}
+        </p>
+      )}
+
       {!query.isLoading && !query.isError && step !== 'ready' && (
         <div className="grid gap-3 rounded-2xl bg-cream p-4">
           <p className="text-sm text-ink">
@@ -137,10 +158,12 @@ export function CardPaymentsCard({
               value: true,
               label: 'Sí, aceptar tarjeta',
               hint:
-                awaitingApproval && !enabled
-                  ? 'Pendiente de aprobación de la plataforma.'
+                enableLocked && !enabled
+                  ? cardOnlyInCafeterias
+                    ? 'Por ahora los pagos con tarjeta solo están disponibles en cafeterías.'
+                    : 'Pendiente de aprobación de la plataforma.'
                   : 'Tus clientes pueden pagar con tarjeta desde la app o la web.',
-              disabled: awaitingApproval && !enabled,
+              disabled: enableLocked && !enabled,
             },
             { value: false, label: 'No, solo otros pagos', hint: 'La opción de tarjeta no aparece. Los pedidos ya pagados no cambian.' },
           ]}
@@ -150,14 +173,20 @@ export function CardPaymentsCard({
       {step === 'ready' && (
         <h3 className="mt-2 text-base font-extrabold text-ink">¿Quién paga la comisión de la tarjeta?</h3>
       )}
+      {step === 'ready' && passThroughLocked && (
+        <p id="card-commission-locked" className="rounded-2xl bg-cream p-4 text-sm text-ink">
+          {passThrough
+            ? 'En una cafetería con tarjeta aprobada, la comisión ya va incluida en los precios del menú. Apaga esta opción para no cobrarla dos veces: después ya no se puede volver a prender.'
+            : 'En una cafetería con tarjeta aprobada, la comisión ya va incluida en los precios del menú, así que no se cobra aparte al cliente. Por eso esta opción queda apagada.'}
+        </p>
+      )}
       {step === 'ready' && (
         <Choice
           name="¿Quién paga la comisión de la tarjeta?"
-          value={passingCommission}
+          value={passThrough}
           onChange={(value) => {
-            if (value === passingCommission || commission.isPending) return;
-            if (value && lockAsCafeteria) return;
-            commission.mutate(value);
+            if (value === true && passThroughLocked) return;
+            if (value !== passThrough && !commission.isPending) commission.mutate(value);
           }}
           options={[
             {
@@ -168,20 +197,11 @@ export function CardPaymentsCard({
             {
               value: true,
               label: 'El cliente',
-              hint: cafeteria
-                ? 'No disponible en cafeterías: el precio del menú con tarjeta ya cubre la comisión.'
-                : 'Con tarjeta, el cliente paga un poco más para cubrir la comisión. Con efectivo o saldo paga el precio de mostrador.',
-              disabled: lockAsCafeteria,
+              hint: 'Con tarjeta, el cliente paga un poco más para cubrir la comisión. Con efectivo o saldo paga el precio de mostrador.',
+              disabled: passThroughLocked && !passThrough,
             },
           ]}
         />
-      )}
-      {step === 'ready' && cafeteria && (
-        <p className="text-sm text-muted">
-          {passingCommission
-            ? 'Esta cafetería tiene la comisión pasada al cliente, y eso la cobraría dos veces. Elige «Yo, el negocio» para apagarla.'
-            : 'En una cafetería la comisión no se suma al cliente, porque el precio del menú con tarjeta ya la considera.'}
-        </p>
       )}
     </section>
   );

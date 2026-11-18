@@ -12,3 +12,14 @@ export function cardApprovalLabel(approval: CardPlatformApproval | null | undefi
   if (approval?.estado === 'revocada') return 'Revocada';
   return 'Pendiente de aprobación';
 }
+
+/**
+ * Una cafetería con la tarjeta aprobada por la plataforma ya tiene la comisión en el precio del menú,
+ * así que no puede pasarla además al cliente (el backend responde 422 si se intenta prender).
+ */
+export function commissionPassThroughLocked(
+  config: TenantCardPayments | null | undefined,
+  businessType: string | null | undefined,
+): boolean {
+  return businessType === 'cafeteria' && config?.aprobacion_plataforma?.vigente === true;
+}

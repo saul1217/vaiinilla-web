@@ -24,7 +24,7 @@ export function Choice({
             onClick={() => onChange(option.value)}
             className={`rounded-2xl border p-4 text-left transition ${
               selected ? 'border-ink bg-lime text-ink' : 'border-ink/15 bg-cream text-ink hover:border-ink/40'
-            } ${option.disabled ? 'cursor-not-allowed opacity-60 hover:border-ink/15' : ''}`}
+            } disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-ink/15`}
           >
             <span className="block text-sm font-extrabold">{option.label}</span>
             <span className="mt-1 block text-xs leading-5 text-muted">{option.hint}</span>

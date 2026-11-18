@@ -165,6 +165,31 @@ describe('onboarding Stripe en Super Admin', () => {
     );
   });
 
+  it('en un restaurante no ofrece activar Stripe: la tarjeta solo va en cafeterías (back #268)', async () => {
+    renderPage({
+      ...establishment,
+      nombre: 'Restaurante Demo',
+      tipo: 'restaurante',
+      stripe: {
+        stripe_account_id: 'acct_test_demo',
+        stripe_enabled: false,
+        estado_onboarding: 'habilitada',
+        charges_enabled: true,
+        payouts_enabled: true,
+        details_submitted: true,
+        requisitos_actuales: {},
+        capacidades: { card_payments: 'active', transfers: 'active' },
+        razon_deshabilitacion: null,
+        livemode: false,
+      },
+    });
+
+    expect(await screen.findByText('Tarjeta solo en cafeterías')).toBeVisible();
+    expect(screen.getByText(/solo se activan en cafeterías/i)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Activar Stripe' })).not.toBeInTheDocument();
+    expect(apiMock.configurePlatformStripe).not.toHaveBeenCalled();
+  });
+
   it('mantiene En revisión sin permitir activar localmente', async () => {
     renderPage({
       ...establishment,
@@ -380,7 +405,7 @@ describe('aprobación de tarjeta en Super Admin (cafeterías)', () => {
     await user.type(within(dialog).getByLabelText(/motivo/i), 'Alta');
     await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
 
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/solo aplica a cafeterías/i);
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/solo están disponibles en cafeterías/i);
     await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
     await waitFor(() => expect(apiMock.decidePlatformCardApproval).toHaveBeenCalledTimes(2));
     const keys = apiMock.decidePlatformCardApproval.mock.calls.map((call) => call[4] as string);
