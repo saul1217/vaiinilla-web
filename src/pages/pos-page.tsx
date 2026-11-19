@@ -1,5 +1,7 @@
 import { CashierHome } from '../components/cashier-home';
 import { CashierQueue } from '../components/cashier-queue';
+import { CashierBarQueue, CashierLineTabs, CashierLinesBoard } from '../components/cashier-lines';
+import { cashierLines, ordersInLine, readSavedLine, saveLine } from '../lib/cashier-lines';
 import { AppSheet } from '../components/app-sheet';
 import { CashDrawer } from '../components/cash-drawer';
 import { CashierSearch } from '../components/cashier-search';
@@ -15,7 +17,7 @@ import {
   Search,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { RejectOrderDialog } from '../components/reject-order-dialog';
 import { Card, Chip, Skeleton, VaiButton } from '../components/vai';
 import { itemRejectionNotice } from '../lib/rejection-notice';
@@ -282,6 +284,11 @@ export function PosPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [queuePick, setQueuePick] = useState<{ id: string; seq: number } | null>(null);
+  // La fila se lee una vez por negocio: cambiar de negocio en la misma pestaña trae la suya.
+  const [lineChoice, setLineChoice] = useState<{ scope: string; lineId: number | null } | null>(null);
+  const [readyBusyId, setReadyBusyId] = useState<string | null>(null);
+  const readyInFlight = useRef(false);
+  const [now, setNow] = useState(() => new Date());
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
   const usuarioId = tenant?.context.usuario_id ?? '';
   const mixedPaymentOwner = useMemo<MixedPaymentOwner>(() => ({ establecimientoId: scopeId, usuarioId }), [scopeId, usuarioId]);
@@ -299,6 +306,7 @@ export function PosPage() {
   const [closingAmount, setClosingAmount] = useState<string | null>(null);
   const [deliveryOrder, setDeliveryOrder] = useState<OrderDetail | null>(null);
   const [qrToken, setQrToken] = useState('');
+  const [qrMissing, setQrMissing] = useState(false);
   // Caja quita un artículo que no se puede entregar; si ya se pagó, se devuelve esa parte.
   const [removingFrom, setRemovingFrom] = useState<OrderDetail | null>(null);
   // El staff registra pedidos de quien no usa la app (mesero, cajero y admin).
@@ -349,13 +357,24 @@ export function PosPage() {
     staleTime: 60_000,
   });
   const deliveryNeedsQr = (order: OrderDetail) => deliveryRequiresQr(order, deliveryQr.data?.entrega_requiere_qr);
+  const barPrepares = deliveryQr.data?.barra_prepara === true;
+
+  // Las filas cambian poco: el dueño las crea en Mesas y espacios.
+  const spaces = useQuery({
+    queryKey: ['spaces', 'cashier-lines', scopeId],
+    enabled: Boolean(token) && isCashier,
+    queryFn: () => api.spaces(token),
+    staleTime: 5 * 60_000,
+  });
 
   const cashierQueue = useInfiniteQuery({
-    queryKey: ['orders', 'cashier-queue', scopeId],
+    queryKey: ['orders', 'cashier-queue', scopeId, barPrepares],
     initialPageParam: undefined as string | undefined,
     enabled: Boolean(token) && isCashier,
     queryFn: ({ pageParam }) => api.listOrders(token, {
-      estado: ['por_cobrar', 'preparando', 'listo'],
+      // `cobrado` solo hace falta con «La barra prepara»: sin ella no hay nada que Caja haga ahí,
+      // y pedirlo ocuparía la paginación de la cola.
+      estado: barPrepares ? ['por_cobrar', 'cobrado', 'preparando', 'listo'] : ['por_cobrar', 'preparando', 'listo'],
       cursor: pageParam,
       limit: 50,
     }),
@@ -468,14 +487,55 @@ export function PosPage() {
     () => cashierQueue.data?.pages.flatMap((page) => page.orders) ?? [],
     [cashierQueue.data],
   );
+  const lines = useMemo(() => cashierLines(spaces.data ?? []), [spaces.data]);
+  const savedLine = lineChoice?.scope === scopeId ? lineChoice.lineId : readSavedLine(scopeId);
+  // Una fila que el dueño borró ya no filtra nada: se vuelve a ver todo.
+  const activeLine = savedLine !== null && lines.some((line) => line.id === savedLine) ? savedLine : null;
+  const showBoard = activeLine === null && lines.length >= 2;
+  const lineOrders = useMemo(() => ordersInLine(queuedOrders, activeLine), [queuedOrders, activeLine]);
   const cashOrders = useMemo(
-    () => queuedOrders.filter(isCashierCashOrder),
-    [queuedOrders],
+    () => lineOrders.filter(isCashierCashOrder),
+    [lineOrders],
   );
   const readyOrders = useMemo(
-    () => queuedOrders.filter(isCashierDeliveryOrder),
-    [queuedOrders],
+    () => lineOrders.filter(isCashierDeliveryOrder),
+    [lineOrders],
   );
+
+  function chooseLine(lineId: number | null) {
+    setLineChoice({ scope: scopeId, lineId });
+    saveLine(scopeId, lineId);
+  }
+
+  // Los avisos de «hace X min» se recalculan solos; no hace falta más precisión que el minuto.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  /**
+   * La barra sella su parte. Desde `cobrado` hay que pasar por `preparando`: el servidor no
+   * acepta el salto, y así el cliente ve que ya se está preparando lo suyo.
+   */
+  async function markBarReady(order: OrderDetail) {
+    if (readyInFlight.current) return;
+    readyInFlight.current = true;
+    setReadyBusyId(order.id);
+    try {
+      const started = order.estado === 'cobrado' ? await api.transitionOrder(token, order.id, 'preparando', order.version) : order;
+      const done = await api.transitionOrder(token, started.id, 'listo', started.version);
+      setNotice((done.estaciones_pendientes ?? []).length > 0
+        ? `Lo de la barra del pedido ${order.folio} está listo; falta cocina.`
+        : `Pedido ${order.folio} listo. Le avisamos al cliente.`);
+      await refreshOperation();
+    } catch (error) {
+      setNotice(errorMessage(error));
+      await refreshOperation();
+    } finally {
+      readyInFlight.current = false;
+      setReadyBusyId(null);
+    }
+  }
   // Lo que se puede abrir en el ticket de la fila: lo que está por cobrar o listo para entregar.
   const searchableOrders = useMemo(() => [...cashOrders, ...readyOrders], [cashOrders, readyOrders]);
   const updateQrToken = useCallback((value: string) => setQrToken(value), []);
@@ -490,6 +550,7 @@ export function PosPage() {
   function beginDelivery(order: OrderDetail) {
     deliveryMutation.reset();
     setQrToken('');
+    setQrMissing(false);
     setDeliveryOrder(order);
   }
 
@@ -669,10 +730,32 @@ export function PosPage() {
             <Feedback tone="error">No se pudo actualizar la fila de pedidos. {errorMessage(cashierQueue.error)}</Feedback>
           )}
 
+          <CashierLineTabs lines={lines} orders={queuedOrders} selected={activeLine} onSelect={chooseLine} />
+
+          {barPrepares && !showBoard && !cashierQueue.isPending && (
+            <CashierBarQueue orders={lineOrders} now={now} busyId={readyBusyId} onReady={(order) => void markBarReady(order)} />
+          )}
+
           {cashierQueue.isError && !cashierQueue.data ? null : cashierQueue.isPending ? (
             <div className="orders-loading" role="status">Actualizando la fila de Caja…</div>
           ) : (
-            <CashierQueue cashOrders={cashOrders} readyOrders={readyOrders} pick={queuePick} actions={(order, group) => group === 'cash' ? (<>
+            <CashierQueue
+              cashOrders={cashOrders}
+              readyOrders={readyOrders}
+              pick={queuePick}
+              now={now}
+              list={showBoard ? (
+                <CashierLinesBoard
+                  lines={lines}
+                  orders={queuedOrders}
+                  barPrepares={barPrepares}
+                  now={now}
+                  busyId={readyBusyId}
+                  onPick={(order) => setQueuePick((previous) => ({ id: order.id, seq: (previous?.seq ?? 0) + 1 }))}
+                  onReady={(order) => void markBarReady(order)}
+                />
+              ) : undefined}
+              actions={(order, group) => group === 'cash' ? (<>
                         <Button disabled={!active} onClick={() => beginCash(order)}>
                           <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order) ? 'Abonar cuenta' : mixedFlowActive ? 'Pago mixto' : 'Cobrar'}
                         </Button>
@@ -878,14 +961,30 @@ export function PosPage() {
           : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
       >
         {deliveryOrder && (
-          <div className="transaction-form">
+          <form
+            className="transaction-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (deliveryMutation.isPending) return;
+              // La pistola teclea y manda Enter de golpe: el campo ya tiene el código aunque el
+              // estado de React todavía no lo refleje, así que se lee del formulario.
+              const typed = new FormData(event.currentTarget).get('pickup-token');
+              const pickupToken = (typeof typed === 'string' ? typed : qrToken).trim();
+              if (deliveryNeedsQr(deliveryOrder) && !pickupToken) {
+                setQrMissing(true);
+                return;
+              }
+              deliveryMutation.mutate({ order: deliveryOrder, pickupToken });
+            }}
+          >
             {deliveryMutation.isError && <Feedback tone="error">{errorMessage(deliveryMutation.error)}</Feedback>}
             <OrderDetailContent order={deliveryOrder} />
             {deliveryNeedsQr(deliveryOrder) && (
               <QrTokenField
+                autoFocus
                 value={qrToken}
                 onChange={updateQrToken}
-                error={!qrToken.trim() && deliveryMutation.isError ? 'Captura el token de entrega.' : undefined}
+                error={!qrToken.trim() && (qrMissing || deliveryMutation.isError) ? 'Escanea o escribe el código del cliente.' : undefined}
               />
             )}
             <div className="form-actions">
@@ -893,16 +992,15 @@ export function PosPage() {
                 Cancelar
               </Button>
               <Button
-                type="button"
+                type="submit"
                 variant="dark"
                 loading={deliveryMutation.isPending}
-                disabled={deliveryMutation.isPending || (deliveryNeedsQr(deliveryOrder) && !qrToken.trim())}
-                onClick={() => deliveryMutation.mutate({ order: deliveryOrder, pickupToken: qrToken.trim() })}
+                disabled={deliveryMutation.isPending}
               >
                 Confirmar entrega
               </Button>
             </div>
-          </div>
+          </form>
         )}
       </AppSheet>
       <RejectOrderDialog

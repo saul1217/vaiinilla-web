@@ -15,6 +15,7 @@ import {
 import type {
   ApiEnvelope,
   ApiErrorEnvelope,
+  OrderSpace,
   AccountDeletion,
   CashDrawerReport,
   CashLastClose,
@@ -1078,6 +1079,12 @@ export const api = {
 
   async spaceAvailability(token: string): Promise<SpaceAvailability[]> {
     return (await request<SpaceAvailability[]>('/espacios/disponibilidad', { token })).data;
+  },
+
+  /** Espacios activos del negocio; Caja los usa para saber qué filas hay. Cualquier rol del personal. */
+  async spaces(token: string): Promise<OrderSpace[]> {
+    const data = (await request<OrderSpace[]>('/espacios', { token })).data;
+    return data.map(({ id, nombre, tipo }) => ({ id, nombre, tipo }));
   },
 
   /** Devoluciones pendientes (sobrante de cuenta, artículo o pedido quitado ya pagado). */

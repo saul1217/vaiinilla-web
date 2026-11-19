@@ -37,3 +37,58 @@
   .cashier-home > .pos-orders { grid-column: 1; }
   .cashier-home__operation .staff-cashbar { flex-direction: column; align-items: stretch; }
 }
+
+/* Qué fila atiende esta caja */
+.cashier-lines { display: grid; gap: 8px; min-width: 0; }
+.cashier-lines__count { min-width: 24px; padding: 0 7px; border-radius: var(--radius-pill); background: color-mix(in srgb, currentColor 16%, transparent); font-size: 12px; font-variant-numeric: tabular-nums; }
+.cashier-lines__hint { margin: 0; color: var(--color-muted); font-size: 13px; }
+
+/* La barra prepara */
+.cashier-bar { display: grid; gap: 12px; min-width: 0; }
+.cashier-bar h3 { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 22px; color: var(--status-warning-text); }
+.cashier-bar h3 > span { font-size: 16px; padding: 4px 12px; border: 1px solid currentColor; border-radius: 24px; }
+.cashier-bar > p { margin: 0; color: var(--color-muted); }
+.cashier-bar ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.cashier-bar__row { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); }
+.cashier-bar__folio { font-size: 28px; line-height: 1; min-width: 56px; font-variant-numeric: tabular-nums; }
+.cashier-bar__body { display: grid; gap: 2px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cashier-bar__customer { font-weight: 700; }
+.cashier-bar__meta { color: var(--color-muted); font-size: 13px; }
+.button.cashier-bar__ready { flex-shrink: 0; background: var(--status-warning-bg); color: var(--status-warning-text); border-color: transparent; }
+
+/* Cuánto lleva avisado el cliente */
+.ready-notice { display: inline-flex; align-items: center; gap: 4px; color: var(--status-success-text); font-weight: 700; }
+.ready-notice--stale { color: var(--status-danger-text); }
+
+/* Todas las filas en una pantalla */
+.cashier-board { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); min-width: 0; align-items: start; }
+.cashier-board__column { display: grid; min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
+.cashier-board__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.cashier-board__head h3 { margin: 0; font-size: 19px; }
+.cashier-board__counts { display: flex; gap: 6px; }
+.cashier-board__counts > span { min-width: 26px; padding: 2px 8px; border-radius: var(--radius-pill); text-align: center; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cashier-board__counts [data-tone='cash'] { background: var(--status-danger-bg); color: var(--status-danger-text); }
+.cashier-board__counts [data-tone='prep'] { background: var(--status-warning-bg); color: var(--status-warning-text); }
+.cashier-board__counts [data-tone='ready'] { background: var(--status-success-bg); color: var(--status-success-text); }
+.cashier-board__empty { margin: 0; padding: 16px; color: var(--color-muted); }
+.cashier-board__group { padding: 8px 10px 10px; }
+.cashier-board__group + .cashier-board__group { border-top: 1px solid var(--line); }
+.cashier-board__group-title { margin: 4px 6px 6px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.cashier-board__group[data-tone='cash'] .cashier-board__group-title { color: var(--status-danger-text); }
+.cashier-board__group[data-tone='prep'] .cashier-board__group-title { color: var(--status-warning-text); }
+.cashier-board__group[data-tone='ready'] .cashier-board__group-title { color: var(--status-success-text); }
+.cashier-board__group ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.cashier-board__row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cashier-board__row + .cashier-board__row { border-top: 1px solid var(--line); }
+.cashier-board__open { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; min-height: 56px; padding: 8px 6px; border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; text-align: left; }
+button.cashier-board__open { cursor: pointer; }
+button.cashier-board__open:hover { background: var(--line); }
+button.cashier-board__open:focus-visible { outline: 3px solid var(--focus-ring, currentColor); outline-offset: 2px; }
+.cashier-board__folio { font-size: 22px; line-height: 1; min-width: 48px; font-variant-numeric: tabular-nums; }
+.cashier-board__text { display: grid; min-width: 0; }
+.cashier-board__customer { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cashier-board__detail { color: var(--color-muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 479px) {
+  .cashier-bar__row { flex-wrap: wrap; }
+  .button.cashier-bar__ready { margin-left: auto; }
+}

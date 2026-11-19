@@ -17,8 +17,8 @@ const apiMock = vi.hoisted(() => ({
   isMixedPaymentUnavailable: vi.fn(() => mixedUnavailable.value),
   markMixedPaymentUnavailable: vi.fn(() => { mixedUnavailable.value = true; }),
   collectCash: vi.fn(), deliverOrder: vi.fn(), closeCashSession: vi.fn(),
-  rejectOrder: vi.fn(), rejectOrderItem: vi.fn(), catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
-  businessSettings: vi.fn(),
+  rejectOrder: vi.fn(), rejectOrderItem: vi.fn(), catalog: vi.fn(), spaceAvailability: vi.fn(), spaces: vi.fn().mockResolvedValue([]), createStaffOrder: vi.fn(),
+  businessSettings: vi.fn(), transitionOrder: vi.fn(),
 }));
 
 const sesion = vi.hoisted(() => ({ rol: 'cajero' }));
@@ -239,7 +239,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(screen.getByRole('button', { name: 'Abrir Caja' })).toBeEnabled();
   });
 
-  it('pide preparando, por_cobrar y listo al backend y muestra preparando sin pagar en Por cobrar', async () => {
+  it('sin «La barra prepara» pide por_cobrar, preparando y listo, no cobrado, y muestra preparando sin pagar en Por cobrar', async () => {
     const preparing = {
       ...baseOrder,
       id: 'order-prep',
@@ -458,6 +458,35 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(await screen.findByLabelText('Token QR de entrega')).toBeVisible();
   });
 
+  it('la pistola lectora entrega: el campo llega enfocado y su Enter confirma', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, monto_pagado: '125.00', saldo_pendiente: '0.00' }], cursor: null });
+    apiMock.deliverOrder.mockResolvedValue({ folio: 14 });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Validar QR' }));
+    const campo = await screen.findByLabelText('Token QR de entrega');
+    expect(campo).toHaveFocus();
+    await user.keyboard('VAI-7Q2K{Enter}');
+    await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', 'order-14', 4, 'VAI-7Q2K'));
+  });
+
+  it('confirmar sin código no entrega y pide escanearlo', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, monto_pagado: '125.00', saldo_pendiente: '0.00' }], cursor: null });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Validar QR' }));
+    // El botón queda habilitado para que el Enter de la pistola siempre llegue al formulario.
+    const confirmar = screen.getByRole('button', { name: 'Confirmar entrega' });
+    expect(confirmar).toBeEnabled();
+    await user.click(confirmar);
+    expect(await screen.findByText('Escanea o escribe el código del cliente.')).toBeVisible();
+    expect(apiMock.deliverOrder).not.toHaveBeenCalled();
+  });
+
   it('permite entregar sin QR un pedido de una sesión activa aunque el ajuste global lo requiera', async () => {
     apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
     apiMock.listOrders.mockResolvedValue({ orders: [{
@@ -477,6 +506,82 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(screen.queryByLabelText('Token QR de entrega')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Confirmar entrega' }));
     await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', 'order-14', 4, ''));
+  });
+});
+
+describe('Caja: filas, la barra que prepara y el aviso de listo', () => {
+  const barra1 = { id: 1, nombre: 'Barra 1', tipo: 'barra' as const };
+  const barra2 = { id: 2, nombre: 'Barra 2', tipo: 'barra' as const };
+  const chocolate = { id: 1, producto_id: 1, nombre_producto: 'Chocolate caliente', estacion_preparacion: 'caja' as const, cantidad: 2, precio_digital_unitario: '23.00', subtotal: '46.00', opciones: [] };
+  const torta = { ...chocolate, id: 2, nombre_producto: 'Torta de jamón', estacion_preparacion: 'cocina' as const, cantidad: 1 };
+  const pagado = { monto_pagado: '125.00', saldo_pendiente: '0.00', metodo_pago: 'saldo' as const };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    sesion.rol = 'cajero';
+    apiMock.activeCashSession.mockResolvedValue({ id: 'cash-1', estado: 'abierta', fondo_inicial: '500.00', abierta_en: '2026-10-07T10:00:00.000Z' });
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: false, barra_prepara: true });
+    apiMock.spaces.mockResolvedValue([barra2, { id: 9, nombre: 'Mesa 9', tipo: 'mesa' }, barra1]);
+  });
+
+  it('cada caja elige su fila y deja de ver la de las demás', async () => {
+    apiMock.listOrders.mockResolvedValue({ orders: [
+      { ...baseOrder, ...pagado, id: 'a', folio: 21, espacio: barra1, usuario: { nombre: 'Emilio', matricula: null } },
+      { ...baseOrder, ...pagado, id: 'b', folio: 18, espacio: barra2, usuario: { nombre: 'Mateo', matricula: null } },
+      { ...baseOrder, ...pagado, id: 'f', folio: 30, espacio: null, usuario: { nombre: 'Lía', matricula: null } },
+    ], cursor: null });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await waitFor(() => expect(apiMock.listOrders).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({ estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'] }),
+    ));
+    const filas = await screen.findByRole('group', { name: 'Qué fila atiendes' });
+    // Cada pestaña cuenta lo que nació en su fila, igual que su columna; lo sin fila no se suma.
+    expect(within(filas).getByRole('button', { name: /Todas/ })).toHaveTextContent('3');
+    expect(within(filas).getByRole('button', { name: /Barra 2/ })).toHaveTextContent(/^Barra 2 1$/);
+    expect(within(filas).getByRole('button', { name: /Todas/ })).toHaveAttribute('aria-pressed', 'true');
+    // Con «Todas» y varias filas, una columna por fila.
+    expect(await screen.findByRole('region', { name: 'Barra 1' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Barra 2' })).toBeVisible();
+
+    await user.click(within(filas).getByRole('button', { name: /Barra 2/ }));
+    expect(screen.getByText('1 pedido de otra fila no se muestra aquí.')).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Barra 1' })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('caja.fila.v1:store-1')).toBe('2');
+  });
+
+  it('la barra marca listo lo suyo: pasa por preparando y avisa', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    const cobrado = { ...baseOrder, ...pagado, id: 'c', folio: 15, estado: 'cobrado' as const, version: 2, items: [chocolate, torta], usuario: { nombre: 'Prof. Olmos', matricula: null } };
+    apiMock.listOrders.mockResolvedValue({ orders: [cobrado], cursor: null });
+    apiMock.transitionOrder
+      .mockResolvedValueOnce({ ...cobrado, estado: 'preparando', version: 3 })
+      .mockResolvedValueOnce({ ...cobrado, estado: 'preparando', version: 4, estaciones_pendientes: ['cocina'] });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    const barra = await screen.findByRole('region', { name: /La barra prepara/ });
+    // La barra solo lee lo que le toca, no la torta de cocina.
+    expect(within(barra).getByText('2× Chocolate caliente')).toBeVisible();
+    expect(within(barra).queryByText(/Torta/)).not.toBeInTheDocument();
+
+    await user.click(within(barra).getByRole('button', { name: 'Marcar listo el pedido 15 y avisar al cliente' }));
+    await waitFor(() => expect(apiMock.transitionOrder).toHaveBeenNthCalledWith(1, 'token', 'c', 'preparando', 2));
+    expect(apiMock.transitionOrder).toHaveBeenNthCalledWith(2, 'token', 'c', 'listo', 3);
+    expect(await screen.findByText('Lo de la barra del pedido 15 está listo; falta cocina.')).toBeVisible();
+  });
+
+  it('un pedido listo dice cuánto lleva avisado el cliente', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    const listo = { ...baseOrder, ...pagado, id: 'd', folio: 9, listo_en: new Date(Date.now() - 4 * 60_000 - 5_000).toISOString() };
+    const otro = { ...listo, id: 'e', folio: 11 };
+    apiMock.listOrders.mockResolvedValue({ orders: [listo, otro], cursor: null });
+    render(<PosPage />, { wrapper: Wrapper });
+    // El primero va al ticket; el segundo queda en la lista con su aviso.
+    expect(await screen.findByText('Avisado hace 4 min')).toBeVisible();
   });
 });
 
