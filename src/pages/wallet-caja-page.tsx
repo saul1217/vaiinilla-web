@@ -1,9 +1,12 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { HandCoins, Search, WalletCards } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { HandCoins, QrCode, Search, WalletCards } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { AppPageHeader } from '../components/app-page-header';
+import { AppSheet } from '../components/app-sheet';
 import { Feedback, Field, Modal } from '../components/ui';
 import { Card, Chip, ChipRow, LoadingState, VaiButton, VaiEmptyState } from '../components/vai';
+
+const QrTokenField = lazy(() => import('../components/qr-token-field').then((m) => ({ default: m.QrTokenField })));
 import { useSessions } from '../context/session-context';
 import { api, apiUrl } from '../lib/api';
 import { VaiinillaApiError, errorMessage } from '../lib/api-error';
@@ -23,6 +26,7 @@ import {
   movementAmountLabel,
   movementDate,
   movementDetail,
+  parseWalletUserQr,
   readPendingRecharge,
   rechargeAmount,
   rechargeErrorMessage,
@@ -66,6 +70,25 @@ function WalletCajaScreen({ token, role, scope }: { token: string; role: string;
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<(WalletCashRecharge & { name: string }) | null>(null);
   const [rechargeError, setRechargeError] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrInput, setQrInput] = useState('');
+  const [qrError, setQrError] = useState<string | null>(null);
+
+  const openFromQr = (raw: string) => {
+    const userId = parseWalletUserQr(raw);
+    if (!userId) {
+      setQrError('Ese código no parece una tarjeta o QR de cliente de Vaiinilla.');
+      return false;
+    }
+    setQrError(null);
+    setQrInput('');
+    setQrOpen(false);
+    setText('');
+    setSelected({ userId, name: 'Cliente' });
+    setReceipt(null);
+    setRechargeError(null);
+    return true;
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(searchQuery(text)), WALLET_SEARCH_DEBOUNCE_MS);
@@ -164,12 +187,43 @@ function WalletCajaScreen({ token, role, scope }: { token: string; role: string;
     {cashClosed && <Feedback tone="info">Caja está cerrada. Ábrela desde Caja para poder recargar saldo.</Feedback>}
 
     <Card title="Buscar cliente">
-      <Field label="Nombre o identificador" type="search" autoComplete="off" maxLength={80} value={text}
-        onChange={(event) => setText(event.target.value)}
-        hint={`Escribe al menos ${WALLET_SEARCH_MIN} letras.`} />
+      <div className="mb-3 flex flex-wrap gap-2">
+        <VaiButton variant="secondary" onClick={() => { setQrError(null); setQrInput(''); setQrOpen(true); }}>
+          <QrCode aria-hidden="true" className="size-4" /> Escanear QR del cliente
+        </VaiButton>
+      </div>
+      <Field label="Nombre o identificador" type="search" autoComplete="off" maxLength={160} value={text}
+        onChange={(event) => {
+          const next = event.target.value;
+          if (parseWalletUserQr(next)) {
+            openFromQr(next);
+            return;
+          }
+          setText(next);
+        }}
+        hint={`Escribe al menos ${WALLET_SEARCH_MIN} letras o escanea la tarjeta QR con pistola/cámara.`} />
       <SearchResults text={trimmed} query={query} loading={search.isFetching && !search.data} error={search.error}
         clients={search.data} selectedId={selected?.userId ?? null} onChoose={choose} onRetry={() => void search.refetch()} />
     </Card>
+
+    <AppSheet open={qrOpen} onOpenChange={setQrOpen} title="Escanear QR del cliente"
+      description="Apunta la cámara a la tarjeta QR del cliente o pásala por la pistola lectora.">
+      <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); openFromQr(qrInput); }}>
+        <Suspense fallback={<LoadingState label="Abriendo lector QR…" />}>
+          <QrTokenField
+            value={qrInput}
+            autoFocus
+            error={qrError ?? undefined}
+            onChange={(value) => {
+              setQrInput(value);
+              setQrError(null);
+              if (parseWalletUserQr(value)) openFromQr(value);
+            }}
+          />
+        </Suspense>
+        <VaiButton type="submit" variant="accent" block disabled={!qrInput.trim()}>Abrir saldo del cliente</VaiButton>
+      </form>
+    </AppSheet>
 
     {selected && <ClientWallet key={selected.userId} token={token} storeId={storeId} client={selected}
       cashier={cashier} blocked={cashClosed ? 'Caja está cerrada.' : pending ? 'Primero resuelve la recarga sin confirmar.' : null}
