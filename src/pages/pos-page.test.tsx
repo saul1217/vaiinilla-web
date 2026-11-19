@@ -18,7 +18,7 @@ const apiMock = vi.hoisted(() => ({
   markMixedPaymentUnavailable: vi.fn(() => { mixedUnavailable.value = true; }),
   collectCash: vi.fn(), deliverOrder: vi.fn(), closeCashSession: vi.fn(),
   rejectOrder: vi.fn(), rejectOrderItem: vi.fn(), catalog: vi.fn(), spaceAvailability: vi.fn(), spaces: vi.fn().mockResolvedValue([]), createStaffOrder: vi.fn(),
-  businessSettings: vi.fn(), transitionOrder: vi.fn(),
+  businessSettings: vi.fn(), transitionOrder: vi.fn(), remindOrder: vi.fn(), markNotPickedUp: vi.fn(),
 }));
 
 const sesion = vi.hoisted(() => ({ rol: 'cajero' }));
@@ -133,7 +133,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     }] }], cursor: null });
     render(<PosPage />, { wrapper: Wrapper });
     // Quitar un artículo vive en el ticket completo, que se abre con «Ver pedido».
-    await user.click(await screen.findByRole('button', { name: 'Ver pedido 14' }));
+    await user.click(await screen.findByRole('button', { name: /^Ver pedido 14 de / }));
     await user.click(await screen.findByRole('button', { name: 'Quitar artículo' }));
     const dialog = await screen.findByRole('dialog', { name: 'Rechazar pedido' });
     expect(within(dialog).getByRole('radio', { name: 'Todo el pedido' })).toBeChecked();
@@ -281,7 +281,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     await waitFor(() => expect(apiMock.collectCash).toHaveBeenCalledWith('token', baseOrder.id, '125.00', 4, '0.00'));
     // La tarjeta ya ofrece entregar; imprimir queda en el ticket completo.
     expect(await screen.findByRole('button', { name: 'Entregar' })).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Ver pedido 14' }));
+    await user.click(screen.getByRole('button', { name: /^Ver pedido 14 de / }));
     const ticket = await screen.findByRole('dialog', { name: 'Pedido #14' });
     expect(within(ticket).getByRole('button', { name: 'Imprimir ticket' })).toBeVisible();
     expect(within(ticket).getByText('PAGADO')).toBeVisible();
@@ -579,6 +579,45 @@ describe('Caja: filas, la barra que prepara y el aviso de listo', () => {
     await waitFor(() => expect(apiMock.transitionOrder).toHaveBeenNthCalledWith(1, 'token', 'c', 'preparando', 2));
     expect(apiMock.transitionOrder).toHaveBeenNthCalledWith(2, 'token', 'c', 'listo', 3);
     expect(await screen.findByText('Lo de la barra del pedido 15 está listo; falta cocina.')).toBeVisible();
+  });
+
+  it('«Ver pedido» dice el nombre del cliente al lector de pantalla', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, ...pagado, id: 'g', folio: 31, usuario: { nombre: 'Lía Prado', matricula: null } }], cursor: null });
+    render(<PosPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('button', { name: 'Ver pedido 31 de Lía Prado' })).toBeVisible();
+  });
+
+  it('«Avisar otra vez» le recuerda al cliente y «No vino» se confirma antes', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    const listo = { ...baseOrder, ...pagado, id: 'h', folio: 32, version: 6, destino: 'para_llevar' as const };
+    apiMock.listOrders.mockResolvedValue({ orders: [listo], cursor: null });
+    apiMock.remindOrder.mockResolvedValue(undefined);
+    apiMock.markNotPickedUp.mockResolvedValue({ ...listo, estado: 'no_recogido' });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Avisar otra vez al cliente del pedido 32' }));
+    await waitFor(() => expect(apiMock.remindOrder).toHaveBeenCalledWith('token', 'h'));
+    expect(await screen.findByText('Le volvimos a avisar al cliente del pedido 32.')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'No vino por el pedido 32' }));
+    const dialog = await screen.findByRole('dialog', { name: '¿No vino por el pedido #32?' });
+    // Nada se manda hasta confirmar.
+    expect(apiMock.markNotPickedUp).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, no vino' }));
+    await waitFor(() => expect(apiMock.markNotPickedUp).toHaveBeenCalledWith('token', 'h', 6));
+    expect(await screen.findByText('El pedido 32 quedó como no recogido.')).toBeVisible();
+  });
+
+  it('una cuenta abierta de mesa no ofrece «No vino» ni avisar', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    const deMesa = { ...baseOrder, id: 'i', folio: 33, destino: 'en_espacio' as const, espacio: { id: 9, nombre: 'Mesa 9', tipo: 'mesa' as const }, pago_diferido: true, pago_pendiente: true };
+    apiMock.listOrders.mockResolvedValue({ orders: [deMesa], cursor: null });
+    render(<PosPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('button', { name: /^Ver pedido 33 de / })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /No vino/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Avisar otra vez/ })).not.toBeInTheDocument();
   });
 
   it('un pedido listo dice cuánto lleva avisado el cliente', async () => {

@@ -3,6 +3,10 @@ import type { OrderDetail, OrderItem, OrderSpace } from '../types/api';
 import {
   barItems,
   barQueue,
+  canMarkNoShow,
+  canRemind,
+  hideScannerToday,
+  scannerHiddenToday,
   cashierLines,
   hiddenByLine,
   minutesSinceReady,
@@ -124,5 +128,26 @@ describe('fila guardada en el equipo', () => {
     expect(readSavedLine('venue-b')).toBeNull();
     saveLine('venue-a', null);
     expect(readSavedLine('venue-a')).toBeNull();
+  });
+});
+
+describe('avisar otra vez, no vino y la pistola', () => {
+  it('solo se avisa lo que el cliente pasa a recoger y tiene cuenta', () => {
+    const listo = order({ estado: 'listo', destino: 'para_llevar' });
+    expect(canRemind(listo)).toBe(true);
+    expect(canRemind({ ...listo, usuario: null })).toBe(false);
+    expect(canRemind({ ...listo, destino: 'en_espacio', espacio: mesa })).toBe(false);
+    expect(canRemind({ ...listo, destino: 'en_espacio', espacio: mesa, recoge_en_barra: true })).toBe(true);
+    expect(canMarkNoShow(listo)).toBe(true);
+    expect(canMarkNoShow({ ...listo, pago_diferido: true })).toBe(false);
+  });
+
+  it('la pistola cerrada no vuelve a salir ese día', () => {
+    window.localStorage.clear();
+    const hoy = new Date('2026-11-19T12:00:00');
+    expect(scannerHiddenToday(hoy)).toBe(false);
+    hideScannerToday(hoy);
+    expect(scannerHiddenToday(hoy)).toBe(true);
+    expect(scannerHiddenToday(new Date('2026-11-20T08:00:00'))).toBe(false);
   });
 });
