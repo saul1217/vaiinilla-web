@@ -70,6 +70,10 @@ export function readyNotice(minutes: number | null): string | null {
 /** Desde aquí un aviso se considera viejo: la cajera debería buscar al cliente. */
 export const STALE_READY_MINUTES = 10;
 
+export function isStaleReady(minutes: number | null): boolean {
+  return minutes !== null && minutes >= STALE_READY_MINUTES;
+}
+
 const STORAGE_KEY = 'caja.fila.v1';
 
 function storageKey(venueId: string) {
