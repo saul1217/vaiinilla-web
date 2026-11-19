@@ -191,7 +191,8 @@ test('Caja: si el servidor no tiene el pago mixto (404) se ve un solo cobro y no
   await expect(dialog.getByRole('button', { name: 'Registrar pago' })).toHaveCount(0);
   await expect(dialog.getByText('Pago mixto no disponible')).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Cancelar' }).click();
-  await page.getByRole('button', { name: 'Cobrar', exact: true }).click();
+  // El botón de la tarjeta dice «Cobrar $monto» (el monto va en el botón).
+  await page.getByRole('button', { name: /^Cobrar(?: \$.*)?$/ }).first().click();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Confirmar cobro' })).toHaveCount(1);
   await expect(page.getByRole('dialog').getByLabel('Monto de este pago (MXN)')).toHaveCount(0);
   expect(state.attempts).toHaveLength(1);

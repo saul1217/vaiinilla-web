@@ -69,10 +69,14 @@ export function minutesSinceReady(order: OrderDetail, now: Date): number | null 
   return Math.max(0, Math.floor(ms / 60_000));
 }
 
+/** Pasada la hora se dice en horas, y pasado el día en días: «hace 30898 min» no se lee. */
 export function readyNotice(minutes: number | null): string | null {
   if (minutes === null) return null;
   if (minutes === 0) return 'Recién avisado';
-  return `Avisado hace ${minutes} min`;
+  if (minutes < 60) return `Avisado hace ${minutes} min`;
+  if (minutes < 1440) return `Avisado hace ${Math.floor(minutes / 60)} h`;
+  const days = Math.floor(minutes / 1440);
+  return `Avisado hace ${days} ${days === 1 ? 'día' : 'días'}`;
 }
 
 /** Desde aquí un aviso se considera viejo: la cajera debería buscar al cliente. */

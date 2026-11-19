@@ -132,6 +132,8 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
       precio_digital_unitario: '125.00', subtotal: '125.00', opciones: [], rechazo: null,
     }] }], cursor: null });
     render(<PosPage />, { wrapper: Wrapper });
+    // Quitar un artículo vive en el ticket completo, que se abre con «Ver pedido».
+    await user.click(await screen.findByRole('button', { name: 'Ver pedido 14' }));
     await user.click(await screen.findByRole('button', { name: 'Quitar artículo' }));
     const dialog = await screen.findByRole('dialog', { name: 'Rechazar pedido' });
     expect(within(dialog).getByRole('radio', { name: 'Todo el pedido' })).toBeChecked();
@@ -256,7 +258,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
         expect.objectContaining({ estado: ['por_cobrar', 'preparando', 'listo'] }),
       ),
     );
-    expect(await screen.findByRole('button', { name: 'Cobrar' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Cobrar $125.00 MXN' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Entregar' })).not.toBeInTheDocument();
   });
 
@@ -277,9 +279,12 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
 
     await waitFor(() => expect(apiMock.collectCash).toHaveBeenCalledWith('token', baseOrder.id, '125.00', 4, '0.00'));
-    expect(await screen.findByRole('button', { name: 'Imprimir ticket' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Entregar' })).toBeVisible();
-    expect(screen.getByText('PAGADO')).toBeVisible();
+    // La tarjeta ya ofrece entregar; imprimir queda en el ticket completo.
+    expect(await screen.findByRole('button', { name: 'Entregar' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Ver pedido 14' }));
+    const ticket = await screen.findByRole('dialog', { name: 'Pedido #14' });
+    expect(within(ticket).getByRole('button', { name: 'Imprimir ticket' })).toBeVisible();
+    expect(within(ticket).getByText('PAGADO')).toBeVisible();
   });
 
   it('conserva efectivo y propina tras error y reintenta con el mismo payload', async () => {
@@ -546,6 +551,8 @@ describe('Caja: filas, la barra que prepara y el aviso de listo', () => {
     // Con «Todas» y varias filas, una columna por fila.
     expect(await screen.findByRole('region', { name: 'Barra 1' })).toBeVisible();
     expect(screen.getByRole('region', { name: 'Barra 2' })).toBeVisible();
+    // Cada renglón trae su botón principal: entregar sin abrir el ticket.
+    expect(within(screen.getByRole('region', { name: 'Barra 1' })).getByRole('button', { name: 'Entregar' })).toBeVisible();
 
     await user.click(within(filas).getByRole('button', { name: /Barra 2/ }));
     expect(screen.getByText('1 pedido de otra fila no se muestra aquí.')).toBeVisible();
@@ -580,8 +587,8 @@ describe('Caja: filas, la barra que prepara y el aviso de listo', () => {
     const otro = { ...listo, id: 'e', folio: 11 };
     apiMock.listOrders.mockResolvedValue({ orders: [listo, otro], cursor: null });
     render(<PosPage />, { wrapper: Wrapper });
-    // El primero va al ticket; el segundo queda en la lista con su aviso.
-    expect(await screen.findByText('Avisado hace 4 min')).toBeVisible();
+    // Cada tarjeta lista dice cuánto lleva avisado su cliente.
+    expect(await screen.findAllByText('Avisado hace 4 min')).toHaveLength(2);
   });
 });
 

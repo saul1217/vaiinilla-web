@@ -1,4 +1,4 @@
-import { BellRing, Check } from 'lucide-react';
+import { BellRing, Check, ScanLine } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { OrderDetail, OrderSpace } from '../types/api';
 import {
@@ -6,11 +6,13 @@ import {
   barQueue,
   isStaleReady,
   hiddenByLine,
+  isLineOrder,
   minutesSinceReady,
   readyNotice,
   stationDone,
 } from '../lib/cashier-lines';
-import { isCashierCashOrder, isCashierDeliveryOrder } from '../lib/cashier-queue';
+import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeliveryOrder } from '../lib/cashier-queue';
+import { formatMoney } from '../lib/money';
 import { Chip, ChipRow } from './vai';
 import { Button } from './ui';
 
@@ -52,55 +54,6 @@ export function CashierLineTabs({ lines, orders, selected, onSelect }: {
   );
 }
 
-function prepMeta(order: OrderDetail, now: Date) {
-  const minutes = Math.max(0, Math.floor((now.getTime() - new Date(order.creado_en).getTime()) / 60_000));
-  const waited = minutes === 0 ? 'recién cobrado' : `lleva ${minutes} min`;
-  return stationDone(order, 'cocina') ? `${waited} · cocina ya terminó lo suyo` : waited;
-}
-
-/** La tira de la barra: lo que Caja prepara y marca listo, sin pasar por cocina. */
-export function CashierBarQueue({ orders, now, busyId, onReady }: {
-  orders: OrderDetail[];
-  now: Date;
-  busyId: string | null;
-  onReady: (order: OrderDetail) => void;
-}) {
-  const queue = barQueue(orders);
-  return (
-    <section className="cashier-bar" aria-labelledby="cashier-bar-title">
-      <h3 id="cashier-bar-title">
-        La barra prepara <span aria-label={`${queue.length} pedidos`}>{queue.length}</span>
-      </h3>
-      {queue.length === 0 ? (
-        <p>Nada que preparar por ahora.</p>
-      ) : (
-        <ul>
-          {queue.map((order) => (
-            <li key={order.id} className="cashier-bar__row">
-              <strong className="cashier-bar__folio">#{order.folio}</strong>
-              <div className="cashier-bar__body">
-                <span className="cashier-bar__customer">{customer(order)}</span>
-                <span>{itemsText(barItems(order))}</span>
-                <span className="cashier-bar__meta">{prepMeta(order, now)}</span>
-              </div>
-              <Button
-                variant="secondary"
-                className="cashier-bar__ready"
-                loading={busyId === order.id}
-                disabled={busyId !== null}
-                onClick={() => onReady(order)}
-                aria-label={`Marcar listo el pedido ${order.folio} y avisar al cliente`}
-              >
-                <Check aria-hidden="true" className="size-5" /> Listo · avisar
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 /** Línea de aviso de un pedido listo: cuánto lleva esperando que pase el cliente. */
 export function ReadyNotice({ order, now }: { order: OrderDetail; now: Date }) {
   const minutes = minutesSinceReady(order, now);
@@ -113,21 +66,126 @@ export function ReadyNotice({ order, now }: { order: OrderDetail; now: Date }) {
   );
 }
 
+export type BoardStage = 'cash' | 'prep' | 'ready';
+
+const STAGE_LABEL: Record<BoardStage, string> = { cash: 'Por cobrar', prep: 'Preparando', ready: 'Para recoger' };
+const timeOf = (iso: string) =>
+  new Intl.DateTimeFormat('es-MX', { hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+const placeOf = (order: OrderDetail) =>
+  order.destino === 'en_espacio' ? order.espacio?.nombre ?? 'En su lugar' : 'Para llevar';
+
+function waitedText(order: OrderDetail, now: Date) {
+  const minutes = Math.max(0, Math.floor((now.getTime() - new Date(order.creado_en).getTime()) / 60_000));
+  const waited = minutes === 0 ? 'recién cobrado' : `lleva ${minutes} min`;
+  return stationDone(order, 'cocina') ? `${waited} · cocina ya terminó lo suyo` : waited;
+}
+
+/** Los tres montones de una caja, en el orden en que se atiende: cobrar, preparar y entregar. */
+function stages(orders: OrderDetail[], barPrepares: boolean) {
+  return {
+    cash: orders.filter(isCashierCashOrder),
+    prep: barPrepares ? barQueue(orders) : [],
+    ready: orders.filter(isCashierDeliveryOrder),
+  };
+}
+
+interface BoardActions {
+  now: Date;
+  barPrepares: boolean;
+  busyId: string | null;
+  /** El botón principal de cobrar o entregar, el mismo que tiene el ticket. */
+  primary: (order: OrderDetail, stage: 'cash' | 'ready', compact?: boolean) => ReactNode;
+  onReady: (order: OrderDetail) => void;
+  onOpen: (order: OrderDetail) => void;
+}
+
+function ReadyButton({ order, busyId, onReady, compact }: { order: OrderDetail; busyId: string | null; onReady: (order: OrderDetail) => void; compact?: boolean }) {
+  return (
+    <Button
+      variant="secondary"
+      className="cashier-bar__ready"
+      loading={busyId === order.id}
+      disabled={busyId !== null}
+      onClick={() => onReady(order)}
+      aria-label={`Marcar listo el pedido ${order.folio} y avisar al cliente`}
+    >
+      <Check aria-hidden="true" className="size-5" /> {compact ? 'Listo' : 'Listo · avisar al cliente'}
+    </Button>
+  );
+}
+
 /**
- * Vista para el mostrador de una sola pantalla: una columna por fila, con sus pedidos por
- * cobrar, en preparación y listos. Tocar un pedido lo abre en el ticket, donde están el cobro
- * y la entrega de siempre.
+ * La caja como se diseñó en Doop (canvas `hLxU-hxvMS`). Con una fila elegida, o en un negocio de
+ * una sola caja, son tres columnas de tarjetas con su botón principal. Con «Todas» y varias filas,
+ * una columna por fila con renglones compactos, para el mostrador de una sola pantalla.
  */
-export function CashierLinesBoard({ lines, orders, barPrepares, now, busyId, onPick, onReady }: {
+export function CashierBoard({ lines, orders, activeLine, ...actions }: BoardActions & {
   lines: OrderSpace[];
   orders: OrderDetail[];
-  barPrepares: boolean;
-  now: Date;
-  busyId: string | null;
-  onPick: (order: OrderDetail) => void;
-  onReady: (order: OrderDetail) => void;
+  activeLine: number | null;
 }) {
-  const unassigned = orders.filter((order) => order.espacio === null || !lines.some((line) => line.id === order.espacio?.id));
+  if (activeLine === null && lines.length >= 2) return <AllLinesBoard lines={lines} orders={orders} {...actions} />;
+  return <LineBoard orders={orders} {...actions} />;
+}
+
+function LineBoard({ orders, ...actions }: BoardActions & { orders: OrderDetail[] }) {
+  const { cash, prep, ready } = stages(orders, actions.barPrepares);
+  const columns: { stage: BoardStage; title: string; list: OrderDetail[]; empty: string }[] = [
+    { stage: 'cash', title: 'Por cobrar', list: cash, empty: 'Sin cobros pendientes. Lo demás ya está pagado desde la app.' },
+    ...(actions.barPrepares ? [{ stage: 'prep' as const, title: 'La barra prepara', list: prep, empty: 'Nada que preparar por ahora.' }] : []),
+    { stage: 'ready', title: 'Listos para entregar', list: ready, empty: 'Sin entregas pendientes.' },
+  ];
+  return (
+    <div className="cashier-stages" data-columns={columns.length}>
+      {columns.map((column) => (
+        <section key={column.stage} className="cashier-stages__column" data-tone={column.stage} aria-label={column.title}>
+          <h3 className="cashier-stages__title">
+            {column.title} <span aria-label={`${column.list.length} pedidos`}>{column.list.length}</span>
+          </h3>
+          {column.list.length === 0 ? (
+            <p className="cashier-stages__empty">{column.empty}</p>
+          ) : (
+            <ul>{column.list.map((order) => <li key={order.id}><OrderCard order={order} stage={column.stage} {...actions} /></li>)}</ul>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function OrderCard({ order, stage, now, busyId, primary, onReady, onOpen }: BoardActions & { order: OrderDetail; stage: BoardStage }) {
+  const items = stage === 'prep' ? barItems(order) : order.items;
+  const owed = hasOutstandingCashBalance(order) ? formatMoney(order.saldo_pendiente ?? order.total) : null;
+  const meta = stage === 'prep'
+    ? `${placeOf(order)} · ${waitedText(order, now)}`
+    : `${placeOf(order)} · ${timeOf(order.creado_en)} · ${owed ?? (stage === 'cash' ? formatMoney(order.total) : 'pagado')}`;
+  return (
+    <article className="cashier-card" data-tone={stage}>
+      <header className="cashier-card__head">
+        <strong className="cashier-card__folio">#{order.folio}</strong>
+        <span className="cashier-card__pill">{STAGE_LABEL[stage]}</span>
+      </header>
+      <p className="cashier-card__customer">{customer(order)}</p>
+      <p className="cashier-card__items">{itemsText(items)}</p>
+      {stage === 'ready' ? (
+        <p className="cashier-card__meta"><ReadyNotice order={order} now={now} /> <span>· {placeOf(order)}</span></p>
+      ) : (
+        <p className="cashier-card__meta">{meta}</p>
+      )}
+      <div className="cashier-card__actions">
+        {stage === 'prep' ? <ReadyButton order={order} busyId={busyId} onReady={onReady} /> : primary(order, stage)}
+        {stage !== 'prep' && (
+          <Button variant="ghost" onClick={() => onOpen(order)} aria-label={`Ver pedido ${order.folio}`}>
+            Ver pedido
+          </Button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function AllLinesBoard({ lines, orders, ...actions }: BoardActions & { lines: OrderSpace[]; orders: OrderDetail[] }) {
+  const unassigned = orders.filter((order) => !isLineOrder(order) || !lines.some((line) => line.id === order.espacio?.id));
   const columns = [
     ...lines.map((line) => ({ key: String(line.id), title: line.nombre, orders: orders.filter((order) => order.espacio?.id === line.id) })),
     ...(unassigned.length ? [{ key: 'sin-fila', title: 'Mesas y para llevar', orders: unassigned }] : []),
@@ -135,35 +193,33 @@ export function CashierLinesBoard({ lines, orders, barPrepares, now, busyId, onP
   return (
     <div className="cashier-board">
       {columns.map((column) => {
-        const cash = column.orders.filter(isCashierCashOrder);
-        const prep = barPrepares ? barQueue(column.orders) : [];
-        const ready = column.orders.filter(isCashierDeliveryOrder);
+        const { cash, prep, ready } = stages(column.orders, actions.barPrepares);
         return (
           <section key={column.key} className="cashier-board__column" aria-label={column.title}>
             <header className="cashier-board__head">
               <h3>{column.title}</h3>
               <span className="cashier-board__counts" aria-label={`${cash.length} por cobrar, ${prep.length} preparando, ${ready.length} listos`}>
                 <span data-tone="cash">{cash.length}</span>
-                {barPrepares && <span data-tone="prep">{prep.length}</span>}
+                {actions.barPrepares && <span data-tone="prep">{prep.length}</span>}
                 <span data-tone="ready">{ready.length}</span>
               </span>
             </header>
             {cash.length + prep.length + ready.length === 0 && <p className="cashier-board__empty">Sin pedidos.</p>}
             {cash.length > 0 && <BoardGroup title="Por cobrar" tone="cash">
-              {cash.map((order) => <BoardRow key={order.id} order={order} detail={itemsText(order.items)} onPick={onPick} />)}
+              {cash.map((order) => <BoardRow key={order.id} order={order} detail={itemsText(order.items)} onOpen={actions.onOpen}>{actions.primary(order, 'cash', true)}</BoardRow>)}
             </BoardGroup>}
             {prep.length > 0 && <BoardGroup title="Preparando" tone="prep">
               {prep.map((order) => (
-                <BoardRow key={order.id} order={order} detail={itemsText(barItems(order))}>
-                  <Button variant="secondary" className="cashier-bar__ready" loading={busyId === order.id} disabled={busyId !== null} onClick={() => onReady(order)} aria-label={`Marcar listo el pedido ${order.folio} y avisar al cliente`}>
-                    Listo
-                  </Button>
+                <BoardRow key={order.id} order={order} detail={`${itemsText(barItems(order))} · ${waitedText(order, actions.now)}`}>
+                  <ReadyButton order={order} busyId={actions.busyId} onReady={actions.onReady} compact />
                 </BoardRow>
               ))}
             </BoardGroup>}
             {ready.length > 0 && <BoardGroup title="Listos para recoger" tone="ready">
               {ready.map((order) => (
-                <BoardRow key={order.id} order={order} detail={<ReadyNotice order={order} now={now} />} onPick={onPick} />
+                <BoardRow key={order.id} order={order} detail={<ReadyNotice order={order} now={actions.now} />} onOpen={actions.onOpen}>
+                  {actions.primary(order, 'ready', true)}
+                </BoardRow>
               ))}
             </BoardGroup>}
           </section>
@@ -173,7 +229,7 @@ export function CashierLinesBoard({ lines, orders, barPrepares, now, busyId, onP
   );
 }
 
-function BoardGroup({ title, tone, children }: { title: string; tone: 'cash' | 'prep' | 'ready'; children: ReactNode }) {
+function BoardGroup({ title, tone, children }: { title: string; tone: BoardStage; children: ReactNode }) {
   return (
     <div className="cashier-board__group" data-tone={tone}>
       <p className="cashier-board__group-title">{title}</p>
@@ -182,11 +238,11 @@ function BoardGroup({ title, tone, children }: { title: string; tone: 'cash' | '
   );
 }
 
-/** Sin `onPick` el renglón no se abre en el ticket: lo que se prepara solo se marca listo. */
-function BoardRow({ order, detail, onPick, children }: {
+/** El nombre abre el ticket completo; el botón de al lado hace lo principal sin abrirlo. */
+function BoardRow({ order, detail, onOpen, children }: {
   order: OrderDetail;
   detail: ReactNode;
-  onPick?: (order: OrderDetail) => void;
+  onOpen?: (order: OrderDetail) => void;
   children?: ReactNode;
 }) {
   const content = (
@@ -200,14 +256,27 @@ function BoardRow({ order, detail, onPick, children }: {
   );
   return (
     <li className="cashier-board__row">
-      {onPick ? (
-        <button type="button" className="cashier-board__open" onClick={() => onPick(order)} aria-label={`Abrir el pedido ${order.folio} en el ticket`}>
+      {onOpen ? (
+        <button type="button" className="cashier-board__open" onClick={() => onOpen(order)} aria-label={`Ver pedido ${order.folio}`}>
           {content}
         </button>
       ) : (
         <div className="cashier-board__open">{content}</div>
       )}
-      {children}
+      <span className="cashier-board__action">{children}</span>
     </li>
+  );
+}
+
+/** Recordatorio de la pistola: el campo del código llega enfocado al tocar Entregar. */
+export function ScannerBar() {
+  return (
+    <div className="cashier-scanner" role="note">
+      <span className="cashier-scanner__chip"><ScanLine aria-hidden="true" className="size-5" /> Pistola</span>
+      <p>
+        <strong>Toca Entregar y dispara al QR del cliente.</strong>{' '}
+        <span>El código se lee y la entrega se confirma sola; sin pistola, escanea con la cámara o escríbelo.</span>
+      </p>
+    </div>
   );
 }

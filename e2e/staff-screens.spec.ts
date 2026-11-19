@@ -110,7 +110,8 @@ for (const theme of ['claro', 'oscuro'] as const) {
     const { installStaffR2Mocks } = await import('./fixtures/staff-r2');
     await installStaffR2Mocks(page, 'cajero', theme);
     await page.goto('/app/pos');
-    await expect(page.locator('.cashier-queue__ticket')).toHaveCount(1);
+    // El tablero de Caja (una columna por etapa o una por fila): el ticket ya se abre con «Ver pedido».
+    await expect(page.locator('.cashier-stages, .cashier-board').first()).toBeVisible();
     await page.getByRole('button', { name: 'Cerrar caja', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(1);
     await expect(page.getByLabel('Monto final (MXN)')).toBeVisible();
