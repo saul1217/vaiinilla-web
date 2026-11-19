@@ -4,12 +4,12 @@ import {
   AlertTriangle,
   Building2,
   CheckCircle2,
+  Clipboard,
   CreditCard,
   Camera,
   ExternalLink,
   Globe2,
   ImagePlus,
-  Link2,
   MailPlus,
   MessageCircle,
   MapPinned,
@@ -191,9 +191,9 @@ function stripePresentation(stripe: PlatformStripeSummary | null | undefined): S
   if (!stripe) {
     return {
       label: 'Sin conectar',
-      description: 'Puedes recuperar una cuenta Stripe ya creada o iniciar un registro nuevo.',
+      description: 'Genera un enlace para que el dueño capture sus datos directamente en Stripe.',
       action: 'onboarding',
-      actionLabel: 'Conectar Stripe',
+      actionLabel: 'Generar link para el dueño',
       tone: 'neutral',
     };
   }
@@ -205,18 +205,18 @@ function stripePresentation(stripe: PlatformStripeSummary | null | undefined): S
     hasBlockingStripeRequirements(stripe)
   ) {
     return {
-      label: 'Revisar requisitos',
-      description: 'Stripe reporta requisitos pendientes o una restricción en la cuenta.',
+      label: 'Revisar datos',
+      description: 'Stripe reporta datos pendientes o una limitación en la cuenta.',
       action: 'onboarding',
-      actionLabel: 'Revisar requisitos',
+      actionLabel: 'Revisar datos',
       tone: 'warning',
     };
   }
 
   if (stripe.stripe_enabled && stripe.charges_enabled && stripe.payouts_enabled) {
     return {
-      label: 'Stripe conectado',
-      description: 'La cuenta está habilitada y activa para recibir pagos de este establecimiento.',
+      label: 'Tarjeta activa',
+      description: 'La tarjeta está activa para recibir pagos de este establecimiento.',
       action: null,
       actionLabel: null,
       tone: 'connected',
@@ -228,7 +228,7 @@ function stripePresentation(stripe: PlatformStripeSummary | null | undefined): S
       label: 'Lista para activar',
       description: 'Stripe confirmó las capacidades necesarias; activa la integración localmente.',
       action: 'activate',
-      actionLabel: 'Activar Stripe',
+      actionLabel: 'Activar tarjeta',
       tone: 'ready',
     };
   }
@@ -236,16 +236,16 @@ function stripePresentation(stripe: PlatformStripeSummary | null | undefined): S
   if (!stripe.details_submitted || stripe.estado_onboarding === 'pendiente') {
     return {
       label: 'Continuar configuración',
-      description: 'El dueño todavía debe completar la información de la cuenta Express.',
+      description: 'El dueño debe completar sus datos en Stripe antes de continuar.',
       action: 'onboarding',
-      actionLabel: 'Continuar configuración',
+      actionLabel: 'Generar link para el dueño',
       tone: 'pending',
     };
   }
 
   return {
     label: 'En revisión',
-    description: 'Stripe está revisando la cuenta. El webhook actualizará este estado.',
+    description: 'Stripe está revisando los datos de la cuenta.',
     action: null,
     actionLabel: null,
     tone: 'pending',
@@ -291,6 +291,7 @@ export function EstablishmentsPage() {
   const history = useHistory();
   const token = platform?.token ?? '';
   const queryClient = useQueryClient();
+  const stripeRefreshInFlight = useRef(new Set<string>());
   const [draftSearch, setDraftSearch] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'todos' | 'activo' | 'suspendido'>('todos');
@@ -309,6 +310,23 @@ export function EstablishmentsPage() {
       state: { from: '/plataforma/establecimientos' },
     });
   }, [clearPlatform, history]);
+
+  const refreshReturnedStripe = useCallback(async (establishmentId: string) => {
+    if (stripeRefreshInFlight.current.has(establishmentId)) return;
+    stripeRefreshInFlight.current.add(establishmentId);
+    try {
+      await api.getPlatformStripeConfiguration(token, establishmentId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['platform-establishments'] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-card-approval', establishmentId] }),
+      ]);
+      forgetStripeReturn();
+    } catch (error) {
+      if (isUnauthorized(error)) redirectToPlatformAccess(establishmentId);
+    } finally {
+      stripeRefreshInFlight.current.delete(establishmentId);
+    }
+  }, [queryClient, redirectToPlatformAccess, token]);
 
   const establishments = useInfiniteQuery({
     queryKey: ['platform-establishments', status, search],
@@ -339,6 +357,31 @@ export function EstablishmentsPage() {
     forgetStripeReturn();
   }, [resumedEstablishmentId, rows]);
 
+  useEffect(() => {
+    if (!token) return;
+    const refreshStripeState = () => {
+      if (document.visibilityState !== 'visible') return;
+      const returnedEstablishmentId = readStripeReturn();
+      if (returnedEstablishmentId) {
+        void refreshReturnedStripe(returnedEstablishmentId);
+      } else {
+        void queryClient.invalidateQueries({ queryKey: ['platform-establishments'] });
+        void queryClient.invalidateQueries({ queryKey: ['platform-card-approval'] });
+      }
+    };
+    window.addEventListener('focus', refreshStripeState);
+    document.addEventListener('visibilitychange', refreshStripeState);
+    return () => {
+      window.removeEventListener('focus', refreshStripeState);
+      document.removeEventListener('visibilitychange', refreshStripeState);
+    };
+  }, [queryClient, refreshReturnedStripe, token]);
+
+  useEffect(() => {
+    if (!token || !resumedEstablishmentId) return;
+    void refreshReturnedStripe(resumedEstablishmentId);
+  }, [refreshReturnedStripe, resumedEstablishmentId, token]);
+
   async function refresh(message: string) {
     setNotice(message);
     await Promise.all([
@@ -362,7 +405,7 @@ export function EstablishmentsPage() {
 
       {notice && <Feedback tone="success">{notice}</Feedback>}
       {resumedEstablishmentId && rows.some((establishment) => establishment.id === resumedEstablishmentId) && (
-        <Feedback tone="info">Sesión recuperada. Revisa nuevamente el estado de Stripe del establecimiento seleccionado.</Feedback>
+        <Feedback tone="info">Sesión recuperada. Estamos actualizando Stripe y la aprobación de tarjeta.</Feedback>
       )}
       {establishments.isError && <Feedback tone="error">{errorMessage(establishments.error)}</Feedback>}
 
@@ -420,6 +463,9 @@ export function EstablishmentsPage() {
                 </div>
                 <EstablishmentStatusBadge status={establishment.estado} />
               </div>
+              <span className={`stripe-list-badge stripe-list-badge--${stripePresentation(establishment.stripe).tone}`} aria-label={`Estado de tarjeta: ${stripePresentation(establishment.stripe).label}`}>
+                Tarjeta: {stripePresentation(establishment.stripe).label}
+              </span>
               <h2>{establishment.nombre}</h2>
               <p className="establishment-card__slug">/{establishment.slug}</p>
               <dl className="establishment-card__details">
@@ -431,22 +477,12 @@ export function EstablishmentsPage() {
               {establishment.estado === 'suspendido' && establishment.motivo_suspension && (
                 <div className="suspension-note"><strong>Motivo:</strong> {establishment.motivo_suspension}</div>
               )}
-              <StripeStatusPanel
+              <EstablishmentStripeCard
                 establishment={establishment}
                 token={token}
                 onChanged={refresh}
                 onUnauthorized={redirectToPlatformAccess}
               />
-              {establishment.tipo === 'cafeteria' && (
-                <CardApprovalPanel
-                  token={token}
-                  establishmentId={establishment.id}
-                  establishmentName={establishment.nombre}
-                  suspended={establishment.estado === 'suspendido'}
-                  onChanged={refresh}
-                  onUnauthorized={redirectToPlatformAccess}
-                />
-              )}
               <div className="establishment-card__actions">
                 <button type="button" onClick={() => { setSelected(establishment); setFormMode('edit'); }}>
                   <Pencil aria-hidden="true" /> Configurar
@@ -533,7 +569,7 @@ export function EstablishmentsPage() {
   );
 }
 
-function StripeStatusPanel({
+function EstablishmentStripeCard({
   establishment,
   token,
   onChanged,
@@ -544,13 +580,86 @@ function StripeStatusPanel({
   onChanged: (message: string) => Promise<void>;
   onUnauthorized: (establishmentId?: string) => void;
 }) {
+  const [approved, setApproved] = useState<boolean | null>(null);
+  const isCafe = establishment.tipo === 'cafeteria';
+  const account = establishment.stripe;
+  const cardStatus = !account
+    ? 'Sin cuenta de Stripe'
+    : account.stripe_enabled
+      ? 'Tarjeta activa'
+      : !account.details_submitted || account.estado_onboarding === 'pendiente'
+        ? 'Onboarding pendiente'
+        : account.estado_onboarding === 'en_revision'
+          ? 'En revisión'
+          : account.charges_enabled && account.payouts_enabled && approved
+            ? 'Aprobada · lista para activar'
+            : account.charges_enabled && account.payouts_enabled
+              ? 'Lista para aprobar'
+              : stripePresentation(account).label;
+
+  return (
+    <section className="stripe-workflow-card" aria-label="Cobro con tarjeta">
+      <header className="stripe-workflow-card__header">
+        <div>
+          <p className="stripe-workflow-card__eyebrow">Cobro con tarjeta</p>
+          <strong aria-live="polite">{cardStatus}</strong>
+        </div>
+        {isCafe && <span className="stripe-workflow-card__step">1. Stripe · 2. Aprobar · 3. Activar</span>}
+      </header>
+      {isCafe && <p className="stripe-workflow-card__owner-note" aria-live="polite">El dueño completa sus datos en Stripe. Aprobar no prende la tarjeta; después, el dueño la activa desde su panel o Super Admin si ya está lista.</p>}
+      <StripeStatusPanel
+        establishment={establishment}
+        token={token}
+        approved={approved}
+        onChanged={onChanged}
+        onUnauthorized={onUnauthorized}
+      />
+      {isCafe && (
+        <CardApprovalPanel
+          token={token}
+          establishmentId={establishment.id}
+          establishmentName={establishment.nombre}
+          suspended={establishment.estado === 'suspendido'}
+          commissionPassThrough={account?.pasar_comision_al_cliente === true}
+          onApprovalChange={setApproved}
+          onChanged={onChanged}
+          onUnauthorized={onUnauthorized}
+        />
+      )}
+      {isCafe && account?.stripe_enabled && (
+        <p className="stripe-workflow-card__owner-note">La tarjeta está activa para este establecimiento.</p>
+      )}
+      {isCafe && approved && account && !account.stripe_enabled && (
+        <p className="stripe-workflow-card__owner-note">La tarjeta no se activa al aprobar. Si todo está listo, puedes activarla aquí; el dueño también puede hacerlo desde su panel.</p>
+      )}
+    </section>
+  );
+}
+
+function StripeStatusPanel({
+  establishment,
+  token,
+  approved,
+  onChanged,
+  onUnauthorized,
+}: {
+  establishment: PlatformEstablishment;
+  token: string;
+  approved: boolean | null;
+  onChanged: (message: string) => Promise<void>;
+  onUnauthorized: (establishmentId?: string) => void;
+}) {
   const [accountLinkUrl, setAccountLinkUrl] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const basePresentation = stripePresentation(establishment.stripe);
-  // Back #268: la tarjeta solo se activa en cafeterías; en otro tipo, «Activar Stripe» daría 409
+  const waitingApproval = establishment.tipo === 'cafeteria' && basePresentation.action === 'activate' && approved !== true;
+  // Back #268: la tarjeta solo se activa en cafeterías; en otro tipo, «Activar tarjeta» daría 409
   // STRIPE_APPROVAL_CAFETERIA_ONLY, así que no se ofrece. Sin tipo conocido decide el back.
   const cafeteriaOnly =
     basePresentation.action === 'activate' && establishment.tipo !== undefined && establishment.tipo !== 'cafeteria';
-  const presentation: StripePresentation = cafeteriaOnly
+  const presentation: StripePresentation = waitingApproval
+    ? { ...basePresentation, label: 'Lista para aprobar', description: 'Stripe confirmó la cuenta. Aprueba la tarjeta para continuar; aprobar no la activa.', action: null, actionLabel: null }
+    : cafeteriaOnly
     ? {
         ...basePresentation,
         label: 'Tarjeta solo en cafeterías',
@@ -566,17 +675,9 @@ function StripeStatusPanel({
       api.createPlatformStripeOnboarding(token, establishment.id, idempotencyKey),
     onSuccess: (result) => {
       setAccountLinkUrl(result.account_link_url);
+      rememberStripeReturn(establishment.id);
       window.open(result.account_link_url, '_blank', 'noopener,noreferrer');
-      void onChanged('Account Link de Stripe generado. El dueño debe completar la configuración.');
-    },
-    onError: (error) => {
-      if (isUnauthorized(error)) onUnauthorized(establishment.id);
-    },
-  });
-  const linkExisting = useMutation({
-    mutationFn: () => api.linkExistingPlatformStripe(token, establishment.id),
-    onSuccess: () => {
-      void onChanged('La cuenta Stripe existente quedó vinculada. Cobros locales siguen apagados hasta activarlos.');
+      void onChanged('Link generado. El dueño debe completar sus datos en Stripe.');
     },
     onError: (error) => {
       if (isUnauthorized(error)) onUnauthorized(establishment.id);
@@ -608,11 +709,17 @@ function StripeStatusPanel({
   });
 
   const loading =
-    onboarding.isPending || linkExisting.isPending || refreshStatus.isPending || configure.isPending;
+    onboarding.isPending || refreshStatus.isPending || configure.isPending;
   const actionDisabled = suspended || loading;
   const actionLabel = suspended && presentation.action
     ? 'Reactiva el establecimiento'
     : presentation.actionLabel;
+
+  async function copyOwnerLink() {
+    if (!accountLinkUrl || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(accountLinkUrl);
+    setLinkCopied(true);
+  }
 
   function runAction() {
     if (suspended || !presentation.action) return;
@@ -621,7 +728,7 @@ function StripeStatusPanel({
   }
 
   return (
-    <section className={`stripe-panel stripe-panel--${presentation.tone}`} aria-label="Stripe Connect">
+    <section className={`stripe-panel stripe-panel--${presentation.tone}`} aria-label="Estado de Stripe">
       <div className="stripe-panel__header">
         <div className="stripe-panel__title">
           <span className="stripe-panel__icon">
@@ -634,30 +741,24 @@ function StripeStatusPanel({
             )}
           </span>
           <div>
-            <p>Stripe Connect</p>
+          <p>Stripe</p>
             <strong>{presentation.label}</strong>
           </div>
         </div>
-        {account && <span className="stripe-panel__account">Cuenta vinculada</span>}
+        {account && <span className="stripe-panel__account">Cuenta conectada</span>}
       </div>
       <p className="stripe-panel__description">{presentation.description}</p>
-      {(onboarding.isError || linkExisting.isError || refreshStatus.isError || configure.isError) && (
+      {suspended && presentation.action && (
+        <p className="text-xs leading-5 text-muted" role="status">
+          Un establecimiento suspendido no puede iniciar ni activar cobros. Reactívalo primero.
+        </p>
+      )}
+      {(onboarding.isError || refreshStatus.isError || configure.isError) && (
         <Feedback tone="error">
-          {errorMessage(onboarding.error ?? linkExisting.error ?? refreshStatus.error ?? configure.error)}
+          {errorMessage(onboarding.error ?? refreshStatus.error ?? configure.error)}
         </Feedback>
       )}
       <div className="stripe-panel__actions">
-        {!account && (
-          <Button
-            type="button"
-            variant="primary"
-            loading={linkExisting.isPending}
-            disabled={actionDisabled}
-            onClick={() => linkExisting.mutate()}
-          >
-            <Link2 aria-hidden="true" /> Vincular cuenta existente
-          </Button>
-        )}
         {actionLabel && (
           <Button
             type="button"
@@ -687,8 +788,15 @@ function StripeStatusPanel({
             target="_blank"
             rel="noreferrer"
           >
-            Abrir Account Link <ExternalLink aria-hidden="true" />
+            Abrir enlace para el dueño <ExternalLink aria-hidden="true" />
           </a>
+        )}
+        {accountLinkUrl && (
+          <button type="button" className="stripe-panel__refresh" onClick={() => {
+            void copyOwnerLink();
+          }}>
+            <Clipboard aria-hidden="true" /> {linkCopied ? 'Link copiado' : 'Copiar link'}
+          </button>
         )}
       </div>
     </section>

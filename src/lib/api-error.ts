@@ -53,6 +53,14 @@ const friendlyMessages: Record<string, string> = {
     'La plataforma todavía no aprueba los pagos con tarjeta de este negocio. La tarjeta sigue apagada.',
   STRIPE_APPROVAL_CAFETERIA_ONLY:
     'Por ahora los pagos con tarjeta solo están disponibles en cafeterías: no se pueden activar ni aprobar en otro tipo de negocio.',
+  STRIPE_PASS_FEE_ON:
+    'No se puede aprobar mientras «pasar comisión al cliente» esté encendido. El dueño debe apagarlo primero porque el menú ya incluye ese precio.',
+  STRIPE_ACCOUNT_NOT_READY:
+    'La cuenta de Stripe todavía no está lista para cobrar. El dueño debe completar sus datos y esperar la confirmación de Stripe.',
+  STRIPE_ACCOUNT_MODE_MISMATCH:
+    'La cuenta de Stripe no corresponde al entorno de cobro actual. Contacta a soporte antes de activarla.',
+  STRIPE_ONBOARDING_REQUIRED:
+    'Primero genera el enlace para que el dueño conecte su cuenta de Stripe.',
 };
 
 export class VaiinillaApiError extends Error {

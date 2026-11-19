@@ -3275,6 +3275,53 @@ tbody tr:last-child td {
   gap: 12px;
 }
 
+.stripe-list-badge {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin: .65rem 0 0;
+  padding: .25rem .6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255,255,255,.55);
+  font-size: .72rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+.stripe-list-badge--ready, .stripe-list-badge--connected { color: #365323; border-color: rgba(100,140,60,.35); }
+.stripe-list-badge--warning { color: #8a3930; border-color: rgba(180,75,64,.35); }
+.stripe-workflow-card {
+  display: grid;
+  gap: .7rem;
+  min-width: 0;
+  padding: .85rem;
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  background: rgba(255,255,255,.35);
+}
+.stripe-workflow-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.stripe-workflow-card__header > div { display: grid; gap: .15rem; }
+.stripe-workflow-card__eyebrow { margin: 0; color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.stripe-workflow-card__header strong { font-size: .95rem; }
+.stripe-workflow-card__step { color: var(--muted); font-size: .7rem; }
+.stripe-workflow-card .stripe-panel { padding: 0; border: 0; background: transparent; }
+.stripe-workflow-card > section[aria-label="Aprobación de tarjeta"] { padding: 0; border: 0; background: transparent; }
+.stripe-workflow-card .stripe-panel__header { align-items: flex-start; }
+.stripe-workflow-card__owner-note { margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+@media (max-width: 420px) {
+  .stripe-workflow-card { padding: .7rem; }
+  .stripe-workflow-card__step { width: 100%; }
+  .stripe-workflow-card .stripe-panel__actions { align-items: stretch; }
+  .stripe-workflow-card .stripe-panel__actions > * { max-width: 100%; }
+}
+
 .establishment-card__media {
   position: relative;
   width: 58px;
