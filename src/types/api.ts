@@ -224,6 +224,8 @@ export interface OperationalStatus {
   dentro_de_franja?: boolean;
   /** false = el personal entrega en el espacio sin pedir el QR. Un backend anterior no lo manda. */
   entrega_requiere_qr?: boolean;
+  /** Caja prepara los productos de la estación `caja` y los marca listos. Un backend anterior no lo manda. */
+  barra_prepara?: boolean;
 }
 
 export interface OrderSpace {
@@ -238,11 +240,13 @@ export interface OrderItemOption {
   precio_extra: string;
 }
 
+export type PreparationStation = 'cocina' | 'caja';
+
 export interface OrderItem {
   id: number;
   producto_id: number;
   nombre_producto: string;
-  estacion_preparacion: 'cocina' | 'caja';
+  estacion_preparacion: PreparationStation;
   cantidad: number;
   precio_digital_unitario: string;
   subtotal: string;
@@ -287,6 +291,12 @@ export interface OrderDetail {
   motivo_pendiente_operativo?: 'caja_inactiva' | 'cocina_inactiva' | null;
   /** Drive-thru: cuándo el cliente avisó que llegó por su pedido; null si no ha avisado. */
   llegada_en?: string | null;
+  /** Cuándo quedó listo: a esa hora le llegó el aviso al cliente. */
+  listo_en?: string | null;
+  /** Con la barra preparando, las estaciones que todavía no sellan su parte. */
+  estaciones_pendientes?: PreparationStation[];
+  /** «Pasa por él»: el cliente recoge en la barra aunque pidió desde una mesa. */
+  recoge_en_barra?: boolean;
   /** Compra sin cuenta: pedido de un invitado (solo dio su nombre). */
   invitado?: boolean;
 }
