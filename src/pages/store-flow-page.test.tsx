@@ -41,6 +41,26 @@ describe('Flujo de mi tienda', () => {
   beforeEach(() => {
     apiMock.businessSettings.mockReset().mockResolvedValue(cafeteria);
     apiMock.saveBusinessSettings.mockReset().mockResolvedValue({ ...cafeteria, tipo: 'padel' });
+    apiMock.cardPayments.mockReset().mockResolvedValue(null);
+  });
+
+  it('en una cafetería con tarjeta aprobada, el panel de tarjeta no deja pasar la comisión al cliente', async () => {
+    apiMock.cardPayments.mockResolvedValue({
+      stripe_enabled: true,
+      stripe_account_id: 'acct_1',
+      charges_enabled: true,
+      payouts_enabled: true,
+      estado_onboarding: 'habilitada',
+      pasar_comision_al_cliente: false,
+      aprobacion_plataforma: { estado: 'aprobada', vigente: true },
+    });
+    const user = userEvent.setup();
+    render(<StoreFlowPage />, { wrapper: Wrapper });
+    await screen.findByText('Pagos con tarjeta activos');
+    await user.click(screen.getByRole('button', { name: 'Configurar pagos con tarjeta' }));
+
+    expect(await screen.findByRole('radio', { name: /^el cliente/i })).toBeDisabled();
+    expect(screen.getByText(/la comisión ya va incluida en los precios del menú/i)).toBeVisible();
   });
 
   it('muestra el flujo actual y no hay nada que guardar sin cambios', async () => {

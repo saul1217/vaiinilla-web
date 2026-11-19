@@ -49,6 +49,10 @@ const friendlyMessages: Record<string, string> = {
   RESERVATION_IN_PROGRESS: 'La reserva ya inició: no se puede cancelar.',
   ACCOUNT_DELETION_FAILED:
     'No fue posible completar la eliminación. Tu sesión sigue activa; inténtalo nuevamente.',
+  STRIPE_PLATFORM_APPROVAL_REQUIRED:
+    'La plataforma todavía no aprueba los pagos con tarjeta de este negocio. La tarjeta sigue apagada.',
+  STRIPE_APPROVAL_CAFETERIA_ONLY:
+    'Por ahora los pagos con tarjeta solo están disponibles en cafeterías: no se pueden activar ni aprobar en otro tipo de negocio.',
 };
 
 export class VaiinillaApiError extends Error {

@@ -88,6 +88,26 @@ regresa a `/plataforma/acceso`, conserva el establecimiento seleccionado en la p
 vuelve a `/plataforma/establecimientos` después de autenticar de nuevo. Efectivo, saldo,
 wallet y cashback siguen siendo flujos separados.
 
+### Tarjeta solo en cafeterías y aprobación de la plataforma (back #266 y #268)
+
+- La tarjeta solo se activa en cafeterías (decisión del 18-nov): en cualquier otro tipo de
+  negocio el back responde 409 `STRIPE_APPROVAL_CAFETERIA_ONLY`, y la Web deja «Sí, aceptar
+  tarjeta» deshabilitado con su explicación. Apagarla siempre se puede.
+- En cada cafetería, Super Admin ve si la tarjeta está aprobada, pendiente o revocada, con el
+  historial reciente, y la aprueba o la revoca con un motivo obligatorio (queda en el historial;
+  vacío da 400 `VALIDATION_ERROR`) e `Idempotency-Key`: `GET`, `POST .../stripe/aprobacion` y
+  `POST .../stripe/aprobacion/revocar`. Aprobar no prende la tarjeta; revocar la apaga y no
+  cancela pagos ya iniciados. En otros tipos, «Activar Stripe» no aparece.
+- En `/app/flujo`, el dueño de una cafetería ve el estado de la aprobación. Sin aprobación no
+  puede activar la tarjeta (solo apagarla); mientras no se conoce el tipo del negocio, el
+  candado sigue puesto. En una cafetería con aprobación vigente, «¿Quién paga la comisión?»
+  no deja elegir «El cliente», porque el precio del menú con tarjeta ya la considera; si ya
+  estaba prendida, se puede apagar. Mientras no se conoce el tipo, ese candado no se aplica
+  (el back responde 422 `STRIPE_PASS_FEE_NOT_ALLOWED` si tocara).
+- El mínimo por cobro con tarjeta (back #265) no tiene lógica en la Web: el personal no cobra
+  con tarjeta de Stripe aquí (Caja usa efectivo o terminal) y el aviso del carrito vive en la
+  landing.
+
 ## Seguridad
 
 - Firebase conserva únicamente la sesión de identidad del navegador.

@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useHistory } from 'react-router-dom';
 import { z } from 'zod';
+import { CardApprovalPanel } from '../components/card-approval-panel';
 import { EstablishmentStatusBadge } from '../components/status-badge';
 import { Button, CustomSelect, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
@@ -436,6 +437,16 @@ export function EstablishmentsPage() {
                 onChanged={refresh}
                 onUnauthorized={redirectToPlatformAccess}
               />
+              {establishment.tipo === 'cafeteria' && (
+                <CardApprovalPanel
+                  token={token}
+                  establishmentId={establishment.id}
+                  establishmentName={establishment.nombre}
+                  suspended={establishment.estado === 'suspendido'}
+                  onChanged={refresh}
+                  onUnauthorized={redirectToPlatformAccess}
+                />
+              )}
               <div className="establishment-card__actions">
                 <button type="button" onClick={() => { setSelected(establishment); setFormMode('edit'); }}>
                   <Pencil aria-hidden="true" /> Configurar
@@ -534,7 +545,20 @@ function StripeStatusPanel({
   onUnauthorized: (establishmentId?: string) => void;
 }) {
   const [accountLinkUrl, setAccountLinkUrl] = useState<string | null>(null);
-  const presentation = stripePresentation(establishment.stripe);
+  const basePresentation = stripePresentation(establishment.stripe);
+  // Back #268: la tarjeta solo se activa en cafeterías; en otro tipo, «Activar Stripe» daría 409
+  // STRIPE_APPROVAL_CAFETERIA_ONLY, así que no se ofrece. Sin tipo conocido decide el back.
+  const cafeteriaOnly =
+    basePresentation.action === 'activate' && establishment.tipo !== undefined && establishment.tipo !== 'cafeteria';
+  const presentation: StripePresentation = cafeteriaOnly
+    ? {
+        ...basePresentation,
+        label: 'Tarjeta solo en cafeterías',
+        description: 'Stripe confirmó la cuenta, pero por ahora los pagos con tarjeta solo se activan en cafeterías.',
+        action: null,
+        actionLabel: null,
+      }
+    : basePresentation;
   const account = establishment.stripe;
   const suspended = establishment.estado === 'suspendido';
   const onboarding = useMutation({

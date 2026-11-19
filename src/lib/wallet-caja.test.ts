@@ -159,7 +159,9 @@ describe('recarga pendiente', () => {
     writePendingRecharge({ ...scope, establecimientoId: 'otra-tienda', membresiaId: 'm-2' }, record());
     window.localStorage.setItem('vaiinilla:admin-theme', 'dark');
     clearAllPendingRecharges();
-    expect(Object.keys(window.localStorage)).toEqual(['vaiinilla:admin-theme']);
+    // Object.keys(localStorage) devuelve los métodos del Storage en jsdom; se leen las claves reales.
+    const claves = Array.from({ length: window.localStorage.length }, (_, i) => window.localStorage.key(i));
+    expect(claves).toEqual(['vaiinilla:admin-theme']);
   });
 
   it('descarta registros viejos o dañados', () => {
