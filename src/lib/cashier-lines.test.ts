@@ -140,6 +140,9 @@ describe('avisar otra vez, no vino y la pistola', () => {
     expect(canRemind({ ...listo, destino: 'en_espacio', espacio: mesa, recoge_en_barra: true })).toBe(true);
     expect(canMarkNoShow(listo)).toBe(true);
     expect(canMarkNoShow({ ...listo, pago_diferido: true })).toBe(false);
+    // En mesa no hay «no vino» (el cliente está sentado), ni siquiera con la barra que prepara.
+    expect(canMarkNoShow({ ...listo, destino: 'en_espacio', espacio: mesa })).toBe(false);
+    expect(canMarkNoShow({ ...listo, destino: 'en_espacio', espacio: mesa, recoge_en_barra: true })).toBe(true);
   });
 
   it('la pistola cerrada no vuelve a salir ese día', () => {

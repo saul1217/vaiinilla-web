@@ -119,9 +119,13 @@ export function canRemind(order: OrderDetail): boolean {
     (order.destino === 'para_llevar' || order.recoge_en_barra === true);
 }
 
-/** «No vino» no aplica a una cuenta abierta de mesa: el pedido se queda en la cuenta. */
+/**
+ * «No vino» solo para lo que el cliente tenía que recoger (para llevar o «Pasa por él»). En mesa
+ * está sentado, y una cuenta abierta se queda en la cuenta: el backend responde 409 en ambos casos.
+ */
 export function canMarkNoShow(order: OrderDetail): boolean {
-  return order.estado === 'listo' && order.pago_diferido !== true;
+  return order.estado === 'listo' && order.pago_diferido !== true &&
+    (order.destino === 'para_llevar' || order.recoge_en_barra === true);
 }
 
 const SCANNER_KEY = 'caja.pistola.cerrada';
