@@ -7,6 +7,8 @@ import { CardPaymentsCard } from '../components/card-payments-card';
 import { StoreDirectoryCard } from '../components/store-directory-card';
 import { StoreImagesCard } from '../components/store-images-card';
 import { StoreVideosCard } from '../components/store-videos-card';
+import { StoreOperationsCard } from '../components/store-operations-card';
+import { StoreDeliveryPreordersCard } from '../components/store-delivery-preorders-card';
 import { Choice } from '../components/choice';
 import { Button, Feedback, Field } from '../components/ui';
 import { useSessions } from '../context/session-context';
@@ -199,6 +201,12 @@ export function StoreFlowPage() {
           </StoreFlowEditButton>
         </article>
       </section>
+      {query.data && (
+        <div className="grid gap-4">
+          <StoreOperationsCard key={`ops-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
+          <StoreDeliveryPreordersCard key={`del-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
+        </div>
+      )}
       <StoreFlowEditorSheet
         open={editor === 'payments'}
         onOpenChange={(open) => !open && setEditor(null)}

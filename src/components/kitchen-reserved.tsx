@@ -22,7 +22,7 @@ export function KitchenReserved({ token, scopeId, open, onOpenChange }: { token:
     : day.data.pedidos === 0 ? 'Sin apartados.' : day.data.pedidos === 1 ? '1 apartado.' : `${day.data.pedidos} apartados.`;
 
   return (
-    <AppSheet open={open} onOpenChange={onOpenChange} title="Para mañana" description="Lo que ya apartaron los tutores, por día, para preparar con anticipación.">
+    <AppSheet open={open} onOpenChange={onOpenChange} title="Para mañana" description="Pedidos apartados por día para preparar con anticipación.">
       <div className="kitchen-reserved">
         <ChipRow label="Día" scroll>
           {days.map((option) => (

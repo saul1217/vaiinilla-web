@@ -634,6 +634,70 @@ export interface BusinessSettings {
   /** "HH:MM" o null (sin hora). */
   hora_corte_pedido?: string | null;
   hora_corte_cancelacion?: string | null;
+  /** Operación de Caja y Cocina. */
+  barra_prepara?: boolean;
+  caja_entrega_en_espacio?: boolean;
+  entrega_en_espacio?: 'mesa' | 'barra' | 'ambas';
+  cocina_prepara_sin_cobrar?: boolean;
+  permite_pago_en_caja?: boolean;
+  fondo_sugerido?: string | null;
+  hora_inicio_dia?: string;
+  /** Reparto a domicilio y encargos con fecha. */
+  reparto_activo?: boolean;
+  reparto_costo?: string | null;
+  reparto_minimo?: string | null;
+  reparto_radio_km?: string | null;
+  permite_contra_entrega?: boolean;
+  encargos_requieren_aceptar?: boolean;
+  encargos_minutos_aceptar?: number | null;
+  anticipo_porcentaje?: number | null;
+  datos_transferencia?: string | null;
+  telefono_contacto?: string | null;
+}
+
+export interface WalletAdjustment {
+  usuario_id: string;
+  movimiento_id: string;
+  saldo_nuevo: string;
+  motivo: string;
+}
+
+export interface StaffShiftRow {
+  usuario_id: string;
+  nombre?: string | null;
+  rol?: string | null;
+  pedidos_hoy?: number;
+  propinas_hoy?: string;
+  ventas_hoy?: string;
+  [key: string]: unknown;
+}
+
+export interface StaffShiftsReport {
+  personal: StaffShiftRow[];
+}
+
+export interface ConfigTransitionPreflight {
+  permitido: boolean;
+  bloqueadores?: { codigo?: string; mensaje?: string; cantidad?: number }[];
+  advertencias?: { codigo?: string; mensaje?: string }[];
+  version_actual?: number;
+  [key: string]: unknown;
+}
+
+export interface PlatformVilloDevice {
+  id: string;
+  nombre?: string | null;
+  establecimiento_id?: string | null;
+  establecimiento_nombre?: string | null;
+  estado?: string | null;
+  ultimo_latido_en?: string | null;
+  [key: string]: unknown;
+}
+
+export interface PlatformAuthority {
+  es_autoridad?: boolean;
+  requiere_totp?: boolean;
+  [key: string]: unknown;
 }
 
 /** Las dos imágenes del negocio que sube su administración. */

@@ -29,6 +29,7 @@ import { CardApprovalPanel } from '../components/card-approval-panel';
 import { EstablishmentStatusBadge } from '../components/status-badge';
 import { Button, CustomSelect, EmptyState, Feedback, Field, Modal, PageHeader } from '../components/ui';
 import { useSessions } from '../context/session-context';
+import { PlatformTransitionModal } from '../components/platform-transition-modal';
 import { api } from '../lib/api';
 import { VaiinillaApiError, errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
@@ -299,6 +300,7 @@ export function EstablishmentsPage() {
   const [selected, setSelected] = useState<PlatformEstablishment | null>(null);
   const [statusAction, setStatusAction] = useState<'suspender' | 'reactivar' | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [transitionOpen, setTransitionOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [resumedEstablishmentId] = useState<string | null>(readStripeReturn);
 
@@ -487,6 +489,9 @@ export function EstablishmentsPage() {
                 <button type="button" onClick={() => { setSelected(establishment); setFormMode('edit'); }}>
                   <Pencil aria-hidden="true" /> Configurar
                 </button>
+                <button type="button" onClick={() => { setSelected(establishment); setTransitionOpen(true); }}>
+                  Transición
+                </button>
                 <button type="button" onClick={() => { setSelected(establishment); setInviteOpen(true); }}>
                   <MailPlus aria-hidden="true" /> Primer admin
                 </button>
@@ -563,6 +568,19 @@ export function EstablishmentsPage() {
           setInviteOpen(false);
           setSelected(null);
           await refresh('Invitación del primer administrador enviada y acción auditada.');
+        }}
+      />
+
+      <PlatformTransitionModal
+        key={`transition-${selected?.id ?? 'none'}`}
+        open={transitionOpen}
+        token={token}
+        establishment={selected}
+        onOpenChange={(open) => { setTransitionOpen(open); if (!open) setSelected(null); }}
+        onApplied={async () => {
+          setTransitionOpen(false);
+          setSelected(null);
+          await refresh('Transición de configuración aplicada y auditada.');
         }}
       />
     </div>

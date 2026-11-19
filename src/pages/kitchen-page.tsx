@@ -2,7 +2,6 @@ import { AppPageHeader } from '../components/app-page-header';
 import {
   useInfiniteQuery,
   useMutation,
-  useQuery,
   useQueryClient,
   type InfiniteData,
 } from '@tanstack/react-query';
@@ -57,14 +56,6 @@ export function KitchenPage() {
   const ordersQueryKey = ['orders', 'kitchen', scopeId] as const;
   const [soldOutOpen, setSoldOutOpen] = useState(false);
   const [reservedOpen, setReservedOpen] = useState(false);
-  // «Para mañana» solo en una escuela; lo dice el estado operativo, que Cocina sí puede leer.
-  const status = useQuery({
-    queryKey: ['operational-status', 'cocina', scopeId],
-    enabled: Boolean(token) && role === 'cocina',
-    queryFn: () => api.operationalStatus(token),
-    staleTime: 5 * 60_000,
-  });
-  const isSchool = status.data?.modo_escuela === true;
 
   const orders = useInfiniteQuery({
     queryKey: ordersQueryKey,
@@ -236,10 +227,10 @@ export function KitchenPage() {
           {isRefreshing ? 'Actualizando' : 'Actualizar'}
         </Button>
         <Button type="button" variant="secondary" onClick={() => setSoldOutOpen(true)}>¿Qué se acabó?</Button>
-        {isSchool && <Button type="button" variant="secondary" onClick={() => setReservedOpen(true)}>Para mañana</Button>}
+        <Button type="button" variant="secondary" onClick={() => setReservedOpen(true)}>Para mañana</Button>
       </div>
       <KitchenSoldOut token={token} scopeId={scopeId} open={soldOutOpen} onOpenChange={setSoldOutOpen} />
-      {isSchool && <KitchenReserved token={token} scopeId={scopeId} open={reservedOpen} onOpenChange={setReservedOpen} />}
+      <KitchenReserved token={token} scopeId={scopeId} open={reservedOpen} onOpenChange={setReservedOpen} />
       {INVENTARIO_ENABLED && role === 'cocina' && <KitchenInventoryAlert token={token} scopeId={scopeId} />}
 
       {waitingReady.length > 0 && (

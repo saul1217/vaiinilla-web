@@ -269,7 +269,8 @@ function ClientWallet({ token, storeId, client, cashier, blocked, sending, onRec
 
     {cashier && !frozen && <RechargeForm name={name} balance={first.wallet.saldo} blocked={blocked} sending={sending}
       onConfirm={(amount) => onRecharge(amount, name)} />}
-    {!cashier && <Feedback tone="info">Solo Caja puede recargar saldo. Desde aquí lo consultas.</Feedback>}
+    {!cashier && <AdminAdjustForm token={token} userId={client.userId} name={name} balance={first.wallet.saldo}
+      onAdjusted={() => void detail.refetch()} />}
 
     <Card title="Movimientos">
       {movements.length === 0
@@ -314,17 +315,17 @@ function RechargeForm({ name, balance, blocked, sending, onConfirm }: {
   const after = amount && balanceCents !== null ? centsToMoney(balanceCents + moneyToCents(amount)!) : null;
 
   return <Card title="Recargar en efectivo" description={`Cobra el efectivo a ${name} y abónalo a su saldo.`}>
-    <ChipRow label="Montos rápidos">
-      {QUICK_AMOUNTS.map((value) => <Chip key={value} selected={amount === `${value}.00`} onClick={() => setText(value)}>
-        ${value}
-      </Chip>)}
-    </ChipRow>
+    <Field label="Monto" inputMode="decimal" autoComplete="off" placeholder="0.00" value={text} onChange={(event) => setText(event.target.value)}
+      error={invalid
+        ? 'Escribe un monto mayor a 0, con hasta 2 decimales.'
+        : overMax ? `El máximo por recarga en efectivo es ${formatMoney(MAX_CASH_RECHARGE)}.` : undefined}
+      hint={blocked ?? 'Escribe cualquier monto o elige un atajo rápido.'} />
     <div className="mt-3">
-      <Field label="Monto" inputMode="decimal" autoComplete="off" value={text} onChange={(event) => setText(event.target.value)}
-        error={invalid
-          ? 'Escribe un monto mayor a 0, con hasta 2 decimales.'
-          : overMax ? `El máximo por recarga en efectivo es ${formatMoney(MAX_CASH_RECHARGE)}.` : undefined}
-        hint={blocked ?? undefined} />
+      <ChipRow label="Montos rápidos">
+        {QUICK_AMOUNTS.map((value) => <Chip key={value} selected={amount === `${value}.00`} onClick={() => setText(value)}>
+          ${value}
+        </Chip>)}
+      </ChipRow>
     </div>
     <div className="mt-3">
       <VaiButton variant="accent" block disabled={!amount || Boolean(blocked) || sending} loading={sending}
@@ -341,6 +342,72 @@ function RechargeForm({ name, balance, blocked, sending, onConfirm }: {
           setText('');
           onConfirm(amount);
         }}>Sí, recargar {formatMoney(amount ?? '0.00')}</VaiButton>
+      </div>
+    </Modal>
+  </Card>;
+}
+
+function parseSignedAmount(raw: string): string | null {
+  const clean = raw.trim().replace(',', '.');
+  if (!/^[+-]?\d{1,6}(\.\d{1,2})?$/.test(clean)) return null;
+  const sign = clean.startsWith('-') ? '-' : '';
+  const body = clean.replace(/^[+-]/, '');
+  const [pesos = '0', cents = ''] = body.split('.');
+  const value = Number(`${pesos}.${cents.padEnd(2, '0')}`);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return `${sign}${BigInt(pesos)}.${cents.padEnd(2, '0')}`;
+}
+
+function AdminAdjustForm({ token, userId, name, balance, onAdjusted }: {
+  token: string;
+  userId: string;
+  name: string;
+  balance: string;
+  onAdjusted: () => void;
+}) {
+  const [amountText, setAmountText] = useState('');
+  const [bucket, setBucket] = useState<'pagada' | 'pendiente'>('pendiente');
+  const [reason, setReason] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [doneMessage, setDoneMessage] = useState<string | null>(null);
+
+  const parsed = parseSignedAmount(amountText);
+  const invalidAmount = amountText.trim() !== '' && parsed === null;
+  const trimmedReason = reason.trim();
+  const canSubmit = Boolean(parsed && trimmedReason.length >= 1 && trimmedReason.length <= 240);
+
+  const adjust = useMutation({
+    mutationFn: () => api.adjustWallet(token, userId, { monto: parsed!, bucket, motivo: trimmedReason }, createIdempotencyKey()),
+    onSuccess: (res) => {
+      setDoneMessage(`Ajuste aplicado. Nuevo saldo de ${name}: ${formatMoney(res.saldo_nuevo)}.`);
+      setAmountText('');
+      setReason('');
+      onAdjusted();
+    },
+  });
+
+  return <Card title="Ajuste manual de saldo (Administración)" description="Solo Caja recarga en efectivo. Como Administración puedes aplicar un ajuste auditado (+ o -) con motivo.">
+    {doneMessage && <div className="mb-3"><Feedback tone="success">{doneMessage}</Feedback></div>}
+    {adjust.isError && <div className="mb-3"><Feedback tone="error">{errorMessage(adjust.error)}</Feedback></div>}
+    <div className="grid gap-3">
+      <Field label="Monto del ajuste (+ o -)" inputMode="decimal" autoComplete="off" placeholder="Ej. 50.00 o -20.00"
+        value={amountText} onChange={(event) => { setDoneMessage(null); setAmountText(event.target.value); }}
+        error={invalidAmount ? 'Escribe un monto distinto de cero (ej. 50.00 o -20.00).' : undefined} />
+      <ChipRow label="Tipo de saldo (bucket)">
+        <Chip selected={bucket === 'pendiente'} onClick={() => setBucket('pendiente')}>Pendiente (efectivo)</Chip>
+        <Chip selected={bucket === 'pagada'} onClick={() => setBucket('pagada')}>Pagada (tarjeta)</Chip>
+      </ChipRow>
+      <Field label="Motivo del ajuste" placeholder="Ej. Corrección por cobro duplicado" maxLength={240}
+        value={reason} onChange={(event) => setReason(event.target.value)} />
+      <VaiButton variant="accent" block disabled={!canSubmit || adjust.isPending} loading={adjust.isPending}
+        onClick={() => setConfirming(true)}>Aplicar ajuste</VaiButton>
+    </div>
+    <Modal open={confirming && canSubmit} onOpenChange={setConfirming} title="Confirmar ajuste de saldo"
+      description={`¿Aplicar un ajuste de ${parsed ?? ''} a ${name} (saldo actual ${formatMoney(balance)})?`}>
+      <p>Motivo: <strong>{trimmedReason}</strong></p>
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <VaiButton variant="secondary" onClick={() => setConfirming(false)}>Cancelar</VaiButton>
+        <VaiButton variant="accent" onClick={() => { setConfirming(false); adjust.mutate(); }}>Confirmar ajuste</VaiButton>
       </div>
     </Modal>
   </Card>;

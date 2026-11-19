@@ -1362,6 +1362,82 @@ export const api = {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
   },
 
+  async preflightBusinessTransition(
+    token: string,
+    cambios: Record<string, unknown>,
+  ): Promise<import('../types/api').ConfigTransitionPreflight> {
+    return (
+      await request<import('../types/api').ConfigTransitionPreflight>('/establecimiento/configuracion/transiciones/preflight', {
+        method: 'POST',
+        token,
+        body: { cambios },
+      })
+    ).data;
+  },
+
+  async applyBusinessTransition(
+    token: string,
+    cambios: Record<string, unknown>,
+    idempotencyKey: string,
+  ): Promise<BusinessSettings> {
+    return (
+      await request<BusinessSettings>('/establecimiento/configuracion/transiciones', {
+        method: 'POST',
+        token,
+        body: { cambios },
+        idempotencyKey,
+      })
+    ).data;
+  },
+
+  async preflightPlatformTransition(
+    token: string,
+    establishmentId: string,
+    cambios: Record<string, unknown>,
+  ): Promise<import('../types/api').ConfigTransitionPreflight> {
+    return (
+      await request<import('../types/api').ConfigTransitionPreflight>(
+        `/plataforma/establecimientos/${encodeURIComponent(establishmentId)}/configuracion/transiciones/preflight`,
+        { method: 'POST', token, body: { cambios } },
+      )
+    ).data;
+  },
+
+  async applyPlatformTransition(
+    token: string,
+    establishmentId: string,
+    cambios: Record<string, unknown>,
+    idempotencyKey: string,
+  ): Promise<Record<string, unknown>> {
+    return (
+      await request<Record<string, unknown>>(
+        `/plataforma/establecimientos/${encodeURIComponent(establishmentId)}/configuracion/transiciones`,
+        { method: 'POST', token, body: { cambios }, idempotencyKey },
+      )
+    ).data;
+  },
+
+  async platformVilloDevices(token: string, signal?: AbortSignal): Promise<import('../types/api').PlatformVilloDevice[]> {
+    const res = await request<import('../types/api').PlatformVilloDevice[] | { dispositivos?: import('../types/api').PlatformVilloDevice[] }>(
+      '/plataforma/villo/dispositivos',
+      { token, signal, cache: 'no-store' },
+    );
+    return Array.isArray(res.data) ? res.data : (res.data?.dispositivos ?? []);
+  },
+
+  async platformAuthority(firebaseToken: string): Promise<import('../types/api').PlatformAuthority> {
+    return (
+      await request<import('../types/api').PlatformAuthority>('/plataforma/sesiones/autoridad', {
+        token: firebaseToken,
+        cache: 'no-store',
+      })
+    ).data;
+  },
+
+  async staffShiftsReport(token: string, signal?: AbortSignal): Promise<import('../types/api').StaffShiftsReport> {
+    return (await request<import('../types/api').StaffShiftsReport>('/reportes/turnos-personal', { token, signal, cache: 'no-store' })).data;
+  },
+
   async setOfflinePause(token: string, enabled: boolean): Promise<BusinessSettings> {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: { pausa_sin_conexion: enabled } })).data;
   },
@@ -1894,6 +1970,23 @@ export const api = {
         method: 'POST',
         token,
         body: { monto: amount },
+        idempotencyKey,
+      })
+    ).data;
+  },
+
+  /** Ajuste manual de cartera con auditoría (rol admin). */
+  async adjustWallet(
+    token: string,
+    userId: string,
+    input: { monto: string; bucket: 'pagada' | 'pendiente'; motivo: string },
+    idempotencyKey: string,
+  ): Promise<import('../types/api').WalletAdjustment> {
+    return (
+      await request<import('../types/api').WalletAdjustment>(`/wallets/${encodeURIComponent(userId)}/ajustes`, {
+        method: 'POST',
+        token,
+        body: input,
         idempotencyKey,
       })
     ).data;

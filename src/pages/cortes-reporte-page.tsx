@@ -41,7 +41,7 @@ function CortesReporteContent({ scope, token, cashierOnly = false }: { scope: Co
   const [date, setDate] = useState(today);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
-  const [tab, setTab] = useState<'caja' | 'contador'>('caja');
+  const [tab, setTab] = useState<'caja' | 'contador' | 'personal'>('caja');
   const [selectedShift, setSelectedShift] = useState('');
   const validPeriod = !!from && !!to && from <= to;
 
@@ -62,6 +62,11 @@ function CortesReporteContent({ scope, token, cashierOnly = false }: { scope: Co
     enabled: !cashierOnly && tab === 'contador' && validPeriod,
     queryFn: async ({ signal }) => parseAccountingReport(await api.accountingReport(token, from, to, signal)),
   });
+  const staffShifts = useQuery({
+    queryKey: ['reportes', 'turnos-personal', scope.establecimientoId],
+    enabled: !cashierOnly && tab === 'personal',
+    queryFn: ({ signal }) => api.staffShiftsReport(token, signal),
+  });
 
   const changeDate = (value: string) => {
     setDate(value);
@@ -71,10 +76,11 @@ function CortesReporteContent({ scope, token, cashierOnly = false }: { scope: Co
   return <main className="page-stack admin-screen admin-overview">
     {cashierOnly
       ? <AppPageHeader eyebrow="Caja" title="Corte de caja" description="El corte del día y de cada turno: lo que entró, lo que salió y lo que debe haber." />
-      : <AppPageHeader eyebrow="Administración · Caja" title="Cortes y reporte" description="Consulta el cierre del día o prepara la información para contabilidad." />}
+      : <AppPageHeader eyebrow="Administración · Caja" title="Cortes y reporte" description="Consulta el cierre del día, los turnos del personal o prepara la información para contabilidad." />}
     {!cashierOnly && <ChipRow label="Tipo de reporte">
       <Chip selected={tab === 'caja'} onClick={() => { setTab('caja'); setSelectedShift(''); }}>Corte del día</Chip>
       <Chip selected={tab === 'contador'} onClick={() => setTab('contador')}>Contabilidad</Chip>
+      <Chip selected={tab === 'personal'} onClick={() => setTab('personal')}>Turnos del personal</Chip>
     </ChipRow>}
     {cashierOnly || tab === 'caja' ? <Card aria-busy={cut.isLoading || shift.isLoading}>
       <div className="flex flex-wrap items-end gap-3">
@@ -96,6 +102,22 @@ function CortesReporteContent({ scope, token, cashierOnly = false }: { scope: Co
           {day.sinTurno.pedidos > 0 && <p className="vai-card__description">Cobrado sin caja abierta: {ordersText(day.sinTurno.pedidos)} · {money(day.sinTurno.ventas)} (ya incluido en las ventas).</p>}
           <Breakdown data={day.desglose} />
         </>}</QueryView>
+    </Card> : tab === 'personal' ? <Card title="Turnos del personal hoy" description="Actividad del día por integrante del equipo." aria-busy={staffShifts.isLoading}>
+      <QueryView query={staffShifts}>{(data) => data.personal.length === 0
+        ? <VaiEmptyState icon={<ReceiptText />} title="Sin actividad hoy" message="Todavía no hay movimientos del personal en el día operativo actual." />
+        : <ul className="grid gap-2" aria-label="Turnos del personal">{data.personal.map((row) => (
+          <li key={row.usuario_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink/10 px-4 py-3 text-sm">
+            <span>
+              <strong>{String(row.nombre ?? row.usuario_id)}</strong>
+              {row.rol ? <small className="ml-2 text-muted">{staffRoleLabel(String(row.rol))}</small> : null}
+            </span>
+            <span className="flex flex-wrap items-center gap-3">
+              {typeof row.pedidos_hoy === 'number' && <span>{ordersText(row.pedidos_hoy)}</span>}
+              {row.ventas_hoy != null && <strong>{money(String(row.ventas_hoy))}</strong>}
+              {row.propinas_hoy != null && isNotZero(String(row.propinas_hoy)) && <small>Propinas {money(String(row.propinas_hoy))}</small>}
+            </span>
+          </li>
+        ))}</ul>}</QueryView>
     </Card> : <Card aria-busy={report.isLoading}>
       <div className="flex flex-wrap items-end gap-3">
         <label>Desde<input aria-label="Desde" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
