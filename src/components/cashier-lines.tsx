@@ -5,8 +5,8 @@ import {
   barItems,
   barQueue,
   isStaleReady,
+  hiddenByLine,
   minutesSinceReady,
-  ordersInLine,
   readyNotice,
   stationDone,
 } from '../lib/cashier-lines';
@@ -27,8 +27,10 @@ export function CashierLineTabs({ lines, orders, selected, onSelect }: {
   onSelect: (lineId: number | null) => void;
 }) {
   if (lines.length < 2) return null;
-  const count = (lineId: number | null) => ordersInLine(orders, lineId).length;
-  const hidden = selected === null ? 0 : orders.length - count(selected);
+  // El número es lo que nació en esa fila, igual que la columna del tablero. Lo de mesa y para
+  // llevar lo ven todas las cajas, así que no se suma a ninguna.
+  const count = (lineId: number) => orders.filter((order) => order.espacio?.id === lineId).length;
+  const hidden = hiddenByLine(orders, selected);
   return (
     <div className="cashier-lines">
       <ChipRow label="Qué fila atiendes" scroll>
@@ -128,7 +130,7 @@ export function CashierLinesBoard({ lines, orders, barPrepares, now, busyId, onP
   const unassigned = orders.filter((order) => order.espacio === null || !lines.some((line) => line.id === order.espacio?.id));
   const columns = [
     ...lines.map((line) => ({ key: String(line.id), title: line.nombre, orders: orders.filter((order) => order.espacio?.id === line.id) })),
-    ...(unassigned.length ? [{ key: 'sin-fila', title: 'Sin fila', orders: unassigned }] : []),
+    ...(unassigned.length ? [{ key: 'sin-fila', title: 'Mesas y para llevar', orders: unassigned }] : []),
   ];
   return (
     <div className="cashier-board">

@@ -60,12 +60,13 @@ describe('filas de caja', () => {
       .toEqual(['Barra 1', 'Barra 2', 'Barra 10']);
   });
 
-  it('una fila ve lo suyo y lo que no tiene lugar; «todas» ve todo', () => {
+  it('una fila ve lo suyo, lo de mesa y lo que no tiene lugar; «todas» ve todo', () => {
     const deBarra1 = order({ espacio: barra1 });
     const deBarra2 = order({ espacio: barra2 });
     const sinLugar = order({ espacio: null });
-    const todos = [deBarra1, deBarra2, sinLugar];
-    expect(ordersInLine(todos, 1)).toEqual([deBarra1, sinLugar]);
+    const deMesa = order({ espacio: mesa, destino: 'en_espacio', estado: 'listo' });
+    const todos = [deBarra1, deBarra2, sinLugar, deMesa];
+    expect(ordersInLine(todos, 1)).toEqual([deBarra1, sinLugar, deMesa]);
     expect(ordersInLine(todos, null)).toEqual(todos);
     expect(hiddenByLine(todos, 1)).toBe(1);
     expect(hiddenByLine(todos, null)).toBe(0);
@@ -81,6 +82,12 @@ describe('la barra prepara', () => {
     const yaListo = order({ estado: 'listo' });
     const rechazado = order({ items: [item('caja', { rechazo: { motivo: 'Se acabó', monto: '30.00' } })] });
     expect(barQueue([nuevo, viejo, soloCocina, cajaSellada, yaListo, rechazado]).map((o) => o.folio)).toEqual([1, 2]);
+  });
+
+  it('lo que todavía debe efectivo se queda en «Por cobrar», no sale también aquí', () => {
+    const debe = order({ estado: 'preparando', metodo_pago: 'efectivo', saldo_pendiente: '30.00' });
+    const pagado = order({ folio: 3, estado: 'preparando', metodo_pago: 'efectivo', saldo_pendiente: '0.00' });
+    expect(barQueue([debe, pagado]).map((o) => o.folio)).toEqual([3]);
   });
 
   it('la barra lee solo lo suyo del pedido mixto', () => {

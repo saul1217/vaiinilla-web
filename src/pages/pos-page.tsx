@@ -17,7 +17,7 @@ import {
   Search,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { RejectOrderDialog } from '../components/reject-order-dialog';
 import { Card, Chip, Skeleton, VaiButton } from '../components/vai';
 import { itemRejectionNotice } from '../lib/rejection-notice';
@@ -287,6 +287,7 @@ export function PosPage() {
   // La fila se lee una vez por negocio: cambiar de negocio en la misma pestaña trae la suya.
   const [lineChoice, setLineChoice] = useState<{ scope: string; lineId: number | null } | null>(null);
   const [readyBusyId, setReadyBusyId] = useState<string | null>(null);
+  const readyInFlight = useRef(false);
   const [now, setNow] = useState(() => new Date());
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
   const usuarioId = tenant?.context.usuario_id ?? '';
@@ -305,6 +306,7 @@ export function PosPage() {
   const [closingAmount, setClosingAmount] = useState<string | null>(null);
   const [deliveryOrder, setDeliveryOrder] = useState<OrderDetail | null>(null);
   const [qrToken, setQrToken] = useState('');
+  const [qrMissing, setQrMissing] = useState(false);
   // Caja quita un artículo que no se puede entregar; si ya se pagó, se devuelve esa parte.
   const [removingFrom, setRemovingFrom] = useState<OrderDetail | null>(null);
   // El staff registra pedidos de quien no usa la app (mesero, cajero y admin).
@@ -355,6 +357,7 @@ export function PosPage() {
     staleTime: 60_000,
   });
   const deliveryNeedsQr = (order: OrderDetail) => deliveryRequiresQr(order, deliveryQr.data?.entrega_requiere_qr);
+  const barPrepares = deliveryQr.data?.barra_prepara === true;
 
   // Las filas cambian poco: el dueño las crea en Mesas y espacios.
   const spaces = useQuery({
@@ -365,12 +368,13 @@ export function PosPage() {
   });
 
   const cashierQueue = useInfiniteQuery({
-    queryKey: ['orders', 'cashier-queue', scopeId],
+    queryKey: ['orders', 'cashier-queue', scopeId, barPrepares],
     initialPageParam: undefined as string | undefined,
     enabled: Boolean(token) && isCashier,
     queryFn: ({ pageParam }) => api.listOrders(token, {
-      // `cobrado` entra por la barra: con «La barra prepara» Caja arma lo suyo desde ahí.
-      estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'],
+      // `cobrado` solo hace falta con «La barra prepara»: sin ella no hay nada que Caja haga ahí,
+      // y pedirlo ocuparía la paginación de la cola.
+      estado: barPrepares ? ['por_cobrar', 'cobrado', 'preparando', 'listo'] : ['por_cobrar', 'preparando', 'listo'],
       cursor: pageParam,
       limit: 50,
     }),
@@ -489,7 +493,6 @@ export function PosPage() {
   const activeLine = savedLine !== null && lines.some((line) => line.id === savedLine) ? savedLine : null;
   const showBoard = activeLine === null && lines.length >= 2;
   const lineOrders = useMemo(() => ordersInLine(queuedOrders, activeLine), [queuedOrders, activeLine]);
-  const barPrepares = deliveryQr.data?.barra_prepara === true;
   const cashOrders = useMemo(
     () => lineOrders.filter(isCashierCashOrder),
     [lineOrders],
@@ -515,6 +518,8 @@ export function PosPage() {
    * acepta el salto, y así el cliente ve que ya se está preparando lo suyo.
    */
   async function markBarReady(order: OrderDetail) {
+    if (readyInFlight.current) return;
+    readyInFlight.current = true;
     setReadyBusyId(order.id);
     try {
       const started = order.estado === 'cobrado' ? await api.transitionOrder(token, order.id, 'preparando', order.version) : order;
@@ -527,6 +532,7 @@ export function PosPage() {
       setNotice(errorMessage(error));
       await refreshOperation();
     } finally {
+      readyInFlight.current = false;
       setReadyBusyId(null);
     }
   }
@@ -544,6 +550,7 @@ export function PosPage() {
   function beginDelivery(order: OrderDetail) {
     deliveryMutation.reset();
     setQrToken('');
+    setQrMissing(false);
     setDeliveryOrder(order);
   }
 
@@ -958,8 +965,16 @@ export function PosPage() {
             className="transaction-form"
             onSubmit={(event) => {
               event.preventDefault();
-              if (deliveryMutation.isPending || (deliveryNeedsQr(deliveryOrder) && !qrToken.trim())) return;
-              deliveryMutation.mutate({ order: deliveryOrder, pickupToken: qrToken.trim() });
+              if (deliveryMutation.isPending) return;
+              // La pistola teclea y manda Enter de golpe: el campo ya tiene el código aunque el
+              // estado de React todavía no lo refleje, así que se lee del formulario.
+              const typed = new FormData(event.currentTarget).get('pickup-token');
+              const pickupToken = (typeof typed === 'string' ? typed : qrToken).trim();
+              if (deliveryNeedsQr(deliveryOrder) && !pickupToken) {
+                setQrMissing(true);
+                return;
+              }
+              deliveryMutation.mutate({ order: deliveryOrder, pickupToken });
             }}
           >
             {deliveryMutation.isError && <Feedback tone="error">{errorMessage(deliveryMutation.error)}</Feedback>}
@@ -969,7 +984,7 @@ export function PosPage() {
                 autoFocus
                 value={qrToken}
                 onChange={updateQrToken}
-                error={!qrToken.trim() && deliveryMutation.isError ? 'Captura el token de entrega.' : undefined}
+                error={!qrToken.trim() && (qrMissing || deliveryMutation.isError) ? 'Escanea o escribe el código del cliente.' : undefined}
               />
             )}
             <div className="form-actions">
@@ -980,7 +995,7 @@ export function PosPage() {
                 type="submit"
                 variant="dark"
                 loading={deliveryMutation.isPending}
-                disabled={deliveryMutation.isPending || (deliveryNeedsQr(deliveryOrder) && !qrToken.trim())}
+                disabled={deliveryMutation.isPending}
               >
                 Confirmar entrega
               </Button>

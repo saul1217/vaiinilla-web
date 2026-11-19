@@ -239,7 +239,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(screen.getByRole('button', { name: 'Abrir Caja' })).toBeEnabled();
   });
 
-  it('pide preparando, por_cobrar y listo al backend y muestra preparando sin pagar en Por cobrar', async () => {
+  it('sin «La barra prepara» pide por_cobrar, preparando y listo, no cobrado, y muestra preparando sin pagar en Por cobrar', async () => {
     const preparing = {
       ...baseOrder,
       id: 'order-prep',
@@ -253,7 +253,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     await waitFor(() =>
       expect(apiMock.listOrders).toHaveBeenCalledWith(
         'token',
-        expect.objectContaining({ estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'] }),
+        expect.objectContaining({ estado: ['por_cobrar', 'preparando', 'listo'] }),
       ),
     );
     expect(await screen.findByRole('button', { name: 'Cobrar' })).toBeInTheDocument();
@@ -472,6 +472,21 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', 'order-14', 4, 'VAI-7Q2K'));
   });
 
+  it('confirmar sin código no entrega y pide escanearlo', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, monto_pagado: '125.00', saldo_pendiente: '0.00' }], cursor: null });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Validar QR' }));
+    // El botón queda habilitado para que el Enter de la pistola siempre llegue al formulario.
+    const confirmar = screen.getByRole('button', { name: 'Confirmar entrega' });
+    expect(confirmar).toBeEnabled();
+    await user.click(confirmar);
+    expect(await screen.findByText('Escanea o escribe el código del cliente.')).toBeVisible();
+    expect(apiMock.deliverOrder).not.toHaveBeenCalled();
+  });
+
   it('permite entregar sin QR un pedido de una sesión activa aunque el ajuste global lo requiera', async () => {
     apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
     apiMock.listOrders.mockResolvedValue({ orders: [{
@@ -514,11 +529,19 @@ describe('Caja: filas, la barra que prepara y el aviso de listo', () => {
     apiMock.listOrders.mockResolvedValue({ orders: [
       { ...baseOrder, ...pagado, id: 'a', folio: 21, espacio: barra1, usuario: { nombre: 'Emilio', matricula: null } },
       { ...baseOrder, ...pagado, id: 'b', folio: 18, espacio: barra2, usuario: { nombre: 'Mateo', matricula: null } },
+      { ...baseOrder, ...pagado, id: 'f', folio: 30, espacio: null, usuario: { nombre: 'Lía', matricula: null } },
     ], cursor: null });
     const user = userEvent.setup();
     render(<PosPage />, { wrapper: Wrapper });
 
+    await waitFor(() => expect(apiMock.listOrders).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({ estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'] }),
+    ));
     const filas = await screen.findByRole('group', { name: 'Qué fila atiendes' });
+    // Cada pestaña cuenta lo que nació en su fila, igual que su columna; lo sin fila no se suma.
+    expect(within(filas).getByRole('button', { name: /Todas/ })).toHaveTextContent('3');
+    expect(within(filas).getByRole('button', { name: /Barra 2/ })).toHaveTextContent(/^Barra 2 1$/);
     expect(within(filas).getByRole('button', { name: /Todas/ })).toHaveAttribute('aria-pressed', 'true');
     // Con «Todas» y varias filas, una columna por fila.
     expect(await screen.findByRole('region', { name: 'Barra 1' })).toBeVisible();

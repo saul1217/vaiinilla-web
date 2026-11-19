@@ -1,4 +1,5 @@
 import type { OrderDetail, OrderSpace, PreparationStation } from '../types/api';
+import { hasOutstandingCashBalance } from './cashier-queue';
 
 /** Los lugares donde se forma gente para pedir: cada uno puede tener su propia caja. */
 const LINE_TYPES: readonly OrderSpace['tipo'][] = ['barra', 'drive_thru'];
@@ -9,20 +10,25 @@ export function cashierLines(spaces: OrderSpace[]): OrderSpace[] {
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { numeric: true }));
 }
 
+/** El pedido nació en una fila (una barra o un drive-thru), no en una mesa ni sin lugar. */
+export function isLineOrder(order: OrderDetail): boolean {
+  return order.espacio !== null && LINE_TYPES.includes(order.espacio.tipo);
+}
+
 /**
  * Los pedidos de una fila. Con `null` se ve todo, que es como trabaja un negocio de una sola
- * caja. Un pedido sin lugar lo sigue viendo toda Caja: nadie más lo va a reclamar, y esconderlo
- * sería peor que verlo dos veces.
+ * caja. Elegir fila solo esconde lo de las otras filas: lo de mesa o sin lugar lo sigue viendo
+ * toda Caja, porque nadie más lo va a reclamar y esconderlo sería peor que verlo dos veces.
  */
 export function ordersInLine(orders: OrderDetail[], lineId: number | null): OrderDetail[] {
   if (lineId === null) return orders;
-  return orders.filter((order) => order.espacio === null || order.espacio.id === lineId);
+  return orders.filter((order) => !isLineOrder(order) || order.espacio?.id === lineId);
 }
 
 /** Cuántos pedidos de otras filas deja de ver esta caja al elegir la suya. */
 export function hiddenByLine(orders: OrderDetail[], lineId: number | null): number {
   if (lineId === null) return 0;
-  return orders.filter((order) => order.espacio !== null && order.espacio.id !== lineId).length;
+  return orders.filter((order) => isLineOrder(order) && order.espacio?.id !== lineId).length;
 }
 
 function liveItems(order: OrderDetail, station: PreparationStation) {
@@ -37,12 +43,14 @@ export function stationDone(order: OrderDetail, station: PreparationStation): bo
 
 /**
  * Lo que la barra tiene que preparar: cobrado o en preparación, con artículos de Caja vivos y
- * sin sellar todavía. Solo tiene sentido con «La barra prepara» encendida.
+ * sin sellar todavía. Solo tiene sentido con «La barra prepara» encendida. Lo que todavía debe
+ * efectivo no sale aquí: ya está en «Por cobrar», y verlo dos veces confunde.
  */
 export function barQueue(orders: OrderDetail[]): OrderDetail[] {
   return orders
     .filter((order) =>
       (order.estado === 'cobrado' || order.estado === 'preparando') &&
+      !hasOutstandingCashBalance(order) &&
       liveItems(order, 'caja').length > 0 &&
       !stationDone(order, 'caja'))
     .sort((a, b) => a.creado_en.localeCompare(b.creado_en));
