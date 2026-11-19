@@ -1,6 +1,6 @@
 import { CashierHome } from '../components/cashier-home';
-import { CashierQueue } from '../components/cashier-queue';
-import { CashierBarQueue, CashierLineTabs, CashierLinesBoard } from '../components/cashier-lines';
+import { CashierReceipt } from '../components/cashier-receipt';
+import { CashierBoard, CashierLineTabs, ScannerBar } from '../components/cashier-lines';
 import { cashierLines, ordersInLine, readSavedLine, saveLine } from '../lib/cashier-lines';
 import { AppSheet } from '../components/app-sheet';
 import { CashDrawer } from '../components/cash-drawer';
@@ -283,7 +283,8 @@ export function PosPage() {
   const [boardOpen, setBoardOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [queuePick, setQueuePick] = useState<{ id: string; seq: number } | null>(null);
+  // El pedido abierto en el panel «Ver pedido»: el ticket completo con todo lo que se puede hacer.
+  const [detailId, setDetailId] = useState<string | null>(null);
   // La fila se lee una vez por negocio: cambiar de negocio en la misma pestaña trae la suya.
   const [lineChoice, setLineChoice] = useState<{ scope: string; lineId: number | null } | null>(null);
   const [readyBusyId, setReadyBusyId] = useState<string | null>(null);
@@ -491,7 +492,6 @@ export function PosPage() {
   const savedLine = lineChoice?.scope === scopeId ? lineChoice.lineId : readSavedLine(scopeId);
   // Una fila que el dueño borró ya no filtra nada: se vuelve a ver todo.
   const activeLine = savedLine !== null && lines.some((line) => line.id === savedLine) ? savedLine : null;
-  const showBoard = activeLine === null && lines.length >= 2;
   const lineOrders = useMemo(() => ordersInLine(queuedOrders, activeLine), [queuedOrders, activeLine]);
   const cashOrders = useMemo(
     () => lineOrders.filter(isCashierCashOrder),
@@ -541,6 +541,7 @@ export function PosPage() {
   const updateQrToken = useCallback((value: string) => setQrToken(value), []);
 
   function beginCash(order: OrderDetail) {
+    setDetailId(null);
     collectMutation.reset();
     setTip({ kind: 'none' });
     setCashOrder(order);
@@ -548,11 +549,94 @@ export function PosPage() {
   }
 
   function beginDelivery(order: OrderDetail) {
+    setDetailId(null);
     deliveryMutation.reset();
     setQrToken('');
     setQrMissing(false);
     setDeliveryOrder(order);
   }
+
+  const boardTitle = lines.length >= 2
+    ? activeLine === null ? 'Todas las filas' : lines.find((line) => line.id === activeLine)?.nombre ?? 'Pedidos pendientes'
+    : 'Pedidos pendientes';
+  const detailOrder = (detailId && queuedOrders.find((order) => order.id === detailId)) || null;
+  // En el renglón compacto de «Todas» el monto va sin «MXN» para que quepa el nombre del cliente.
+  const cashButtonLabel = (order: OrderDetail, due: string, compact = false) => {
+    const amount = compact ? formatMoney(due).replace(/\s*MXN$/, '') : formatMoney(due);
+    if (mixedPaymentsEnabled && isAccountOrder(order)) return 'Abonar cuenta';
+    return mixedFlowActive ? `Pago mixto · ${amount}` : `Cobrar ${amount}`;
+  };
+  const deliverButton = (order: OrderDetail) => (
+    <Button variant="dark" onClick={() => beginDelivery(order)}>
+      {deliveryNeedsQr(order)
+        ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
+        : 'Entregar'}
+    </Button>
+  );
+  /** Lo principal de cada tarjeta: cobrar lo que se debe o entregar lo que ya está pagado. */
+  const primaryAction = (order: OrderDetail, stage: 'cash' | 'ready', compact = false): ReactNode => {
+    const icon = compact ? null : <CircleDollarSign aria-hidden="true" className="size-5" />;
+    if (stage === 'cash') {
+      return (
+        <Button disabled={!active} onClick={() => beginCash(order)}>
+          {icon} {cashButtonLabel(order, order.saldo_pendiente ?? order.total, compact)}
+        </Button>
+      );
+    }
+    if (hasOutstandingCashBalance(order)) {
+      return (
+        <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
+          {icon} {cashButtonLabel(order, order.saldo_pendiente!, compact)}
+        </Button>
+      );
+    }
+    if (isCashierPaidDeliveryOrder(order) || isCashierDeferredDeliveryOrder(order)) return deliverButton(order);
+    return <span className="text-sm" role="status">Pago pendiente</span>;
+  };
+  const ticketActions = (order: OrderDetail, group: 'cash' | 'ready'): ReactNode => group === 'cash' ? (<>
+                        <Button disabled={!active} onClick={() => beginCash(order)}>
+                          <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order) ? 'Abonar cuenta' : mixedFlowActive ? 'Pago mixto' : 'Cobrar'}
+                        </Button>
+                        <Button variant="ghost" onClick={() => { setDetailId(null); setRemovingFrom(order); }}>
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                        </Button>
+                      </>) : (<>
+                        {hasOutstandingCashBalance(order) ? (
+                          <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
+                            <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order)
+                              ? 'Abonar cuenta'
+                              : mixedFlowActive
+                                ? `Pago mixto · ${formatMoney(order.saldo_pendiente!)}`
+                                : `Cobrar ${formatMoney(order.saldo_pendiente!)}`}
+                          </Button>
+                        ) : isCashierPaidDeliveryOrder(order) ? (
+                          <>
+                            <strong className="text-sm" role="status">PAGADO</strong>
+                            <Button variant="secondary" onClick={() => printOrderTicket(order, businessName ?? 'Establecimiento')}>
+                              <ReceiptText aria-hidden="true" className="size-5" /> Imprimir ticket
+                            </Button>
+                            <Button variant="dark" onClick={() => beginDelivery(order)}>
+                              {deliveryNeedsQr(order)
+                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
+                                : 'Entregar'}
+                            </Button>
+                          </>
+                        ) : isCashierDeferredDeliveryOrder(order) ? (
+                          <>
+                            <strong className="text-sm" role="status">Pendiente en cuenta</strong>
+                            <Button variant="dark" onClick={() => beginDelivery(order)}>
+                              {deliveryNeedsQr(order)
+                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
+                                : 'Entregar'}
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-sm" role="status">Pago pendiente</span>
+                        )}
+                        <Button variant="ghost" onClick={() => { setDetailId(null); setRemovingFrom(order); }}>
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                        </Button>
+                      </>);
 
   return (
     <CashierHome cashier={isCashier}>
@@ -705,7 +789,7 @@ export function PosPage() {
           <div className="section-heading">
             <div>
               <p className="eyebrow">Atención en Caja</p>
-              <h2 id="cashier-orders-title">Pedidos pendientes</h2>
+              <h2 id="cashier-orders-title">{boardTitle}</h2>
             </div>
             <div className="pos-orders__tools">
               <Button variant="secondary" onClick={() => setSearchOpen(true)} disabled={!searchableOrders.length}>
@@ -722,7 +806,7 @@ export function PosPage() {
             orders={searchableOrders}
             onPick={(order) => {
               setSearchOpen(false);
-              setQueuePick((previous) => ({ id: order.id, seq: (previous?.seq ?? 0) + 1 }));
+              setDetailId(order.id);
             }}
           />
 
@@ -732,74 +816,30 @@ export function PosPage() {
 
           <CashierLineTabs lines={lines} orders={queuedOrders} selected={activeLine} onSelect={chooseLine} />
 
-          {barPrepares && !showBoard && !cashierQueue.isPending && (
-            <CashierBarQueue orders={lineOrders} now={now} busyId={readyBusyId} onReady={(order) => void markBarReady(order)} />
-          )}
-
           {cashierQueue.isError && !cashierQueue.data ? null : cashierQueue.isPending ? (
             <div className="orders-loading" role="status">Actualizando la fila de Caja…</div>
           ) : (
-            <CashierQueue
-              cashOrders={cashOrders}
-              readyOrders={readyOrders}
-              pick={queuePick}
+            <CashierBoard
+              lines={lines}
+              orders={lineOrders}
+              activeLine={activeLine}
+              barPrepares={barPrepares}
               now={now}
-              list={showBoard ? (
-                <CashierLinesBoard
-                  lines={lines}
-                  orders={queuedOrders}
-                  barPrepares={barPrepares}
-                  now={now}
-                  busyId={readyBusyId}
-                  onPick={(order) => setQueuePick((previous) => ({ id: order.id, seq: (previous?.seq ?? 0) + 1 }))}
-                  onReady={(order) => void markBarReady(order)}
-                />
-              ) : undefined}
-              actions={(order, group) => group === 'cash' ? (<>
-                        <Button disabled={!active} onClick={() => beginCash(order)}>
-                          <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order) ? 'Abonar cuenta' : mixedFlowActive ? 'Pago mixto' : 'Cobrar'}
-                        </Button>
-                        <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
-                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
-                        </Button>
-                      </>) : (<>
-                        {hasOutstandingCashBalance(order) ? (
-                          <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
-                            <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order)
-                              ? 'Abonar cuenta'
-                              : mixedFlowActive
-                                ? `Pago mixto · ${formatMoney(order.saldo_pendiente!)}`
-                                : `Cobrar ${formatMoney(order.saldo_pendiente!)}`}
-                          </Button>
-                        ) : isCashierPaidDeliveryOrder(order) ? (
-                          <>
-                            <strong className="text-sm" role="status">PAGADO</strong>
-                            <Button variant="secondary" onClick={() => printOrderTicket(order, businessName ?? 'Establecimiento')}>
-                              <ReceiptText aria-hidden="true" className="size-5" /> Imprimir ticket
-                            </Button>
-                            <Button variant="dark" onClick={() => beginDelivery(order)}>
-                              {deliveryNeedsQr(order)
-                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
-                                : 'Entregar'}
-                            </Button>
-                          </>
-                        ) : isCashierDeferredDeliveryOrder(order) ? (
-                          <>
-                            <strong className="text-sm" role="status">Pendiente en cuenta</strong>
-                            <Button variant="dark" onClick={() => beginDelivery(order)}>
-                              {deliveryNeedsQr(order)
-                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
-                                : 'Entregar'}
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-sm" role="status">Pago pendiente</span>
-                        )}
-                        <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
-                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
-                        </Button>
-                      </>)} />
+              busyId={readyBusyId}
+              primary={primaryAction}
+              onReady={(order) => void markBarReady(order)}
+              onOpen={(order) => setDetailId(order.id)}
+            />
           )}
+          {deliveryQr.data?.entrega_requiere_qr && <ScannerBar />}
+          <AppSheet
+            open={detailOrder !== null}
+            onOpenChange={(open) => { if (!open) setDetailId(null); }}
+            title={detailOrder ? `Pedido #${detailOrder.folio}` : 'Pedido'}
+            description="El ticket completo: cobrar, entregar, imprimir o quitar un artículo."
+          >
+            {detailOrder && <CashierReceipt order={detailOrder} actions={ticketActions(detailOrder, isCashierCashOrder(detailOrder) ? 'cash' : 'ready')} />}
+          </AppSheet>
           {cashierQueue.hasNextPage && (
             <div className="orders-footer">
               <Button

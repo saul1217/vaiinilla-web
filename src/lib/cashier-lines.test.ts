@@ -106,6 +106,13 @@ describe('aviso de listo', () => {
     expect(readyNotice(4)).toBe('Avisado hace 4 min');
     expect(readyNotice(null)).toBeNull();
   });
+
+  it('pasada la hora habla en horas y pasado el día en días', () => {
+    expect(readyNotice(59)).toBe('Avisado hace 59 min');
+    expect(readyNotice(125)).toBe('Avisado hace 2 h');
+    expect(readyNotice(1440)).toBe('Avisado hace 1 día');
+    expect(readyNotice(30898)).toBe('Avisado hace 21 días');
+  });
 });
 
 describe('fila guardada en el equipo', () => {

@@ -1,4 +1,4 @@
-.cashier-home { max-width: 1160px; margin-inline: auto; }
+.cashier-home { max-width: 1480px; margin-inline: auto; }
 .cashier-home > .app-page-header { order: -2; }
 .cashier-home > .staff-topbar { order: -1; }
 .cashier-home .staff-cashbar { min-width: 0; }
@@ -43,18 +43,39 @@
 .cashier-lines__count { min-width: 24px; padding: 0 7px; border-radius: var(--radius-pill); background: color-mix(in srgb, currentColor 16%, transparent); font-size: 12px; font-variant-numeric: tabular-nums; }
 .cashier-lines__hint { margin: 0; color: var(--color-muted); font-size: 13px; }
 
-/* La barra prepara */
-.cashier-bar { display: grid; gap: 12px; min-width: 0; }
-.cashier-bar h3 { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 22px; color: var(--status-warning-text); }
-.cashier-bar h3 > span { font-size: 16px; padding: 4px 12px; border: 1px solid currentColor; border-radius: 24px; }
-.cashier-bar > p { margin: 0; color: var(--color-muted); }
-.cashier-bar ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.cashier-bar__row { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); }
-.cashier-bar__folio { font-size: 28px; line-height: 1; min-width: 56px; font-variant-numeric: tabular-nums; }
-.cashier-bar__body { display: grid; gap: 2px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.cashier-bar__customer { font-weight: 700; }
-.cashier-bar__meta { color: var(--color-muted); font-size: 13px; }
-.button.cashier-bar__ready { flex-shrink: 0; background: var(--status-warning-bg); color: var(--status-warning-text); border-color: transparent; }
+/* El botón «Listo» de la barra: ámbar, como la columna que prepara */
+.button.cashier-bar__ready { flex-shrink: 0; background: var(--status-warning-bg); color: var(--status-warning-text); border-color: color-mix(in srgb, var(--status-warning-text) 45%, transparent); }
+
+/* Una fila: tres columnas de tarjetas (cobrar, preparar, entregar) */
+.cashier-stages { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; min-width: 0; }
+.cashier-stages__column { display: grid; gap: 12px; min-width: 0; }
+.cashier-stages__column ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.cashier-stages__title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 4px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.cashier-stages__title > span { min-width: 26px; padding: 2px 8px; border-radius: var(--radius-pill); background: var(--line); color: var(--color-ink); text-align: center; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.cashier-stages__column[data-tone='cash'] .cashier-stages__title { color: var(--color-muted); }
+.cashier-stages__column[data-tone='prep'] .cashier-stages__title { color: var(--status-warning-text); }
+.cashier-stages__column[data-tone='ready'] .cashier-stages__title { color: var(--status-success-text); }
+.cashier-stages__empty { margin: 0; padding: 18px; border: 1px dashed var(--line-strong); border-radius: var(--radius-card); color: var(--color-muted); text-align: center; font-size: 14px; }
+
+.cashier-card { display: grid; gap: 4px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--color-cream-2); min-width: 0; }
+.cashier-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cashier-card__folio { font-size: 32px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.cashier-card__pill { padding: 3px 10px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; border: 1px solid currentColor; }
+.cashier-card[data-tone='cash'] .cashier-card__pill { color: var(--status-danger-text); background: var(--status-danger-bg); }
+.cashier-card[data-tone='prep'] .cashier-card__pill { color: var(--status-warning-text); background: var(--status-warning-bg); }
+.cashier-card[data-tone='ready'] .cashier-card__pill { color: var(--status-success-text); background: var(--status-success-bg); }
+.cashier-card__customer { margin: 6px 0 0; font-weight: 800; overflow-wrap: anywhere; }
+.cashier-card__items { margin: 0; overflow-wrap: anywhere; }
+.cashier-card__meta { margin: 6px 0 0; color: var(--color-muted); font-size: 13px; }
+.cashier-card__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cashier-card__actions > .button:first-child { flex: 1 1 auto; min-height: 48px; }
+.cashier-card__actions > .button--ghost { flex: 0 0 auto; }
+
+/* La pistola: recordatorio fijo abajo cuando el negocio pide QR para entregar */
+.cashier-scanner { position: sticky; bottom: 12px; display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--color-cream-2); box-shadow: var(--shadow-sm); }
+.cashier-scanner__chip { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 8px 14px; border-radius: var(--radius-pill); border: 1px solid color-mix(in srgb, var(--status-success-text) 55%, transparent); background: var(--status-success-bg); color: var(--status-success-text); font-weight: 800; }
+.cashier-scanner p { margin: 0; display: grid; gap: 2px; }
+.cashier-scanner p span { color: var(--color-muted); font-size: 13px; }
 
 /* Cuánto lleva avisado el cliente */
 .ready-notice { display: inline-flex; align-items: center; gap: 4px; color: var(--status-success-text); font-weight: 700; }
@@ -78,9 +99,9 @@
 .cashier-board__group[data-tone='prep'] .cashier-board__group-title { color: var(--status-warning-text); }
 .cashier-board__group[data-tone='ready'] .cashier-board__group-title { color: var(--status-success-text); }
 .cashier-board__group ul { display: grid; margin: 0; padding: 0; list-style: none; }
-.cashier-board__row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cashier-board__row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; padding-bottom: 6px; }
 .cashier-board__row + .cashier-board__row { border-top: 1px solid var(--line); }
-.cashier-board__open { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; min-height: 56px; padding: 8px 6px; border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; text-align: left; }
+.cashier-board__open { display: flex; align-items: center; gap: 10px; flex: 1 1 170px; min-width: 0; min-height: 56px; padding: 8px 6px; border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; text-align: left; }
 button.cashier-board__open { cursor: pointer; }
 button.cashier-board__open:hover { background: var(--line); }
 button.cashier-board__open:focus-visible { outline: 3px solid var(--focus-ring, currentColor); outline-offset: 2px; }
@@ -88,7 +109,10 @@ button.cashier-board__open:focus-visible { outline: 3px solid var(--focus-ring, 
 .cashier-board__text { display: grid; min-width: 0; }
 .cashier-board__customer { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cashier-board__detail { color: var(--color-muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cashier-board__action { flex-shrink: 0; margin-left: auto; }
+.cashier-board__action .button { min-height: 40px; padding-inline: 12px; white-space: nowrap; }
 @media (max-width: 479px) {
-  .cashier-bar__row { flex-wrap: wrap; }
-  .button.cashier-bar__ready { margin-left: auto; }
+  .cashier-board__row { flex-wrap: wrap; }
+  .cashier-board__action { margin-left: auto; }
+  .cashier-scanner { flex-direction: column; align-items: flex-start; }
 }
