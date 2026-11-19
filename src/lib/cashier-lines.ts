@@ -112,3 +112,37 @@ export function saveLine(venueId: string, lineId: number | null) {
     // Sin almacenamiento (modo privado estricto) la fila dura lo que dure la pestaña.
   }
 }
+
+/** «Avisar otra vez» sirve si el cliente pasa a recogerlo y tiene cuenta a quién avisarle. */
+export function canRemind(order: OrderDetail): boolean {
+  return order.estado === 'listo' && order.usuario != null &&
+    (order.destino === 'para_llevar' || order.recoge_en_barra === true);
+}
+
+/**
+ * «No vino» solo para lo que el cliente tenía que recoger (para llevar o «Pasa por él»). En mesa
+ * está sentado, y una cuenta abierta se queda en la cuenta: el backend responde 409 en ambos casos.
+ */
+export function canMarkNoShow(order: OrderDetail): boolean {
+  return order.estado === 'listo' && order.pago_diferido !== true &&
+    (order.destino === 'para_llevar' || order.recoge_en_barra === true);
+}
+
+const SCANNER_KEY = 'caja.pistola.cerrada';
+
+/** La barra de la pistola, cerrada con la X, no vuelve a salir ese día en ese equipo. */
+export function scannerHiddenToday(today = new Date()): boolean {
+  try {
+    return window.localStorage.getItem(SCANNER_KEY) === today.toDateString();
+  } catch {
+    return false;
+  }
+}
+
+export function hideScannerToday(today = new Date()) {
+  try {
+    window.localStorage.setItem(SCANNER_KEY, today.toDateString());
+  } catch {
+    // Sin almacenamiento se esconde solo mientras dure la pestaña.
+  }
+}

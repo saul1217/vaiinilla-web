@@ -72,10 +72,17 @@
 .cashier-card__actions > .button--ghost { flex: 0 0 auto; }
 
 /* La pistola: recordatorio fijo abajo cuando el negocio pide QR para entregar */
-.cashier-scanner { position: sticky; bottom: 12px; display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--color-cream-2); box-shadow: var(--shadow-sm); }
+.cashier-scanner { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--color-cream-2); box-shadow: var(--shadow-sm); }
 .cashier-scanner__chip { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 8px 14px; border-radius: var(--radius-pill); border: 1px solid color-mix(in srgb, var(--status-success-text) 55%, transparent); background: var(--status-success-bg); color: var(--status-success-text); font-weight: 800; }
 .cashier-scanner p { margin: 0; display: grid; gap: 2px; }
 .cashier-scanner p span { color: var(--color-muted); font-size: 13px; }
+.cashier-scanner p { flex: 1; }
+.cashier-scanner__close { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.cashier-scanner__close:hover { background: var(--line); }
+.cashier-scanner__close:focus-visible { outline: 3px solid var(--focus-ring, currentColor); outline-offset: 2px; }
+.button.cashier-noshow { color: var(--status-danger-text); }
+.button.cashier-board__icon { min-width: 40px; padding-inline: 10px; }
+.cashier-board__action { display: inline-flex; align-items: center; gap: 6px; }
 
 /* Cuánto lleva avisado el cliente */
 .ready-notice { display: inline-flex; align-items: center; gap: 4px; color: var(--status-success-text); font-weight: 700; }

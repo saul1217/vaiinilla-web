@@ -737,7 +737,7 @@ export const api = {
   async transitionOrder(
     token: string,
     id: string,
-    targetStatus: Extract<OrderStatus, 'preparando' | 'listo' | 'entregado'>,
+    targetStatus: Extract<OrderStatus, 'preparando' | 'listo' | 'entregado' | 'no_recogido'>,
     expectedVersion: number,
     pickupToken?: string,
   ): Promise<OrderDetail> {
@@ -753,6 +753,16 @@ export const api = {
         },
       })
     ).data;
+  },
+
+  /** «No vino»: el cliente nunca pasó por su pedido listo. No devuelve dinero solo. */
+  async markNotPickedUp(token: string, id: string, expectedVersion: number): Promise<OrderDetail> {
+    return api.transitionOrder(token, id, 'no_recogido', expectedVersion);
+  },
+
+  /** «Avisar otra vez»: le recuerda al cliente que su pedido sigue listo (uno por minuto). */
+  async remindOrder(token: string, id: string): Promise<void> {
+    await request<unknown>(`/pedidos/${id}/avisos`, { method: 'POST', token });
   },
 
   /** Caja › Alumnos: busca por nombre o matrícula (2 a 80 letras). */

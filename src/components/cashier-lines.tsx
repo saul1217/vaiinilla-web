@@ -1,9 +1,13 @@
-import { BellRing, Check, ScanLine } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Bell, BellRing, Check, ScanLine, X } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { OrderDetail, OrderSpace } from '../types/api';
 import {
   barItems,
   barQueue,
+  canMarkNoShow,
+  canRemind,
+  hideScannerToday,
+  scannerHiddenToday,
   isStaleReady,
   hiddenByLine,
   isLineOrder,
@@ -97,6 +101,33 @@ interface BoardActions {
   primary: (order: OrderDetail, stage: 'cash' | 'ready', compact?: boolean) => ReactNode;
   onReady: (order: OrderDetail) => void;
   onOpen: (order: OrderDetail) => void;
+  /** «Avisar otra vez» y «No vino» de un pedido listo; sin ellos no se muestran. */
+  onRemind?: (order: OrderDetail) => void;
+  onNoShow?: (order: OrderDetail) => void;
+  remindBusyId?: string | null;
+}
+
+function RemindButton({ order, busyId, onRemind, compact }: { order: OrderDetail; busyId?: string | null; onRemind: (order: OrderDetail) => void; compact?: boolean }) {
+  return (
+    <Button
+      variant={compact ? 'ghost' : 'secondary'}
+      className={compact ? 'cashier-board__icon' : undefined}
+      loading={busyId === order.id}
+      disabled={busyId === order.id}
+      onClick={() => onRemind(order)}
+      aria-label={`Avisar otra vez al cliente del pedido ${order.folio}`}
+    >
+      <Bell aria-hidden="true" className="size-4" />{compact ? null : ' Avisar otra vez'}
+    </Button>
+  );
+}
+
+function NoShowButton({ order, onNoShow }: { order: OrderDetail; onNoShow: (order: OrderDetail) => void }) {
+  return (
+    <Button variant="ghost" className="cashier-noshow" onClick={() => onNoShow(order)} aria-label={`No vino por el pedido ${order.folio}`}>
+      No vino
+    </Button>
+  );
 }
 
 function ReadyButton({ order, busyId, onReady, compact }: { order: OrderDetail; busyId: string | null; onReady: (order: OrderDetail) => void; compact?: boolean }) {
@@ -153,7 +184,7 @@ function LineBoard({ orders, ...actions }: BoardActions & { orders: OrderDetail[
   );
 }
 
-function OrderCard({ order, stage, now, busyId, primary, onReady, onOpen }: BoardActions & { order: OrderDetail; stage: BoardStage }) {
+function OrderCard({ order, stage, now, busyId, primary, onReady, onOpen, onRemind, onNoShow, remindBusyId }: BoardActions & { order: OrderDetail; stage: BoardStage }) {
   const items = stage === 'prep' ? barItems(order) : order.items;
   const owed = hasOutstandingCashBalance(order) ? formatMoney(order.saldo_pendiente ?? order.total) : null;
   const meta = stage === 'prep'
@@ -174,8 +205,10 @@ function OrderCard({ order, stage, now, busyId, primary, onReady, onOpen }: Boar
       )}
       <div className="cashier-card__actions">
         {stage === 'prep' ? <ReadyButton order={order} busyId={busyId} onReady={onReady} /> : primary(order, stage)}
+        {stage === 'ready' && onRemind && canRemind(order) && <RemindButton order={order} busyId={remindBusyId} onRemind={onRemind} />}
+        {stage === 'ready' && onNoShow && canMarkNoShow(order) && <NoShowButton order={order} onNoShow={onNoShow} />}
         {stage !== 'prep' && (
-          <Button variant="ghost" onClick={() => onOpen(order)} aria-label={`Ver pedido ${order.folio}`}>
+          <Button variant="ghost" onClick={() => onOpen(order)} aria-label={`Ver pedido ${order.folio} de ${customer(order)}`}>
             Ver pedido
           </Button>
         )}
@@ -218,6 +251,8 @@ function AllLinesBoard({ lines, orders, ...actions }: BoardActions & { lines: Or
             {ready.length > 0 && <BoardGroup title="Listos para recoger" tone="ready">
               {ready.map((order) => (
                 <BoardRow key={order.id} order={order} detail={<ReadyNotice order={order} now={actions.now} />} onOpen={actions.onOpen}>
+                  {actions.onNoShow && canMarkNoShow(order) && isStaleReady(minutesSinceReady(order, actions.now)) && <NoShowButton order={order} onNoShow={actions.onNoShow} />}
+                  {actions.onRemind && canRemind(order) && <RemindButton order={order} busyId={actions.remindBusyId} onRemind={actions.onRemind} compact />}
                   {actions.primary(order, 'ready', true)}
                 </BoardRow>
               ))}
@@ -257,7 +292,7 @@ function BoardRow({ order, detail, onOpen, children }: {
   return (
     <li className="cashier-board__row">
       {onOpen ? (
-        <button type="button" className="cashier-board__open" onClick={() => onOpen(order)} aria-label={`Ver pedido ${order.folio}`}>
+        <button type="button" className="cashier-board__open" onClick={() => onOpen(order)} aria-label={`Ver pedido ${order.folio} de ${customer(order)}`}>
           {content}
         </button>
       ) : (
@@ -268,8 +303,20 @@ function BoardRow({ order, detail, onOpen, children }: {
   );
 }
 
-/** Recordatorio de la pistola: el campo del código llega enfocado al tocar Entregar. */
+const SCANNER_SHOW_MS = 30_000;
+
+/**
+ * Recordatorio de la pistola: el campo del código llega enfocado al tocar Entregar. Se va solo a
+ * los 30 segundos, y con la X ya no sale el resto del día en ese equipo.
+ */
 export function ScannerBar() {
+  const [hidden, setHidden] = useState(() => scannerHiddenToday());
+  useEffect(() => {
+    if (hidden) return;
+    const timer = window.setTimeout(() => setHidden(true), SCANNER_SHOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [hidden]);
+  if (hidden) return null;
   return (
     <div className="cashier-scanner" role="note">
       <span className="cashier-scanner__chip"><ScanLine aria-hidden="true" className="size-5" /> Pistola</span>
@@ -277,6 +324,14 @@ export function ScannerBar() {
         <strong>Toca Entregar y dispara al QR del cliente.</strong>{' '}
         <span>El código se lee y la entrega se confirma sola; sin pistola, escanea con la cámara o escríbelo.</span>
       </p>
+      <button
+        type="button"
+        className="cashier-scanner__close"
+        onClick={() => { hideScannerToday(); setHidden(true); }}
+        aria-label="Cerrar el aviso de la pistola por hoy"
+      >
+        <X aria-hidden="true" className="size-5" />
+      </button>
     </div>
   );
 }

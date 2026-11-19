@@ -285,6 +285,10 @@ export function PosPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   // El pedido abierto en el panel «Ver pedido»: el ticket completo con todo lo que se puede hacer.
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [remindBusyId, setRemindBusyId] = useState<string | null>(null);
+  // «No vino» se confirma antes: saca el pedido de la fila y no tiene vuelta.
+  const [noShowOrder, setNoShowOrder] = useState<OrderDetail | null>(null);
+  const [noShowBusy, setNoShowBusy] = useState(false);
   // La fila se lee una vez por negocio: cambiar de negocio en la misma pestaña trae la suya.
   const [lineChoice, setLineChoice] = useState<{ scope: string; lineId: number | null } | null>(null);
   const [readyBusyId, setReadyBusyId] = useState<string | null>(null);
@@ -536,6 +540,34 @@ export function PosPage() {
       setReadyBusyId(null);
     }
   }
+  async function remindCustomer(order: OrderDetail) {
+    setRemindBusyId(order.id);
+    try {
+      await api.remindOrder(token, order.id);
+      setNotice(`Le volvimos a avisar al cliente del pedido ${order.folio}.`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setRemindBusyId(null);
+    }
+  }
+
+  async function confirmNoShow() {
+    if (!noShowOrder || noShowBusy) return;
+    setNoShowBusy(true);
+    try {
+      await api.markNotPickedUp(token, noShowOrder.id, noShowOrder.version);
+      setNotice(`El pedido ${noShowOrder.folio} quedó como no recogido.`);
+      setNoShowOrder(null);
+    } catch (error) {
+      setNotice(errorMessage(error));
+      setNoShowOrder(null);
+    } finally {
+      setNoShowBusy(false);
+      await refreshOperation();
+    }
+  }
+
   // Lo que se puede abrir en el ticket de la fila: lo que está por cobrar o listo para entregar.
   const searchableOrders = useMemo(() => [...cashOrders, ...readyOrders], [cashOrders, readyOrders]);
   const updateQrToken = useCallback((value: string) => setQrToken(value), []);
@@ -829,9 +861,23 @@ export function PosPage() {
               primary={primaryAction}
               onReady={(order) => void markBarReady(order)}
               onOpen={(order) => setDetailId(order.id)}
+              onRemind={(order) => void remindCustomer(order)}
+              onNoShow={setNoShowOrder}
+              remindBusyId={remindBusyId}
             />
           )}
           {deliveryQr.data?.entrega_requiere_qr && <ScannerBar />}
+          <AppSheet
+            open={noShowOrder !== null}
+            onOpenChange={(open) => { if (!open && !noShowBusy) setNoShowOrder(null); }}
+            title={noShowOrder ? `¿No vino por el pedido #${noShowOrder.folio}?` : 'No vino'}
+            description="Sale de la fila y al cliente le llega el aviso de que no se recogió. No se devuelve dinero solo: si procede, la devolución la decides tú."
+          >
+            <div className="form-actions">
+              <Button variant="ghost" disabled={noShowBusy} onClick={() => setNoShowOrder(null)}>Cancelar</Button>
+              <Button variant="danger" loading={noShowBusy} onClick={() => void confirmNoShow()}>Sí, no vino</Button>
+            </div>
+          </AppSheet>
           <AppSheet
             open={detailOrder !== null}
             onOpenChange={(open) => { if (!open) setDetailId(null); }}
