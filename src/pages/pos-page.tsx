@@ -37,6 +37,7 @@ import { WaiterBoard } from '../components/waiter-board';
 import { useStaffTheme } from '../lib/staff-ui';
 import { apiUrl } from '../lib/api';
 import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
+import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
 import { environmentOf, type FlushEvent, type OfflineStaffOrder, type OfflineStaffScope } from '../lib/offline-staff-orders';
 import { useOfflineStaffOrders } from '../hooks/use-offline-staff-orders';
 import { OfflineStaffOrdersPanel } from '../components/offline-staff-orders-panel';
@@ -736,6 +737,7 @@ export function PosPage() {
             </div>
           </div>
           <div className="staff-cashbar__actions">
+            {isCashier && WALLET_CAJA_ENABLED && <Link className="button button--secondary" to="/app/saldo">Recargar saldo</Link>}
             {isCashier && active && <Button variant="secondary" onClick={() => setDrawerOpen(true)}>Movimientos del cajón</Button>}
             {isCashier && CORTES_REPORTE_ENABLED && <Link className="button button--secondary" to="/app/cortes">Corte de caja</Link>}
             {canOperateSession && deliveryQr.data?.modo_escuela && <Link className="button button--secondary" to="/app/alumnos">Alumnos</Link>}
