@@ -27,15 +27,18 @@ git clone https://github.com/saul1217/vaiinilla_back ../vaiinilla_back
 (cd ../vaiinilla_back && git checkout <sha del PR #257> && npm ci)
 npx playwright install chromium
 E2E_BACK_DIR=../vaiinilla_back npm run e2e:real
-npm run e2e:conteo                 # cuadra manifiesto y tests; falla si no coinciden
-npm run e2e:conteo:aceptacion      # además exige 86 A + 10 C y que la última corrida pase sin reintentos
+npm run e2e:conteo                 # cuadra manifiesto y tests; falla si no coinciden o si A < 86 o C < 10
+npm run e2e:conteo:info            # lo mismo, pero los mínimos solo se reportan (PR intermedio)
+npm run e2e:conteo:aceptacion      # además exige que la última corrida pase completa y sin reintentos
 ```
 
 ## Reglas para agregar escenarios
 
 - El título empieza con el ID del manifiesto: `[A-CAF-MES-01] …`. Cada ID va en
   `manifiesto.json` con bloque, rol, tipo, precondiciones, acción UI, resultado esperado, spec y modo.
-- Nada de `test.skip`, `fixme` u `only`: el conteo los rechaza. Si una precondición no se cumple,
-  el escenario falla.
+- Nada de `test.skip`, `fixme`, `only` o `fail`: el conteo los rechaza en cualquier archivo de
+  `e2e/real` (búsqueda recursiva). Si una precondición no se cumple, el escenario falla.
+- Nada de interceptar la red (`page.route`, `context.route`, `routeFromHAR`, `route.fulfill`,
+  `msw`, `setupServer`): el conteo también lo rechaza, en specs, fixtures y `lib/`.
 - La base solo se lee al final (`consultar`), nunca para hacer el paso bajo prueba.
 - Un fallo encontrado se registra en `docs/qa/fallos-encontrados.md`; no se debilita la aserción.

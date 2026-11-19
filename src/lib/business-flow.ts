@@ -20,6 +20,8 @@ export interface FlowSettings {
   gracia_liberacion_min: number;
   /** Horas en las que se reciben pedidos; vacío = a cualquier hora. */
   franjas_pedido: Franja[];
+  /** Pedido en mesa: lo lleva el mesero, pasan a la barra o eligen. Las plantillas no lo cambian. */
+  entrega_en_espacio?: 'mesa' | 'barra' | 'ambas';
 }
 
 export interface FlowTemplate {

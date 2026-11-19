@@ -17,7 +17,8 @@
     "test:ui": "playwright test --project=ui-regresion",
     "e2e:real": "node e2e/real/harness.mjs",
     "e2e:conteo": "node scripts/e2e-conteo.mjs",
-    "e2e:conteo:aceptacion": "node scripts/e2e-conteo.mjs --exigir-minimo --resultados test-results/e2e-real.json",
+    "e2e:conteo:info": "node scripts/e2e-conteo.mjs --informativo",
+    "e2e:conteo:aceptacion": "node scripts/e2e-conteo.mjs --resultados test-results/e2e-real.json",
     "lhci": "npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.cjs"
   },
   "dependencies": {

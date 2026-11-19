@@ -4,18 +4,25 @@
 //   - un test no trae ID «[X-...]» al inicio del título, o un ID se repite;
 //   - hay IDs en el manifiesto sin test, o tests sin entrada en el manifiesto;
 //   - el spec del manifiesto no es el archivo donde vive el test;
-//   - algún test está marcado skip/fixme/only (estático o en el código de e2e/real).
-// Con --exigir-minimo además falla si no se alcanzan los mínimos (86 A y 10 C).
-// Con --resultados <json> compara contra una corrida real (reporter json): todos los IDs del
-// manifiesto deben haberse ejecutado y pasado, sin reintentos.
+//   - algún test está marcado skip/fixme/only/fail (estático o en cualquier archivo de e2e/real,
+//     búsqueda recursiva);
+//   - algún archivo de código de e2e/real (recursivo) intercepta la red: page.route,
+//     context.route, routeFromHAR, route.fulfill/abort/continue/fallback, msw o setupServer;
+//   - no se alcanzan los mínimos del manifiesto (86 A y 10 C). Es el comportamiento por omisión;
+//     --informativo solo los reporta (para un PR intermedio que aún no llega). --exigir-minimo se
+//     acepta por compatibilidad y no cambia nada.
+// Con --resultados <json> compara además contra una corrida real (reporter json): todos los IDs
+// del manifiesto deben haberse ejecutado y pasado, sin reintentos. Si falta el archivo se dice
+// así, sin tapar los demás errores.
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
-const exigirMinimo = args.includes('--exigir-minimo');
+const informativo = args.includes('--informativo');
+const exigirMinimo = !informativo;
 const iRes = args.indexOf('--resultados');
 const archivoResultados = iRes >= 0 ? args[iRes + 1] : null;
 const ID = /^\[([AC][A-Z0-9]*(?:-[A-Z0-9]+)+)\]/;
@@ -70,11 +77,34 @@ for (const t of tests) {
   porId.set(m[1], t);
 }
 
+// Escaneo estático recursivo de todo el código de e2e/real (specs, fixtures y lib/).
+const CODIGO = /\.(?:[cm]?[jt]sx?)$/;
+function archivosDeCodigo(dir) {
+  const salida = [];
+  for (const nombre of readdirSync(dir)) {
+    const ruta = join(dir, nombre);
+    if (statSync(ruta).isDirectory()) salida.push(...archivosDeCodigo(ruta));
+    else if (CODIGO.test(nombre)) salida.push(ruta);
+  }
+  return salida;
+}
 // Skips dinámicos (test.skip(cond)) o fixme dentro del cuerpo: no aparecen en --list.
-for (const archivo of readdirSync(join(RAIZ, 'e2e/real')).filter((f) => f.endsWith('.spec.ts'))) {
-  const fuente = readFileSync(join(RAIZ, 'e2e/real', archivo), 'utf8');
-  if (/\btest(\.describe)?\.(skip|fixme|only)\s*\(/.test(fuente)) {
-    errores.push(`e2e/real/${archivo} usa test.skip/fixme/only: prohibido en los escenarios de aceptación.`);
+const SALTOS = /\btest(?:\.describe)?(?:\.serial|\.parallel)?\.(skip|fixme|only|fail)\s*\(/;
+// Interceptar la red convierte un escenario real en uno con mocks.
+const INTERCEPTORES = [
+  [/\.route(?:FromHAR|WebSocket)?\s*\(/, 'page.route/context.route/routeFromHAR'],
+  // Cualquier nombre de variable: (r) => r.fulfill(...) también cuenta.
+  [/\.\s*(?:fulfill|continue|fallback)\s*\(|\broute\s*\.\s*abort\s*\(/, 'route.fulfill/abort/continue/fallback'],
+  [/\bfrom\s+['"]msw(?:\/[^'"]*)?['"]|\brequire\(\s*['"]msw/, 'msw'],
+  [/\bsetupServer\s*\(|\bsetupWorker\s*\(/, 'setupServer/setupWorker'],
+];
+for (const ruta of archivosDeCodigo(join(RAIZ, 'e2e/real'))) {
+  const rel = relative(RAIZ, ruta);
+  const fuente = readFileSync(ruta, 'utf8');
+  const salto = SALTOS.exec(fuente);
+  if (salto) errores.push(`${rel} usa test.${salto[1]}: prohibido en los escenarios de aceptación.`);
+  for (const [patron, nombre] of INTERCEPTORES) {
+    if (patron.test(fuente)) errores.push(`${rel} intercepta la red (${nombre}): los escenarios reales no llevan mocks.`);
   }
 }
 
@@ -110,10 +140,30 @@ const minimoOk = A >= manifiesto.minimos.A && C >= manifiesto.minimos.C;
 console.log(
   `Mínimo de aceptación (A ≥ ${manifiesto.minimos.A}, C ≥ ${manifiesto.minimos.C}): ${minimoOk ? 'CUMPLIDO' : `PENDIENTE (A ${A}, C ${C})`}`,
 );
-if (exigirMinimo && !minimoOk) errores.push(`No se alcanza el mínimo: A ${A}/${manifiesto.minimos.A}, C ${C}/${manifiesto.minimos.C}.`);
+if (exigirMinimo && !minimoOk) {
+  errores.push(
+    `No se alcanza el mínimo: A ${A}/${manifiesto.minimos.A}, C ${C}/${manifiesto.minimos.C} (usa --informativo en un PR intermedio).`,
+  );
+}
 
-if (archivoResultados) {
-  const corrida = leerReporte(JSON.parse(readFileSync(resolve(archivoResultados), 'utf8')));
+// La corrida se revisa aparte: un archivo que falta o no se lee se reporta como tal y no tapa
+// los errores del manifiesto.
+function leerCorrida(archivo) {
+  const ruta = resolve(archivo);
+  if (!existsSync(ruta)) {
+    errores.push(`No existe ${archivo}: corre antes \`npm run e2e:real\` (escribe el reporte JSON de la corrida).`);
+    return null;
+  }
+  try {
+    return leerReporte(JSON.parse(readFileSync(ruta, 'utf8')));
+  } catch (error) {
+    errores.push(`No se pudo leer ${archivo}: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+const corrida = archivoResultados ? leerCorrida(archivoResultados) : null;
+if (corrida) {
   const estado = { passed: 0, failed: 0, skipped: 0, timedOut: 0, interrupted: 0 };
   let reintentos = 0;
   const ejecutados = new Map();

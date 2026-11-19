@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Minus, Plus } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
-import { errorMessage } from '../lib/api-error';
+import { errorMessage, VaiinillaApiError } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
 import type { OfflineStaffOrdersApi } from '../hooks/use-offline-staff-orders';
 import { DurableStorageError, STORAGE_UNAVAILABLE_MESSAGE, shouldKeepOffline, type OfflineStaffOrder } from '../lib/offline-staff-orders';
@@ -70,6 +70,8 @@ function borradorGuardado(offline: OfflineStaffOrdersApi | undefined): { guardad
   }
 }
 
+const ESPERA_CONFIGURACION = 'Espera un momento: estamos cargando la configuración del negocio.';
+
 export function StaffOrderForm(props: StaffOrderFormProps) {
   const configuracion = useQuery({
     queryKey: ['operational-settings', 'staff-order', props.queryScope ?? ''],
@@ -116,6 +118,8 @@ function StaffOrderFormBody({
   const [errorAlmacenamiento, setErrorAlmacenamiento] = useState<string | null>(inicial.error);
   const [errorCola, setErrorCola] = useState<string | null>(null);
   const pagoAlFinalTocado = useRef(inicial.guardado?.pagoAlFinalTocado ?? false);
+  // Si la configuración falla (por ejemplo 403), decide el servidor; solo se espera mientras carga.
+  const cargandoConfiguracion = !configuracion && !errorConfiguracion;
   const guardarBorrador = offline?.enabled && offline.scope ? { store: offline.store, scope: offline.scope } : null;
 
   function persistir(siguienteLlave: LlaveDeEnvio | null, siguienteDraft: StaffOrderDraft = draft): boolean {
@@ -179,6 +183,14 @@ function StaffOrderFormBody({
       onCreated(pedido);
     },
     onError: (error, { body, key }) => {
+      // T3-0011: el servidor no permite pagar al final (422). Se desmarca y se vuelve a leer la
+      // configuración para que la casilla deje de ofrecerse; el personal revisa y reenvía.
+      if (error instanceof VaiinillaApiError && error.code === 'PAYMENT_AT_END_NOT_ALLOWED') {
+        pagoAlFinalTocado.current = false;
+        setDraft((previo) => ({ ...previo, pagoAlFinal: false }));
+        reintentarConfiguracion();
+        return;
+      }
       // Sin red o servidor caído: el pedido se guarda con la misma llave y se manda al volver.
       if (offline?.enabled && shouldKeepOffline(error)) guardarSinConexion(body, key);
     },
@@ -237,11 +249,22 @@ function StaffOrderFormBody({
 
   function enviar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // T3-0011: mientras la configuración carga no se sabe si el negocio permite pagar al final.
+    if (cargandoConfiguracion) {
+      setErrores([ESPERA_CONFIGURACION]);
+      return;
+    }
     const nuevosErrores = erroresDePedido(draft);
     setErrores(nuevosErrores);
     if (nuevosErrores.length > 0) return;
 
-    const body = construirPedidoStaff(draft, pagoAlFinalTocado.current);
+    // T3-0011: con la configuración cargada se revalida aquí, no solo al pintar la casilla: si el
+    // negocio no permite pagar al final, pago_diferido=true nunca sale (el servidor daría 422).
+    const sinPagoAlFinal = configuracion?.permite_pago_al_final === false;
+    const body = construirPedidoStaff(
+      sinPagoAlFinal ? { ...draft, pagoAlFinal: false } : draft,
+      sinPagoAlFinal ? false : pagoAlFinalTocado.current,
+    );
     // La llave se reutiliza si el pedido no cambió; si cambió, una nueva (reusarla daría 409).
     const siguiente = llaveParaEnvio(llave, JSON.stringify(body), createIdempotencyKey);
     setLlave(siguiente);
@@ -503,7 +526,7 @@ function StaffOrderFormBody({
           Total <strong>{formatMoney(totalPedidoTexto(draft.lineas))}</strong>
           <small>El servidor calcula el total final.</small>
         </p>
-        <Button type="submit" loading={crear.isPending}>
+        <Button type="submit" loading={crear.isPending} disabled={cargandoConfiguracion}>
           {draft.cobrarAhora ? 'Enviar y cobrar' : 'Enviar pedido'}
         </Button>
       </StaffOrderSummary>
