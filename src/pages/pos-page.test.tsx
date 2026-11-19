@@ -458,6 +458,20 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(await screen.findByLabelText('Token QR de entrega')).toBeVisible();
   });
 
+  it('la pistola lectora entrega: el campo llega enfocado y su Enter confirma', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, monto_pagado: '125.00', saldo_pendiente: '0.00' }], cursor: null });
+    apiMock.deliverOrder.mockResolvedValue({ folio: 14 });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Validar QR' }));
+    const campo = await screen.findByLabelText('Token QR de entrega');
+    expect(campo).toHaveFocus();
+    await user.keyboard('VAI-7Q2K{Enter}');
+    await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', 'order-14', 4, 'VAI-7Q2K'));
+  });
+
   it('permite entregar sin QR un pedido de una sesión activa aunque el ajuste global lo requiera', async () => {
     apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
     apiMock.listOrders.mockResolvedValue({ orders: [{

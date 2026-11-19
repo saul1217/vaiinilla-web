@@ -878,11 +878,19 @@ export function PosPage() {
           : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
       >
         {deliveryOrder && (
-          <div className="transaction-form">
+          <form
+            className="transaction-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (deliveryMutation.isPending || (deliveryNeedsQr(deliveryOrder) && !qrToken.trim())) return;
+              deliveryMutation.mutate({ order: deliveryOrder, pickupToken: qrToken.trim() });
+            }}
+          >
             {deliveryMutation.isError && <Feedback tone="error">{errorMessage(deliveryMutation.error)}</Feedback>}
             <OrderDetailContent order={deliveryOrder} />
             {deliveryNeedsQr(deliveryOrder) && (
               <QrTokenField
+                autoFocus
                 value={qrToken}
                 onChange={updateQrToken}
                 error={!qrToken.trim() && deliveryMutation.isError ? 'Captura el token de entrega.' : undefined}
@@ -893,16 +901,15 @@ export function PosPage() {
                 Cancelar
               </Button>
               <Button
-                type="button"
+                type="submit"
                 variant="dark"
                 loading={deliveryMutation.isPending}
                 disabled={deliveryMutation.isPending || (deliveryNeedsQr(deliveryOrder) && !qrToken.trim())}
-                onClick={() => deliveryMutation.mutate({ order: deliveryOrder, pickupToken: qrToken.trim() })}
               >
                 Confirmar entrega
               </Button>
             </div>
-          </div>
+          </form>
         )}
       </AppSheet>
       <RejectOrderDialog

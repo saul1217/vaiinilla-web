@@ -13,14 +13,20 @@ interface BarcodeDetectorInstance {
 
 type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorInstance;
 
+/**
+ * Una pistola lectora teclea el código y manda Enter, así que basta con que el campo tenga el
+ * foco y viva dentro del formulario de entrega: el Enter lo envía.
+ */
 export function QrTokenField({
   value,
   onChange,
   error,
+  autoFocus = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   error?: string;
+  autoFocus?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -127,7 +133,8 @@ export function QrTokenField({
         onChange={(event) => onChange(event.target.value)}
         autoComplete="off"
         spellCheck={false}
-        placeholder="Escanea o pega el código del cliente"
+        autoFocus={autoFocus}
+        placeholder="Dispara la pistola o escribe el código"
         error={error}
         hint="El token es de un solo pedido y no se guarda en esta Web."
       />
