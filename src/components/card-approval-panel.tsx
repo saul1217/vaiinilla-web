@@ -37,15 +37,19 @@ export function CardApprovalPanel({
   establishmentId,
   establishmentName,
   suspended = false,
+  commissionPassThrough = false,
   onChanged,
   onUnauthorized,
+  onApprovalChange,
 }: {
   token: string;
   establishmentId: string;
   establishmentName: string;
   suspended?: boolean;
+  commissionPassThrough?: boolean;
   onChanged: (message: string) => Promise<void>;
   onUnauthorized: (establishmentId?: string) => void;
+  onApprovalChange?: (approved: boolean | null) => void;
 }) {
   const queryClient = useQueryClient();
   const queryKey = ['platform-card-approval', establishmentId];
@@ -62,6 +66,10 @@ export function CardApprovalPanel({
   }, [establishmentId, onUnauthorized, query.error]);
 
   const approval = query.data?.aprobacion;
+  const commissionMustBeDisabled = commissionPassThrough || query.data?.stripe?.pasar_comision_al_cliente === true;
+  useEffect(() => {
+    onApprovalChange?.(query.isSuccess ? Boolean(approval?.vigente) : null);
+  }, [approval?.vigente, onApprovalChange, query.isSuccess]);
   const history = query.data?.historial ?? [];
   const approvable = query.data?.aprobable !== false;
   const decidedAt = approval?.vigente ? formatDate(approval.aprobada_en) : formatDate(approval?.revocada_en);
@@ -106,6 +114,17 @@ export function CardApprovalPanel({
             : approvable
               ? 'Mientras no se apruebe, el dueño no puede activar la tarjeta.'
               : 'La aprobación de tarjeta solo aplica a cafeterías.'}
+        </p>
+      )}
+
+      {suspended && query.isSuccess && !approval?.vigente && (
+        <p className="text-xs leading-5 text-muted" role="status">
+          Reactiva el establecimiento para poder aprobar la tarjeta.
+        </p>
+      )}
+      {commissionMustBeDisabled && query.isSuccess && !approval?.vigente && (
+        <p className="rounded-xl border border-amber-500/30 bg-amber-50 p-3 text-xs leading-5 text-amber-950" role="status">
+          Antes de aprobar, el dueño debe apagar «pasar comisión al cliente»: el menú de la cafetería ya incluye ese precio.
         </p>
       )}
 
@@ -158,6 +177,7 @@ export function CardApprovalPanel({
         token={token}
         establishmentId={establishmentId}
         establishmentName={establishmentName}
+        commissionPassThrough={commissionMustBeDisabled}
         returnFocusRef={opener}
         onOpenChange={(open) => { if (!open) setDecision(null); }}
         onUnauthorized={onUnauthorized}
@@ -181,6 +201,7 @@ function DecisionModal({
   token,
   establishmentId,
   establishmentName,
+  commissionPassThrough,
   returnFocusRef,
   onOpenChange,
   onUnauthorized,
@@ -191,6 +212,7 @@ function DecisionModal({
   token: string;
   establishmentId: string;
   establishmentName: string;
+  commissionPassThrough: boolean;
   returnFocusRef: RefObject<HTMLButtonElement | null>;
   onOpenChange: (open: boolean) => void;
   onUnauthorized: (establishmentId?: string) => void;
@@ -198,6 +220,7 @@ function DecisionModal({
 }) {
   const [motivo, setMotivo] = useState('');
   const [touched, setTouched] = useState(false);
+  const reasonInput = useRef<HTMLTextAreaElement>(null);
   // Una llave por intento: si se reintenta con el mismo motivo (p. ej., tras un error de red)
   // se repite la llave y el back no decide dos veces; si cambia el motivo, es otro intento.
   const attempt = useRef<{ motivo: string; key: string } | null>(null);
@@ -222,11 +245,12 @@ function DecisionModal({
       open={open}
       onOpenChange={(next) => { if (!mutation.isPending) onOpenChange(next); }}
       returnFocusRef={returnFocusRef}
+      initialFocusRef={reasonInput}
       title={revoking ? '¿Revocar la aprobación de tarjeta?' : `Aprobar tarjeta en ${establishmentName}`}
       description={
         revoking
           ? 'Se desactivarán nuevos cobros con tarjeta. Los pagos ya iniciados no se cancelan.'
-          : 'Aprobar no prende la tarjeta: el dueño la activa cuando su cuenta de Stripe ya pueda cobrar.'
+          : `Aprobar no prende la tarjeta: el dueño la activa cuando su cuenta de Stripe ya pueda cobrar.${commissionPassThrough ? ' Antes, debe apagar «pasar comisión al cliente» porque el menú ya incluye ese precio.' : ''}`
       }
     >
       {mutation.isError && <Feedback tone="error">{errorMessage(mutation.error)}</Feedback>}
@@ -242,6 +266,7 @@ function DecisionModal({
         <label className="field">
           <span className="field__label">Motivo (queda en el historial)</span>
           <textarea
+            ref={reasonInput}
             className="field__control min-h-28 resize-y"
             maxLength={MOTIVO_MAX}
             value={motivo}

@@ -109,9 +109,11 @@ describe('onboarding Stripe en Super Admin', () => {
     });
 
     const actor = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     renderPage();
 
-    await actor.click(await screen.findByRole('button', { name: 'Conectar Stripe' }));
+    await actor.click(await screen.findByRole('button', { name: 'Generar link para el dueño' }));
 
     await waitFor(() =>
       expect(apiMock.createPlatformStripeOnboarding).toHaveBeenCalledWith(
@@ -121,15 +123,21 @@ describe('onboarding Stripe en Super Admin', () => {
       ),
     );
     expect(windowOpenMock).toHaveBeenCalledWith(accountLinkUrl, '_blank', 'noopener,noreferrer');
-    expect(await screen.findByRole('link', { name: /Abrir Account Link/ })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: /Abrir enlace para el dueño/ })).toHaveAttribute(
       'href',
       accountLinkUrl,
     );
+    await actor.click(screen.getByRole('button', { name: 'Copiar link' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(accountLinkUrl));
+    expect(await screen.findByRole('button', { name: 'Link copiado' })).toBeVisible();
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(apiMock.getPlatformStripeConfiguration).toHaveBeenCalledWith('platform-token', establishment.id));
   });
 
   it('solo muestra activar cuando Stripe ya confirmó cargos y transferencias', async () => {
     const readyEstablishment: PlatformEstablishment = {
       ...establishment,
+      tipo: 'cafeteria',
       stripe: {
         stripe_account_id: 'acct_test_demo',
         stripe_enabled: false,
@@ -150,10 +158,18 @@ describe('onboarding Stripe en Super Admin', () => {
       payouts_enabled: true,
       estado_onboarding: 'habilitada',
     });
+    apiMock.platformCardApproval.mockResolvedValue({
+      establecimiento_id: establishment.id,
+      tipo: 'cafeteria',
+      aprobable: true,
+      aprobacion: { estado: 'aprobada', vigente: true },
+      stripe: null,
+      historial: [],
+    });
 
     const actor = userEvent.setup();
     renderPage(readyEstablishment);
-    await actor.click(await screen.findByRole('button', { name: 'Activar Stripe' }));
+    await actor.click(await screen.findByRole('button', { name: 'Activar tarjeta' }));
 
     await waitFor(() =>
       expect(apiMock.configurePlatformStripe).toHaveBeenCalledWith(
@@ -186,7 +202,7 @@ describe('onboarding Stripe en Super Admin', () => {
 
     expect(await screen.findByText('Tarjeta solo en cafeterías')).toBeVisible();
     expect(screen.getByText(/solo se activan en cafeterías/i)).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Activar Stripe' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Activar tarjeta' })).not.toBeInTheDocument();
     expect(apiMock.configurePlatformStripe).not.toHaveBeenCalled();
   });
 
@@ -207,13 +223,42 @@ describe('onboarding Stripe en Super Admin', () => {
       },
     });
 
-    expect(await screen.findByText('En revisión')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Activar Stripe' })).not.toBeInTheDocument();
+    expect(await screen.findAllByText('En revisión')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Activar tarjeta' })).not.toBeInTheDocument();
+  });
+
+  it('muestra la etapa compacta con datos de la lista y el paso siguiente para el dueño', async () => {
+    renderPage({
+      ...establishment,
+      stripe: {
+        stripe_account_id: 'acct_test_demo', stripe_enabled: false, estado_onboarding: 'en_revision',
+        charges_enabled: false, payouts_enabled: false, details_submitted: true,
+        requisitos_actuales: {}, capacidades: {}, razon_deshabilitacion: null, livemode: false,
+      },
+    });
+    expect(await screen.findByLabelText('Estado de tarjeta: En revisión')).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Cobro con tarjeta' })).toBeVisible();
+    expect(apiMock.getPlatformStripeConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('al recuperar sesión vuelve a consultar Stripe y la aprobación', async () => {
+    window.sessionStorage.setItem('vaiinilla_platform_stripe_return', JSON.stringify({ establishmentId: establishment.id }));
+    apiMock.platformCardApproval.mockResolvedValue({
+      establecimiento_id: establishment.id, tipo: 'cafeteria', aprobable: true,
+      aprobacion: { estado: null, vigente: false }, stripe: null, historial: [],
+    });
+    renderPage({ ...establishment, tipo: 'cafeteria' });
+    await screen.findByText(/Sesión recuperada/);
+    await waitFor(() => {
+      expect(apiMock.getPlatformStripeConfiguration).toHaveBeenCalledWith('platform-token', establishment.id);
+      expect(apiMock.platformCardApproval).toHaveBeenCalled();
+    });
   });
 
   it('muestra el conflicto del backend si la cuenta deja de estar lista al activar', async () => {
     const readyEstablishment: PlatformEstablishment = {
       ...establishment,
+      tipo: 'cafeteria',
       stripe: {
         stripe_account_id: 'acct_test_demo',
         stripe_enabled: false,
@@ -233,13 +278,21 @@ describe('onboarding Stripe en Super Admin', () => {
         message: 'La cuenta conectada todavía no está habilitada para cobrar.',
       }),
     );
+    apiMock.platformCardApproval.mockResolvedValue({
+      establecimiento_id: establishment.id,
+      tipo: 'cafeteria',
+      aprobable: true,
+      aprobacion: { estado: 'aprobada', vigente: true },
+      stripe: null,
+      historial: [],
+    });
 
     const actor = userEvent.setup();
     renderPage(readyEstablishment);
-    await actor.click(await screen.findByRole('button', { name: 'Activar Stripe' }));
+    await actor.click(await screen.findByRole('button', { name: 'Activar tarjeta' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'La cuenta conectada todavía no está habilitada para cobrar.',
+      'La cuenta de Stripe todavía no está lista para cobrar. El dueño debe completar sus datos y esperar la confirmación de Stripe.',
     );
   });
 
@@ -253,7 +306,7 @@ describe('onboarding Stripe en Super Admin', () => {
 
     const actor = userEvent.setup();
     renderPage(establishment, true);
-    await actor.click(await screen.findByRole('button', { name: 'Conectar Stripe' }));
+    await actor.click(await screen.findByRole('button', { name: 'Generar link para el dueño' }));
 
     await waitFor(() => expect(sessionMock.clearPlatform).toHaveBeenCalled());
     expect(screen.getByTestId('location')).toHaveTextContent('/plataforma/acceso');
@@ -326,6 +379,40 @@ describe('aprobación de tarjeta en Super Admin (cafeterías)', () => {
     expect(apiMock.platformCardApproval).not.toHaveBeenCalled();
   });
 
+  it('explica por qué no se puede aprobar una cafetería suspendida', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(sinAprobar));
+    renderPage({ ...cafeteria, estado: 'suspendido' });
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    expect(await within(panel).findByRole('button', { name: /aprobar tarjeta/i })).toBeDisabled();
+    expect(within(panel).getByRole('status')).toHaveTextContent('Reactiva el establecimiento para poder aprobar');
+  });
+
+  it('avisa antes de aprobar cuando pasar comisión está encendido', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(sinAprobar));
+    renderPage({ ...cafeteria, stripe: { ...({
+      stripe_account_id: 'acct_test_demo', stripe_enabled: false, estado_onboarding: 'habilitada' as const,
+      charges_enabled: true, payouts_enabled: true, details_submitted: true, requisitos_actuales: {},
+      capacidades: {}, razon_deshabilitacion: null, livemode: false, pasar_comision_al_cliente: true,
+    }) } });
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    expect(await within(panel).findByText(/el dueño debe apagar «pasar comisión al cliente»/i)).toBeVisible();
+  });
+
+  it('explica el conflicto de comisión si el estado cambió antes de aprobar', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(sinAprobar));
+    apiMock.decidePlatformCardApproval.mockRejectedValue(new VaiinillaApiError(409, {
+      code: 'STRIPE_PASS_FEE_ON', message: 'conflicto',
+    }));
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    await user.click(await within(panel).findByRole('button', { name: /aprobar tarjeta/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/motivo/i), 'Alta autorizada');
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/debe apagarlo primero/i);
+  });
+
   it('aprueba con motivo obligatorio e Idempotency-Key, y muestra el estado nuevo', async () => {
     apiMock.platformCardApproval
       .mockResolvedValueOnce(consulta(sinAprobar))
@@ -339,6 +426,7 @@ describe('aprobación de tarjeta en Super Admin (cafeterías)', () => {
     await user.click(within(panel).getByRole('button', { name: /aprobar tarjeta/i }));
 
     const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText(/motivo/i)).toHaveFocus();
     await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
     expect(await within(dialog).findByText(/escribe el motivo/i)).toBeVisible();
     expect(apiMock.decidePlatformCardApproval).not.toHaveBeenCalled();

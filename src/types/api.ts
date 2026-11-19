@@ -1095,6 +1095,7 @@ export interface PlatformStripeSummary {
   capacidades: Record<string, unknown>;
   razon_deshabilitacion: string | null;
   livemode: boolean;
+  pasar_comision_al_cliente?: boolean;
 }
 
 /** La tarjeta del negocio vista por su dueño (GET /stripe/configuracion). */
@@ -1167,6 +1168,7 @@ export interface StripePlatformConfiguration {
   charges_enabled: boolean;
   payouts_enabled: boolean;
   estado_onboarding: StripeOnboardingStatus;
+  pasar_comision_al_cliente?: boolean;
   aprobacion_plataforma?: CardPlatformApproval;
 }
 
