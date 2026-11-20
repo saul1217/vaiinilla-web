@@ -38,6 +38,7 @@ const friendlyMessages: Record<string, string> = {
   SPACE_TOKEN_INVALID: 'El código QR de mesa no es válido.',
   SPACE_TOKEN_REVOKED: 'Ese QR ya no sirve. Pide el código actualizado en Caja.',
   PICKUP_QR_INVALID: 'El QR no corresponde a este pedido.',
+  CASH_SESSION_OPEN: 'Cierra las cajas abiertas antes de cambiar cómo se reparten las cajas.',
   INVALID_PICKUP_CODE: 'El código no coincide con este pedido. Pídeselo otra vez al cliente.',
   PICKUP_CODE_LOCKED: 'Demasiados códigos equivocados. Entrégalo escaneando su QR o su credencial.',
   QR_TOKEN_INVALID: 'El QR no corresponde a este pedido.',

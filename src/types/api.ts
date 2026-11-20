@@ -645,6 +645,8 @@ export interface BusinessSettings {
   /** Operación de Caja y Cocina. */
   barra_prepara?: boolean;
   caja_entrega_en_espacio?: boolean;
+  /** Cada cajera abre su propia caja y hace su corte (migración 223). Null: el back no lo tiene. */
+  cajas_independientes?: boolean | null;
   entrega_en_espacio?: 'mesa' | 'barra' | 'ambas';
   cocina_prepara_sin_cobrar?: boolean;
   permite_pago_en_caja?: boolean;
