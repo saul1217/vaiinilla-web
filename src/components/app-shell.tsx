@@ -36,6 +36,7 @@ import { isDarkAdminTheme, useAdminTheme, type AdminTheme } from '../lib/admin-t
 import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { AGENDA_ENABLED } from '../lib/agenda-feature';
+import { AGENDA_ROLES, hasRentableCourts } from '../lib/agenda';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
 import { BOWLING_ADMIN_ENABLED } from '../lib/bowling-admin-feature';
 import { REPARTO_ENABLED } from '../lib/reparto-feature';
@@ -60,7 +61,8 @@ interface NavItem {
 }
 
 // Agenda de reservas: Administración, Caja y Mesero (los roles que el back deja crear y cancelar).
-const agendaNavigation: NavItem[] = AGENDA_ENABLED ? [{ to: '/app/agenda', label: 'Agenda de reservas', icon: CalendarDays }] : [];
+// Solo sale si el negocio tiene canchas que se renten (useHasCourts).
+const agendaItem: NavItem = { to: '/app/agenda', label: 'Agenda de reservas', icon: CalendarDays };
 
 const adminNavigation: NavItem[] = [
   { to: '/app', label: 'Inicio', icon: LayoutDashboard, end: true },
@@ -78,7 +80,6 @@ const adminNavigation: NavItem[] = [
   ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto y encargos', icon: Truck } satisfies NavItem] : []),
   { to: '/app/pos', label: 'Pedir', icon: WalletCards },
   { to: '/app/filas', label: 'Filas en vivo', icon: Rows3 },
-  ...agendaNavigation,
 ];
 
 const posNavigation: NavItem[] = [
@@ -86,7 +87,6 @@ const posNavigation: NavItem[] = [
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo', icon: HandCoins } satisfies NavItem] : []),
   ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto', icon: Truck } satisfies NavItem] : []),
   { to: '/app/filas', label: 'Filas en vivo', icon: Rows3 },
-  ...agendaNavigation,
 ];
 const kitchenNavigation: NavItem[] = [
   { to: '/app/cocina', label: 'Cocina', icon: ChefHat },
@@ -97,7 +97,6 @@ const kitchenNavigation: NavItem[] = [
 const myShiftNavigation: NavItem = { to: '/app/mi-turno', label: 'Mi turno', icon: Coins };
 const waiterNavigation: NavItem[] = [
   { to: '/app/pos', label: 'Mesas', icon: ConciergeBell },
-  ...agendaNavigation,
 ];
 
 /**
@@ -138,6 +137,35 @@ function useBowlingNavigationLive(role: OperationalRole, token: string, storeId:
   return [{ to: '/app/boliche', label: role === 'admin' ? 'Pistas de boliche' : 'Pistas', icon: Table2 }];
 }
 const useBowlingNavigation = BOWLING_ADMIN_ENABLED ? useBowlingNavigationLive : noHotelStaffNavigation;
+
+// Por negocio, una sola consulta por sesión de la pestaña: el menú se monta en cada pantalla.
+const courtsByStore = new Map<string, Promise<boolean>>();
+
+/**
+ * La agenda de reservas, solo si hay una cancha activa con precio por hora: la misma regla con la
+ * que el back deja reservar. Mientras carga o si la consulta falla se muestra, como antes; se
+ * esconde solo cuando el back confirma que no hay nada que rentar.
+ */
+function useAgendaNavigationLive(role: OperationalRole, token: string, storeId: string): NavItem[] {
+  const allowed = AGENDA_ROLES.includes(role);
+  const [noCourts, setNoCourts] = useState<string | null>(null);
+  useEffect(() => {
+    if (!allowed || !token || !storeId) return;
+    let alive = true;
+    let pending = courtsByStore.get(storeId);
+    if (!pending) {
+      pending = api.courtAvailability(token).then(hasRentableCourts);
+      // Un fallo no se recuerda: la siguiente pantalla vuelve a preguntar.
+      pending.catch(() => courtsByStore.delete(storeId));
+      courtsByStore.set(storeId, pending);
+    }
+    pending.then((has) => { if (alive) setNoCourts(has ? null : storeId); }, () => undefined);
+    return () => { alive = false; };
+  }, [allowed, token, storeId]);
+  if (!allowed || noCourts === storeId) return [];
+  return [agendaItem];
+}
+const useAgendaNavigation = AGENDA_ENABLED ? useAgendaNavigationLive : noHotelStaffNavigation;
 const useHotelStaffNavigation = HOTEL_STAFF_ENABLED ? useHotelStaffNavigationLive : noHotelStaffNavigation;
 
 const platformNavigation: NavItem[] = [
@@ -153,11 +181,12 @@ export function TenantShell({ children }: { children: ReactNode }) {
 
   const hotelItems = useHotelStaffNavigation(tenant?.context.rol ?? 'cliente', tenant?.token ?? '', tenant?.context.establecimiento_id ?? '');
   const bowlingItems = useBowlingNavigation(tenant?.context.rol ?? 'cliente', tenant?.token ?? '', tenant?.context.establecimiento_id ?? '');
+  const agendaItems = useAgendaNavigation(tenant?.context.rol ?? 'cliente', tenant?.token ?? '', tenant?.context.establecimiento_id ?? '');
   if (!tenant) return null;
   const role = tenant.context.rol;
   // Lo del hotel va junto al destino principal del rol; «Mi turno», al final.
   const [roleHome, ...rest] = navigationForRole(role);
-  const items = [...(roleHome ? [roleHome] : []), ...hotelItems, ...rest, ...bowlingItems, ...(role === 'admin' ? [] : [myShiftNavigation])];
+  const items = [...(roleHome ? [roleHome] : []), ...hotelItems, ...rest, ...agendaItems, ...bowlingItems, ...(role === 'admin' ? [] : [myShiftNavigation])];
 
   async function switchContext() {
     // Las recargas en efectivo sin confirmar no se quedan en el navegador al cambiar de acceso.
