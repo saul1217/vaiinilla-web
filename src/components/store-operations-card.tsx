@@ -44,6 +44,9 @@ export function StoreOperationsCard({
   const [fondoSugerido, setFondoSugerido] = useState(settings.fondo_sugerido ?? '');
   const [horaInicioDia, setHoraInicioDia] = useState(settings.hora_inicio_dia ?? '00:00');
   const [modoEscuela, setModoEscuela] = useState(settings.modo_escuela === true);
+  // Un back sin la migración 225 no manda cobro_requiere_codigo: ahí no se ofrece.
+  const cobroCodigoDisponible = settings.cobro_requiere_codigo !== undefined;
+  const [cobroCodigo, setCobroCodigo] = useState(settings.cobro_requiere_codigo === true);
   const [preflight, setPreflight] = useState<ConfigTransitionPreflight | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
@@ -57,6 +60,7 @@ export function StoreOperationsCard({
   const patchChanges: BusinessSettingsInput = {};
   if (cajaEntrega !== (settings.caja_entrega_en_espacio === true)) patchChanges.caja_entrega_en_espacio = cajaEntrega;
   if (modoEscuela !== (settings.modo_escuela === true)) patchChanges.modo_escuela = modoEscuela;
+  if (cobroCodigoDisponible && cobroCodigo !== (settings.cobro_requiere_codigo === true)) patchChanges.cobro_requiere_codigo = cobroCodigo;
   const trimmedFondo = fondoSugerido.trim();
   const currentFondo = settings.fondo_sugerido ?? '';
   if (trimmedFondo !== currentFondo) patchChanges.fondo_sugerido = trimmedFondo || null;
@@ -140,6 +144,17 @@ export function StoreOperationsCard({
           { value: false, label: 'Solo pago digital', hint: 'Solo tarjeta o saldo Vaiinilla.' },
         ]}
       />
+      {cobroCodigoDisponible && (
+        <Choice
+          name="cobro_requiere_codigo"
+          value={cobroCodigo}
+          onChange={(v) => { setSavedNotice(null); setCobroCodigo(v); }}
+          options={[
+            { value: false, label: 'Cobrar sin pedir código', hint: 'Caja cobra en efectivo cualquier pedido, como siempre.' },
+            { value: true, label: 'Pedir el código del cliente al cobrar', hint: 'Lo pedido en la app se cobra con su QR, su código o su credencial, según cómo se entrega. Lo de mostrador no cambia.' },
+          ]}
+        />
+      )}
       <SelectField
         label="Entrega en mesa o espacio"
         value={entregaEnEspacio}

@@ -20,7 +20,7 @@ const FIELD_COPY: Record<'qr_o_codigo' | 'qr' | 'codigo', { label: string; place
   codigo: {
     label: 'Código de 4 dígitos',
     placeholder: 'Escribe el código que te dicta o escanea su credencial',
-    hint: 'El código es de un solo pedido. Tras 5 códigos equivocados, solo sirve su credencial.',
+    hint: 'El código es de un solo pedido. Tras 5 códigos equivocados, sirve su QR o su credencial.',
   },
 };
 

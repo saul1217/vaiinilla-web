@@ -195,13 +195,17 @@ function sameMixedPaymentBody(a: MixedPaymentAttempt['body'], b: MixedPaymentAtt
 }
 
 /** Manda el intento guardado con su llave. Solo se llama dentro del candado del pedido. */
-async function sendMixedPaymentAttempt(token: string, attempt: MixedPaymentAttempt): Promise<MixedPaymentResult> {
+async function sendMixedPaymentAttempt(
+  token: string,
+  attempt: MixedPaymentAttempt,
+  proof: ReturnType<typeof pickupBody> = {},
+): Promise<MixedPaymentResult> {
   try {
     const result = await request<MixedPaymentResult>(`/pedidos/${attempt.orderId}/pagos-mixtos`, {
       method: 'POST',
       token,
       idempotencyKey: attempt.idempotencyKey,
-      body: attempt.body,
+      body: { ...attempt.body, ...proof },
     });
     writeMixedPaymentAttempt({ ...attempt, completedRemaining: result.data.restante });
     return result.data;
@@ -661,6 +665,8 @@ export const api = {
     montoRecibido: string,
     versionEsperada: number,
     propina?: string,
+    /** QR o código del cliente, si el negocio pide código para cobrar (migración 225). */
+    proof?: string,
   ): Promise<CashPaymentResult> {
     return (
       await request<CashPaymentResult>(`/pedidos/${id}/cobros-efectivo`, {
@@ -671,6 +677,7 @@ export const api = {
           monto_recibido: montoRecibido,
           version_esperada: versionEsperada,
           ...(propina && propina !== '0.00' ? { propina } : {}),
+          ...pickupBody(proof),
         },
       })
     ).data;
@@ -680,7 +687,7 @@ export const api = {
     token: string,
     owner: MixedPaymentOwner,
     id: string,
-    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
+    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string; proof?: string },
     expectedRemaining: string,
   ): Promise<MixedPaymentResult> {
     const scope = mixedPaymentScope(owner);
@@ -716,7 +723,8 @@ export const api = {
         };
         writeMixedPaymentAttempt(attempt);
       }
-      return sendMixedPaymentAttempt(token, attempt);
+      // La prueba del cliente va solo en el envío: el intento guardado en la pestaña no lleva su QR.
+      return sendMixedPaymentAttempt(token, attempt, pickupBody(input.proof));
     });
   },
 

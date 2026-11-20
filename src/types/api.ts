@@ -212,6 +212,8 @@ export interface OperationalStatus {
   recibiendo_pedidos: boolean;
   /** El negocio opera como escuela (padres e hijos): Cocina ve «Para mañana». Un back anterior no lo manda. */
   modo_escuela?: boolean;
+  /** Caja pide la prueba del cliente para cobrar lo pedido en la app (migración 225). */
+  cobro_requiere_codigo?: boolean;
   local_sin_conexion?: boolean;
   sesion_caja_abierta: boolean;
   caja_en_linea: boolean;
@@ -287,6 +289,8 @@ export interface OrderDetail {
   ahorro_combinado: string;
   cashback_otorgado: string;
   total: string;
+  /** Dónde nació el pedido: la app del cliente, el mostrador o una tablet VILLO. Un back anterior no lo manda. */
+  origen?: 'app' | 'mostrador' | 'villo' | null;
   /** Importes oficiales derivados en backend del ledger de pagos y reembolsos. */
   monto_pagado?: string;
   saldo_pendiente?: string;
@@ -636,6 +640,8 @@ export interface BusinessSettings {
   /** Logo del negocio (carrito y seguimiento en la app). Se cambia con su propia ruta. */
   logo_url?: string | null;
   tipos_disponibles: string[];
+  /** Caja pide el QR, el código o la credencial del cliente para cobrar lo pedido en la app (migración 225). Un back anterior no lo manda. */
+  cobro_requiere_codigo?: boolean;
   /** Padres e hijos: solo con true se muestra el admin de Escuela. Un backend anterior no lo manda. */
   modo_escuela?: boolean;
   /** Código de 6 caracteres para unirse a la escuela; null sin código. */

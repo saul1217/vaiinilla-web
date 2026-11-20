@@ -28,6 +28,7 @@ import { z } from 'zod';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
+import { paymentNeedsProof, paymentProofMode } from '../lib/cobro-codigo';
 import { StaffOrderForm } from '../components/staff-order-form';
 import { Button, Feedback, Field } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
@@ -85,6 +86,7 @@ function MixedOrderPayment({
   onDone,
   onUnavailable,
   onCancel,
+  proofMode,
 }: {
   token: string;
   owner: MixedPaymentOwner;
@@ -92,7 +94,11 @@ function MixedOrderPayment({
   onDone: (remaining: string, liquidated: boolean) => void;
   onUnavailable: () => void;
   onCancel: () => void;
+  /** Con el cobro con código (migración 225), qué prueba del cliente pide; sin él, ninguna. */
+  proofMode?: DeliveryValidation;
 }) {
+  const [proof, setProof] = useState('');
+  const proofMissing = Boolean(proofMode) && !proof.trim();
   const [pendingAttempt, setPendingAttempt] = useState(() => api.pendingMixedPayment(owner, order.id));
   const [method, setMethod] = useState<'efectivo' | 'terminal'>(pendingAttempt?.body.metodo_pago ?? 'efectivo');
   const [amount, setAmount] = useState(pendingAttempt?.body.monto ?? order.saldo_pendiente ?? order.total);
@@ -108,6 +114,7 @@ function MixedOrderPayment({
       metodoPago: method,
       monto: normalizeMoneyInput(amount),
       ...(method === 'efectivo' ? { montoRecibido: normalizeMoneyInput(received) } : {}),
+      ...(proofMode ? { proof } : {}),
     }, due),
     onSuccess: (result) => {
       setPendingAttempt(null);
@@ -162,9 +169,11 @@ function MixedOrderPayment({
       onBlur={() => { const normalized = normalizeMoneyInput(received); if (normalized !== received) setReceived(normalized); }}
       error={received && !enoughCash ? 'El efectivo recibido es menor al pago.' : undefined}
       hint={enoughCash && receivedCents !== null ? `Cambio: ${formatMoney(centsToMoney(receivedCents - amountCents))}` : 'Solo se registra para pagos en efectivo.'} />}
+    {proofMode && <QrTokenField value={proof} onChange={setProof} mode={proofMode}
+      error={proofMissing && payment.isError ? 'Pide la prueba del cliente para cobrar.' : undefined} />}
     <div className="form-actions mixed-payment__actions">
       <VaiButton variant="quiet" onClick={onCancel}>Cancelar</VaiButton>
-      <VaiButton type="submit" variant="accent" loading={payment.isPending} disabled={!validAmount || !enoughCash}>{pendingAttempt ? 'Reintentar el mismo pago' : 'Registrar pago'}</VaiButton>
+      <VaiButton type="submit" variant="accent" loading={payment.isPending} disabled={!validAmount || !enoughCash || proofMissing}>{pendingAttempt ? 'Reintentar el mismo pago' : 'Registrar pago'}</VaiButton>
     </div>
   </form>;
 }
@@ -378,6 +387,11 @@ export function PosPage() {
   });
   const deliveryNeedsQr = (order: OrderDetail) => deliveryRequiresQr(order, deliveryQr.data?.entrega_requiere_qr);
   const barPrepares = deliveryQr.data?.barra_prepara === true;
+  // Cobro con código (migración 225): qué prueba pide este cobro, o nada.
+  const cashProofMode = cashOrder && paymentNeedsProof(cashOrder, deliveryQr.data)
+    ? paymentProofMode(deliveryQr.data?.validacion_entrega)
+    : undefined;
+  const [paymentProof, setPaymentProof] = useState('');
 
   // Las filas cambian poco: el dueño las crea en Mesas y espacios.
   const spaces = useQuery({
@@ -458,11 +472,14 @@ export function PosPage() {
     return () => window.clearTimeout(timer);
   }, [notice]);
   const collectMutation = useMutation({
-    mutationFn: ({ order, amount, propina }: { order: OrderDetail; amount: string; propina: string }) =>
-      api.collectCash(token, order.id, amount, order.version, propina),
+    mutationFn: ({ order, amount, propina, proof }: { order: OrderDetail; amount: string; propina: string; proof?: string }) =>
+      proof === undefined
+        ? api.collectCash(token, order.id, amount, order.version, propina)
+        : api.collectCash(token, order.id, amount, order.version, propina, proof),
     onSuccess: async (result) => {
       setNotice(<>Cobro registrado. Cambio para el cliente: <strong>{formatMoney(result.cambio)}</strong>.</>);
       setCashOrder(null);
+      setPaymentProof('');
       cashForm.reset({ amount: '' });
       await refreshOperation();
     },
@@ -592,6 +609,7 @@ export function PosPage() {
     collectMutation.reset();
     setTip({ kind: 'none' });
     setCashOrder(order);
+    setPaymentProof('');
     cashForm.reset({ amount: '' });
   }
 
@@ -957,7 +975,7 @@ export function PosPage() {
 
       <AppSheet
         open={Boolean(cashOrder)}
-        onOpenChange={(open) => { if (!open) setCashOrder(null); }}
+        onOpenChange={(open) => { if (!open) { setCashOrder(null); setPaymentProof(''); } }}
         title={cashOrder ? `Cobrar pedido ${cashOrder.folio}` : 'Cobrar pedido'}
         contentClassName="staff-payment-dialog"
         description={cashFlow === 'account'
@@ -995,6 +1013,7 @@ export function PosPage() {
               rememberMixedUnavailable();
             }}
             onCancel={() => setCashOrder(null)}
+            proofMode={cashProofMode}
             onDone={async (remaining, liquidated) => {
               setNotice(liquidated
                 ? <>Pago registrado. Pedido liquidado.</>
@@ -1013,8 +1032,8 @@ export function PosPage() {
           <form
             className="transaction-form staff-payment"
             onSubmit={(event) => void cashForm.handleSubmit(({ amount }) => {
-              if (tipTooBig) return;
-              collectMutation.mutate({ order: cashOrder, amount, propina: tipValue });
+              if (tipTooBig || (cashProofMode && !paymentProof.trim())) return;
+              collectMutation.mutate({ order: cashOrder, amount, propina: tipValue, ...(cashProofMode ? { proof: paymentProof } : {}) });
             })(event)}
           >
             {mixedEndpointUnavailable && <Feedback tone="info">El pago mixto todavía no está disponible en el servidor. Registra el cobro completo en efectivo.</Feedback>}
@@ -1039,13 +1058,17 @@ export function PosPage() {
                 }
               }}
             />
+            {cashProofMode && (
+              <QrTokenField value={paymentProof} onChange={setPaymentProof} mode={cashProofMode}
+                error={!paymentProof.trim() && collectMutation.isError ? 'Pide la prueba del cliente para cobrar.' : undefined} />
+            )}
             <div className={`change-preview ${change !== null ? 'change-preview--ready' : ''}`} aria-live="polite">
               <span>{change === null && receivedAmount && calculateChange(cashToCollect, receivedAmount) !== null ? 'Falta' : 'Cambio'}</span>
               <strong>{change === null ? receivedAmount && calculateChange(cashToCollect, receivedAmount) !== null ? formatMoney(calculateChange(cashToCollect, receivedAmount)!) : '—' : formatMoney(change)}</strong>
             </div>
             <div className="form-actions">
               <Button type="button" variant="ghost" onClick={() => setCashOrder(null)}>Cancelar</Button>
-              <Button type="submit" loading={collectMutation.isPending} disabled={change === null || tipTooBig} aria-disabled={change === null || tipTooBig}>
+              <Button type="submit" loading={collectMutation.isPending} disabled={change === null || tipTooBig || Boolean(cashProofMode && !paymentProof.trim())} aria-disabled={change === null || tipTooBig || Boolean(cashProofMode && !paymentProof.trim())}>
                 Confirmar cobro
               </Button>
             </div>
