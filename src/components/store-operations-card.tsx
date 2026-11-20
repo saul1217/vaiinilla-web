@@ -32,6 +32,7 @@ export function StoreOperationsCard({
   const [fondoSugerido, setFondoSugerido] = useState(settings.fondo_sugerido ?? '');
   const [horaInicioDia, setHoraInicioDia] = useState(settings.hora_inicio_dia ?? '00:00');
   const [modoEscuela, setModoEscuela] = useState(settings.modo_escuela === true);
+  const [cajasIndependientes, setCajasIndependientes] = useState(settings.cajas_independientes === true);
   const [preflight, setPreflight] = useState<ConfigTransitionPreflight | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
@@ -44,6 +45,8 @@ export function StoreOperationsCard({
   const patchChanges: BusinessSettingsInput = {};
   if (cajaEntrega !== (settings.caja_entrega_en_espacio === true)) patchChanges.caja_entrega_en_espacio = cajaEntrega;
   if (modoEscuela !== (settings.modo_escuela === true)) patchChanges.modo_escuela = modoEscuela;
+  if (settings.cajas_independientes != null && cajasIndependientes !== settings.cajas_independientes)
+    patchChanges.cajas_independientes = cajasIndependientes;
   const trimmedFondo = fondoSugerido.trim();
   const currentFondo = settings.fondo_sugerido ?? '';
   if (trimmedFondo !== currentFondo) patchChanges.fondo_sugerido = trimmedFondo || null;
@@ -106,6 +109,17 @@ export function StoreOperationsCard({
           { value: false, label: 'Solo Mesero entrega en mesa/espacio', hint: 'Caja solo entrega lo que se recoge en barra.' },
         ]}
       />
+      {settings.cajas_independientes != null && (
+        <Choice
+          name="cajas_independientes"
+          value={cajasIndependientes}
+          onChange={(v) => { setSavedNotice(null); setCajasIndependientes(v); }}
+          options={[
+            { value: false, label: 'Una caja para todos', hint: 'Todas las cajeras cobran en la misma caja y se hace un solo corte.' },
+            { value: true, label: 'Cada cajera con su caja', hint: 'Cada una abre su caja, cuenta su dinero y hace su corte. Se cambia con las cajas cerradas.' },
+          ]}
+        />
+      )}
       <Choice
         name="cocina_prepara_sin_cobrar"
         value={cocinaSinCobrar}
