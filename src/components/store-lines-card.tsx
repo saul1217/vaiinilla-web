@@ -56,7 +56,7 @@ export function StoreLinesCard({
   const touch = () => setSavedNotice(null);
 
   return (
-    <section className="rounded-3xl border border-ink/10 bg-white-warm p-5 grid gap-4" aria-label="Filas para recoger">
+    <section id="ajuste-filas" tabIndex={-1} className="rounded-3xl border border-ink/10 bg-white-warm p-5 grid gap-4" aria-label="Filas para recoger">
       <div>
         <h3 className="text-base font-extrabold">Filas para recoger</h3>
         <p className="text-sm text-muted">

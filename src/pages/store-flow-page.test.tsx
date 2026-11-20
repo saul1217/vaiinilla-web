@@ -281,3 +281,29 @@ describe('Flujo de mi tienda', () => {
     expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeEnabled();
   });
 });
+
+describe('llegar desde «Buscar ajuste»', () => {
+  beforeEach(() => {
+    apiMock.businessSettings.mockReset().mockResolvedValue(cafeteria);
+    apiMock.cardPayments.mockReset().mockResolvedValue(null);
+  });
+
+  function renderAt(url: string) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <MemoryRouter initialEntries={[url]}>
+        <QueryClientProvider client={client}><StoreFlowPage /></QueryClientProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  it('?ajuste=flow abre «Cómo funciona tu tienda»', async () => {
+    renderAt('/app/flujo?ajuste=flow');
+    expect(await screen.findByRole('button', { name: 'Guardar flujo' })).toBeInTheDocument();
+  });
+
+  it('?ajuste=operacion pone el foco en la tarjeta de Operación de Caja', async () => {
+    renderAt('/app/flujo?ajuste=operacion');
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('id', 'ajuste-operacion'));
+  });
+});

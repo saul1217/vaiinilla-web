@@ -95,7 +95,7 @@ export function StoreOperationsCard({
   });
 
   return (
-    <section className="rounded-3xl border border-ink/10 bg-white-warm p-5 grid gap-4" aria-label="Operación avanzada">
+    <section id="ajuste-operacion" tabIndex={-1} className="rounded-3xl border border-ink/10 bg-white-warm p-5 grid gap-4" aria-label="Operación avanzada">
       <div>
         <h3 className="text-base font-extrabold">Operación de Caja, Cocina y cortes</h3>
         <p className="text-sm text-muted">Los cambios de modo operativo se validan con preflight antes de aplicarse.</p>

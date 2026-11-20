@@ -1,8 +1,8 @@
 import { AppPageHeader } from '../components/app-page-header';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Clock3, Link2, CreditCard, MapPin, Image as ImageIcon, Workflow } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { CardPaymentsCard } from '../components/card-payments-card';
 import { StoreDirectoryCard } from '../components/store-directory-card';
 import { StoreImagesCard } from '../components/store-images-card';
@@ -35,6 +35,12 @@ import {
 import type { BusinessSettings, DeliveryValidation } from '../types/api';
 import { StoreFlowEditButton, StoreFlowEditorSheet, type StoreFlowEditor } from '../components/store-flow-editor-sheet';
 
+const EDITORS: Exclude<StoreFlowEditor, null>[] = ['flow', 'payments', 'directory', 'media'];
+
+function requestedEditor(value: string | null): StoreFlowEditor {
+  return EDITORS.find((editor) => editor === value) ?? null;
+}
+
 function mediaSummary(settings: BusinessSettings) {
   const images = [settings.logo_url, settings.imagen_url].filter(Boolean).length;
   const videos = (settings.videos_local ?? []).length;
@@ -66,14 +72,25 @@ function toSettings(data: BusinessSettings): FlowSettings | null {
   };
 }
 
+/**
+ * Llegar desde «Buscar ajuste» estando ya en esta pantalla cambia solo el ?ajuste=: se vuelve a
+ * montar para abrir el editor o bajar a la tarjeta que se pidió.
+ */
 export function StoreFlowPage() {
+  const { search } = useLocation();
+  return <StoreFlowScreen key={new URLSearchParams(search).get('ajuste') ?? ''} />;
+}
+
+function StoreFlowScreen() {
   const { tenant } = useSessions();
   const token = tenant?.token ?? '';
   const scopeId = tenant?.context.establecimiento_id ?? '';
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowSettings | null>(null);
   const [saved, setSaved] = useState(false);
-  const [editor, setEditor] = useState<StoreFlowEditor>(null);
+  // El buscador de ajustes llega con ?ajuste=: abre su editor o baja a su tarjeta.
+  const requested = new URLSearchParams(useLocation().search).get('ajuste');
+  const [editor, setEditor] = useState<StoreFlowEditor>(() => requestedEditor(requested));
   const opener = useRef<HTMLElement>(null);
   const openEditor = (next: Exclude<StoreFlowEditor, null>, event: React.MouseEvent<HTMLButtonElement>) => {
     opener.current = event.currentTarget;
@@ -104,6 +121,13 @@ export function StoreFlowPage() {
     enabled: Boolean(token),
     queryFn: () => api.businessSettings(token),
   });
+  const hasData = Boolean(query.data);
+  useEffect(() => {
+    if (!requested || !hasData || requestedEditor(requested)) return;
+    const section = document.getElementById(`ajuste-${requested}`);
+    section?.scrollIntoView?.({ block: 'start' });
+    section?.focus?.({ preventScroll: true });
+  }, [requested, hasData]);
   const current = query.data ? toSettings(query.data) : null;
   const settings = draft ?? current;
   const save = useMutation({

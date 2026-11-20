@@ -37,6 +37,7 @@ import { CASHBACK_ENABLED } from '../lib/features';
 import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { AGENDA_ENABLED } from '../lib/agenda-feature';
 import { AGENDA_ROLES, hasRentableCourts } from '../lib/agenda';
+import { SettingsSearch } from './settings-search';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
 import { BOWLING_ADMIN_ENABLED } from '../lib/bowling-admin-feature';
 import { REPARTO_ENABLED } from '../lib/reparto-feature';
@@ -211,6 +212,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
       onAccountOpenChange={setOpen}
       onSwitchContext={switchContext}
       onExit={exit}
+      search={role === 'admin' ? <SettingsSearch token={tenant.token} /> : null}
       children={children}
     />
   );
@@ -218,6 +220,8 @@ export function TenantShell({ children }: { children: ReactNode }) {
 
 interface TenantLayoutProps {
   navigation: NavItem[];
+  /** «Buscar ajuste», solo para Administración: va arriba del contenido en cada pantalla. */
+  search?: ReactNode;
   title: string;
   subtitle: string;
   accountOpen: boolean;
@@ -227,7 +231,7 @@ interface TenantLayoutProps {
   children: ReactNode;
 }
 
-function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenChange, onSwitchContext, onExit, children }: TenantLayoutProps) {
+function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenChange, onSwitchContext, onExit, search, children }: TenantLayoutProps) {
   const [theme, setTheme] = useAdminTheme();
   const [moreOpen, setMoreOpen] = useState(false);
   const accountButton = useRef<HTMLButtonElement>(null);
@@ -254,7 +258,10 @@ function TenantLayout({ navigation, title, subtitle, accountOpen, onAccountOpenC
     <AppIdentityHeader title={title} subtitle={subtitle} dark={isDarkAdminTheme(theme)} opener={accountButton}
       open={accountOpen} onOpen={() => onAccountOpenChange(true)} />
     <DesktopAppRail navigation={navigation} title={title} subtitle={subtitle} dark={isDarkAdminTheme(theme)}>{accountActions}</DesktopAppRail>
-    <main id="contenido" ref={main} className="app-main tenant-app__main" tabIndex={-1}>{children}</main>
+    <main id="contenido" ref={main} className="app-main tenant-app__main" tabIndex={-1}>
+      {search && <div className="mx-auto w-full max-w-5xl px-4 pt-4 sm:px-6">{search}</div>}
+      {children}
+    </main>
     <MobileAppNav navigation={primary} more={secondary.length > 0} moreActive={secondary.some((item) => location.pathname === item.to)}
       moreOpen={moreOpen} opener={moreButton} onMore={() => { moreReturnFocus.current = moreButton.current; setMoreOpen(true); }} />
     <AppSheet open={moreOpen} onOpenChange={setMoreOpen} title="Más" returnFocusRef={moreReturnFocus} fallbackFocusRef={main}>

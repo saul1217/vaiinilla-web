@@ -71,7 +71,7 @@ export function StoreDeliveryPreordersCard({
   });
 
   return (
-    <section className="rounded-3xl border border-ink/10 bg-white-warm p-5 grid gap-4" aria-label="Encargos y reparto a domicilio">
+    <section id="ajuste-encargos" tabIndex={-1} className="rounded-3xl border border-ink/10 bg-white-warm p-5 grid gap-4" aria-label="Encargos y reparto a domicilio">
       <div>
         <h3 className="text-base font-extrabold">Encargos con fecha y reparto a domicilio</h3>
         <p className="text-sm text-muted">Disponible para cualquier negocio: apartados para otros días y entrega a domicilio.</p>
