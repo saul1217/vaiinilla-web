@@ -86,10 +86,11 @@ export function StoreFlowPage() {
   const requested = new URLSearchParams(location.search).get('ajuste');
   const [chosen, setEditor] = useState<StoreFlowEditor>(null);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
-  const editor = chosen ?? (dismissedKey === location.key ? null : requestedEditor(requested));
+  const editor = chosen ?? (dismissedKey === (location.key ?? '') ? null : requestedEditor(requested));
   const closeEditor = () => {
     setEditor(null);
-    setDismissedKey(location.key);
+    // En React Router 5 la key puede faltar (la primera entrada de un historial en memoria).
+    setDismissedKey(location.key ?? '');
   };
   const opener = useRef<HTMLElement>(null);
   const openEditor = (next: Exclude<StoreFlowEditor, null>, event: React.MouseEvent<HTMLButtonElement>) => {
