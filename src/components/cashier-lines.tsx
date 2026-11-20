@@ -11,6 +11,7 @@ import {
   isStaleReady,
   hiddenByLine,
   isLineOrder,
+  lineIdOf,
   minutesSinceReady,
   readyNotice,
   stationDone,
@@ -35,7 +36,7 @@ export function CashierLineTabs({ lines, orders, selected, onSelect }: {
   if (lines.length < 2) return null;
   // El número es lo que nació en esa fila, igual que la columna del tablero. Lo de mesa y para
   // llevar lo ven todas las cajas, así que no se suma a ninguna.
-  const count = (lineId: number) => orders.filter((order) => order.espacio?.id === lineId).length;
+  const count = (lineId: number) => orders.filter((order) => lineIdOf(order) === lineId).length;
   const hidden = hiddenByLine(orders, selected);
   return (
     <div className="cashier-lines">
@@ -218,9 +219,9 @@ function OrderCard({ order, stage, now, busyId, primary, onReady, onOpen, onRemi
 }
 
 function AllLinesBoard({ lines, orders, ...actions }: BoardActions & { lines: OrderSpace[]; orders: OrderDetail[] }) {
-  const unassigned = orders.filter((order) => !isLineOrder(order) || !lines.some((line) => line.id === order.espacio?.id));
+  const unassigned = orders.filter((order) => !isLineOrder(order) || !lines.some((line) => line.id === lineIdOf(order)));
   const columns = [
-    ...lines.map((line) => ({ key: String(line.id), title: line.nombre, orders: orders.filter((order) => order.espacio?.id === line.id) })),
+    ...lines.map((line) => ({ key: String(line.id), title: line.nombre, orders: orders.filter((order) => lineIdOf(order) === line.id) })),
     ...(unassigned.length ? [{ key: 'sin-fila', title: 'Mesas y para llevar', orders: unassigned }] : []),
   ];
   return (

@@ -10,9 +10,18 @@ export function cashierLines(spaces: OrderSpace[]): OrderSpace[] {
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { numeric: true }));
 }
 
-/** El pedido nació en una fila (una barra o un drive-thru), no en una mesa ni sin lugar. */
+/**
+ * La fila del pedido: la barra que le tocó por turno o como express (`fila`, migración 222) o, si
+ * no, la barra o drive-thru donde nació. Null: mesa o sin lugar.
+ */
+export function lineIdOf(order: OrderDetail): number | null {
+  if (order.fila) return order.fila.id;
+  return order.espacio !== null && LINE_TYPES.includes(order.espacio.tipo) ? order.espacio.id : null;
+}
+
+/** El pedido es de una fila (una barra o un drive-thru), no de una mesa ni sin lugar. */
 export function isLineOrder(order: OrderDetail): boolean {
-  return order.espacio !== null && LINE_TYPES.includes(order.espacio.tipo);
+  return lineIdOf(order) !== null;
 }
 
 /**
@@ -22,13 +31,13 @@ export function isLineOrder(order: OrderDetail): boolean {
  */
 export function ordersInLine(orders: OrderDetail[], lineId: number | null): OrderDetail[] {
   if (lineId === null) return orders;
-  return orders.filter((order) => !isLineOrder(order) || order.espacio?.id === lineId);
+  return orders.filter((order) => !isLineOrder(order) || lineIdOf(order) === lineId);
 }
 
 /** Cuántos pedidos de otras filas deja de ver esta caja al elegir la suya. */
 export function hiddenByLine(orders: OrderDetail[], lineId: number | null): number {
   if (lineId === null) return 0;
-  return orders.filter((order) => isLineOrder(order) && order.espacio?.id !== lineId).length;
+  return orders.filter((order) => isLineOrder(order) && lineIdOf(order) !== lineId).length;
 }
 
 function liveItems(order: OrderDetail, station: PreparationStation) {

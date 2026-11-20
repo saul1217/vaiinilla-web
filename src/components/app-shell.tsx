@@ -24,6 +24,7 @@ import {
   Table2,
   Truck,
   Workflow,
+  Rows3,
   UserPlus,
   WalletCards,
   X,
@@ -76,6 +77,7 @@ const adminNavigation: NavItem[] = [
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo de clientes', icon: HandCoins } satisfies NavItem] : []),
   ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto y encargos', icon: Truck } satisfies NavItem] : []),
   { to: '/app/pos', label: 'Pedir', icon: WalletCards },
+  { to: '/app/filas', label: 'Filas en vivo', icon: Rows3 },
   ...agendaNavigation,
 ];
 
@@ -83,6 +85,7 @@ const posNavigation: NavItem[] = [
   { to: '/app/pos', label: 'Caja', icon: WalletCards },
   ...(WALLET_CAJA_ENABLED ? [{ to: '/app/saldo', label: 'Saldo', icon: HandCoins } satisfies NavItem] : []),
   ...(REPARTO_ENABLED ? [{ to: '/app/reparto', label: 'Reparto', icon: Truck } satisfies NavItem] : []),
+  { to: '/app/filas', label: 'Filas en vivo', icon: Rows3 },
   ...agendaNavigation,
 ];
 const kitchenNavigation: NavItem[] = [

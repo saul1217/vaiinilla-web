@@ -257,6 +257,12 @@ export interface OrderItem {
   rechazo?: { motivo: string; monto: string } | null;
 }
 
+export interface OrderLine {
+  id: number;
+  nombre: string;
+  express: boolean;
+}
+
 export interface OrderDetail {
   id: string;
   folio: number;
@@ -268,6 +274,8 @@ export interface OrderDetail {
   sesion_espacio_id?: string | null;
   sesion_espacio_estado?: 'abierta' | 'cerrada' | null;
   espacio: OrderSpace | null;
+  /** Dónde se forma el cliente para recogerlo (migración 222). Sin el back nuevo no viene. */
+  fila?: OrderLine | null;
   subtotal: string;
   ahorro_combinado: string;
   cashback_otorgado: string;
@@ -653,6 +661,44 @@ export interface BusinessSettings {
   anticipo_porcentaje?: number | null;
   datos_transferencia?: string | null;
   telefono_contacto?: string | null;
+  /** Filas para recoger (migración 222). Un backend anterior no los manda. */
+  reparto_filas?: 'lugar' | 'turno' | null;
+  fila_express_espacio_id?: number | null;
+  fila_express_hora_corte?: string | null;
+}
+
+export interface LineCounts {
+  por_cobrar: number;
+  en_preparacion: number;
+  listos: number;
+  entregados: number;
+  no_recogidos: number;
+}
+
+export interface LiveLine extends LineCounts {
+  id: number;
+  nombre: string;
+  express: boolean;
+}
+
+export interface LiveStaffRow {
+  usuario_id: string;
+  rol: 'cajero' | 'mesero' | 'cocina';
+  nombre: string | null;
+  entregados: number;
+  listos: number;
+  no_recogidos: number;
+  ultimo_movimiento: string | null;
+}
+
+/** GET /reportes/filas-en-vivo. */
+export interface LinesLiveBoard {
+  fecha_operativa: string;
+  reparto_filas: 'lugar' | 'turno';
+  antes_del_corte: boolean;
+  filas: LiveLine[];
+  sin_fila: LineCounts;
+  personal: LiveStaffRow[];
 }
 
 export interface WalletAdjustment {

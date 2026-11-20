@@ -8,6 +8,7 @@ import { StoreDirectoryCard } from '../components/store-directory-card';
 import { StoreImagesCard } from '../components/store-images-card';
 import { StoreVideosCard } from '../components/store-videos-card';
 import { StoreOperationsCard } from '../components/store-operations-card';
+import { StoreLinesCard } from '../components/store-lines-card';
 import { StoreDeliveryPreordersCard } from '../components/store-delivery-preorders-card';
 import { Choice } from '../components/choice';
 import { Button, Feedback, Field } from '../components/ui';
@@ -205,6 +206,7 @@ export function StoreFlowPage() {
         <div className="grid gap-4">
           <StoreOperationsCard key={`ops-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
           <StoreDeliveryPreordersCard key={`del-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
+          <StoreLinesCard key={`lines-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
         </div>
       )}
       <StoreFlowEditorSheet

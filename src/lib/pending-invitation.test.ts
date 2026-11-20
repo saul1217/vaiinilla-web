@@ -9,7 +9,7 @@ import {
 
 describe('invitación pendiente', () => {
   beforeEach(() => {
-    window.sessionStorage.clear();
+    window.localStorage.clear();
     window.history.replaceState({}, '', '/invitaciones/aceptar');
   });
 

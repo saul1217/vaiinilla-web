@@ -13,6 +13,7 @@ import {
   type MixedPaymentScope,
 } from './mixed-payment-attempts';
 import type {
+  LinesLiveBoard,
   ApiEnvelope,
   ApiErrorEnvelope,
   OrderSpace,
@@ -292,6 +293,16 @@ function waitOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
     const onAbort = () => { clearTimeout(timer); reject(cancelled()); };
     signal?.addEventListener('abort', onAbort, { once: true });
   });
+}
+
+/**
+ * Lo que se tecleó o escaneó al entregar: 4 dígitos son el código que el cliente dicta en la barra
+ * (`codigo_recoger`); lo demás es el token de su QR.
+ */
+export function pickupBody(pickup?: string): { qr_token?: string; codigo_recoger?: string } {
+  const value = pickup?.trim();
+  if (!value) return {};
+  return /^\d{4}$/.test(value) ? { codigo_recoger: value } : { qr_token: value };
 }
 
 export const api = {
@@ -749,7 +760,7 @@ export const api = {
         body: {
           estado_objetivo: targetStatus,
           version_esperada: expectedVersion,
-          ...(pickupToken ? { qr_token: pickupToken } : {}),
+          ...pickupBody(pickupToken),
         },
       })
     ).data;
@@ -1089,6 +1100,11 @@ export const api = {
 
   async spaceAvailability(token: string): Promise<SpaceAvailability[]> {
     return (await request<SpaceAvailability[]>('/espacios/disponibilidad', { token })).data;
+  },
+
+  /** Tablero de Caja: cómo va hoy cada fila y cada integrante del personal. Admin y cajero. */
+  async linesLive(token: string): Promise<LinesLiveBoard> {
+    return (await request<LinesLiveBoard>('/reportes/filas-en-vivo', { token })).data;
   },
 
   /** Espacios activos del negocio; Caja los usa para saber qué filas hay. Cualquier rol del personal. */

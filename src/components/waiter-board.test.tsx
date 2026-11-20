@@ -170,7 +170,7 @@ describe('WaiterBoard: solicitud de cuenta de mesa', () => {
     await user.click(screen.getByRole('button', { name: 'Cancelar' }));
     expect(screen.getByRole('button', { name: 'Entregar' })).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Entregar' }));
-    await user.type(screen.getByRole('textbox', { name: /token/i }), 'qr-28');
+    await user.type(screen.getByRole('textbox', { name: /QR o código/i }), 'qr-28');
     await user.click(screen.getByRole('button', { name: 'Confirmar entrega' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Entregar' })).not.toBeInTheDocument());
     expect(apiMock.deliverOrder).toHaveBeenCalledExactlyOnceWith('staff-token', 'order-28', 1, 'qr-28');

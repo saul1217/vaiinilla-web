@@ -154,3 +154,19 @@ describe('avisar otra vez, no vino y la pistola', () => {
     expect(scannerHiddenToday(new Date('2026-11-20T08:00:00'))).toBe(false);
   });
 });
+
+describe('fila asignada por turno o express (migración 222)', () => {
+  it('la fila asignada manda sobre el lugar donde nació', () => {
+    const turno = order({ destino: 'para_llevar', fila: { id: 2, nombre: 'Barra 2', express: false } });
+    const delQr = order({ destino: 'en_espacio', espacio: barra1 });
+    const sinFila = order({ destino: 'para_llevar' });
+    expect(ordersInLine([turno, delQr, sinFila], 2)).toEqual([turno, sinFila]);
+    expect(ordersInLine([turno, delQr, sinFila], 1)).toEqual([delQr, sinFila]);
+    expect(hiddenByLine([turno, delQr, sinFila], 1)).toBe(1);
+  });
+
+  it('sin fila asignada sigue contando la barra del QR', () => {
+    const viaMesa = order({ destino: 'en_espacio', espacio: mesa, fila: null });
+    expect(ordersInLine([viaMesa], 1)).toEqual([viaMesa]);
+  });
+});
