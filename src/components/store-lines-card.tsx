@@ -40,6 +40,8 @@ export function StoreLinesCard({
 
   const save = useMutation({
     mutationFn: () => api.saveBusinessSettings(token, changes),
+    // La tarjeta no se vuelve a montar al refrescar la configuración (su key no cambia): así el
+    // aviso de guardado se queda a la vista. Lo escrito ya es lo guardado.
     onSuccess: (data) => {
       queryClient.setQueryData(['business-settings', scopeId], data);
       void queryClient.invalidateQueries({ queryKey: ['business-settings', scopeId] });

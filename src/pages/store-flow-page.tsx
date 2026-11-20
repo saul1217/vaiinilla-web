@@ -206,7 +206,7 @@ export function StoreFlowPage() {
         <div className="grid gap-4">
           <StoreOperationsCard key={`ops-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
           <StoreDeliveryPreordersCard key={`del-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
-          <StoreLinesCard key={`lines-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
+          <StoreLinesCard key={`lines-${scopeId}`} token={token} scopeId={scopeId} settings={query.data} />
         </div>
       )}
       <StoreFlowEditorSheet
