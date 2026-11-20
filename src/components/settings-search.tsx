@@ -18,7 +18,7 @@ export function SettingsSearch({ token }: { token: string }) {
   useEffect(() => {
     if (!asked || !token) return;
     let alive = true;
-    api.businessSettings(token).then(
+    Promise.resolve().then(() => api.businessSettings(token)).then(
       (settings) => { if (alive) setCtx({ settings }); },
       // Sin los ajustes se busca solo con las banderas: mejor eso que nada.
       () => undefined,

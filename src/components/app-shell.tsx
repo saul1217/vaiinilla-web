@@ -162,7 +162,8 @@ function useAgendaNavigationLive(role: OperationalRole, token: string, storeId: 
     let alive = true;
     let pending = courtsByStore.get(storeId);
     if (!pending) {
-      pending = api.courtAvailability(token).then(hasRentableCourts);
+      // Un error al llamar (no solo al responder) tampoco tumba el menú: queda como «no se sabe».
+      pending = Promise.resolve().then(() => api.courtAvailability(token)).then(hasRentableCourts);
       // Un fallo no se recuerda: la siguiente pantalla vuelve a preguntar.
       pending.catch(() => courtsByStore.delete(storeId));
       courtsByStore.set(storeId, pending);
