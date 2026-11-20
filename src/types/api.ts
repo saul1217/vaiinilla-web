@@ -232,7 +232,7 @@ export interface OperationalStatus {
   validacion_entrega?: DeliveryValidation;
 }
 
-/** Cómo valida Caja la entrega de un pedido para llevar (migración 226 del back). */
+/** Cómo valida Caja la entrega de un pedido para llevar (migración 227 del back). */
 export type DeliveryValidation = 'qr_o_codigo' | 'qr' | 'codigo' | 'ninguna';
 
 export interface OrderSpace {

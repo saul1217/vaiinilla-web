@@ -132,7 +132,7 @@ export function StoreFlowPage() {
   const steps = settings ? buildFlow(settings) : [];
   const summary = flowSummary(steps);
   const unknownType = Boolean(query.data && !current);
-  // Back con las migraciones 225 y 226: tipo fijo y modos de entrega.
+  // Back con las migraciones 226 y 227: tipo fijo y modos de entrega.
   const typeLocked = query.data?.tipo_bloqueado === true;
   const deliveryModes = query.data?.validacion_entrega !== undefined;
 

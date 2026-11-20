@@ -80,7 +80,7 @@ const establishmentSchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/, 'Usa el formato HH:mm:ss.'),
   identificador_cliente_etiqueta: z.string().trim().min(2, 'Captura la etiqueta visible.'),
   identificador_cliente_obligatorio: z.boolean(),
-  // Migración 225 del back: el negocio no puede cambiar su tipo. Solo al editar.
+  // Migración 226 del back: el negocio no puede cambiar su tipo. Solo al editar.
   tipo_bloqueado: z.boolean().optional(),
   descripcion: z.string().trim().max(500, 'Usa máximo 500 caracteres.'),
   imagen_url: z.string().trim(),

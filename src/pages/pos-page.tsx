@@ -51,7 +51,7 @@ import { deliveryRequiresQr } from '../lib/delivery-policy';
 import { printOrderTicket } from '../lib/order-ticket-print';
 import type { DeliveryValidation, OrderDetail, StaffOrderResult } from '../types/api';
 
-/** Qué pedirle al cliente al entregar, según cómo valida el negocio (migración 226 del back). */
+/** Qué pedirle al cliente al entregar, según cómo valida el negocio (migración 227 del back). */
 function deliveryPrompt(mode?: DeliveryValidation): string {
   if (mode === 'qr') return 'Escanea el QR del pedido o la credencial del alumno. El código de 4 dígitos no sirve.';
   if (mode === 'codigo') return 'Escribe el código de 4 dígitos que te dicta el cliente o escanea la credencial del alumno.';

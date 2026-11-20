@@ -4,7 +4,7 @@ import jsQR from 'jsqr';
 import { Button, Field } from './ui';
 import type { DeliveryValidation } from '../types/api';
 
-// Lo que pide el campo según cómo valida la entrega el negocio (migración 226 del back). La
+// Lo que pide el campo según cómo valida la entrega el negocio (migración 227 del back). La
 // credencial del alumno sirve en todos los modos.
 const FIELD_COPY: Record<'qr_o_codigo' | 'qr' | 'codigo', { label: string; placeholder: string; hint: string }> = {
   qr_o_codigo: {
