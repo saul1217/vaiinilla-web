@@ -49,7 +49,21 @@ import { MONEY_PATTERN, calculateChange, centsToMoney, formatMoney, moneyToCents
 import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeferredDeliveryOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
 import { deliveryRequiresQr } from '../lib/delivery-policy';
 import { printOrderTicket } from '../lib/order-ticket-print';
-import type { OrderDetail, StaffOrderResult } from '../types/api';
+import type { DeliveryValidation, OrderDetail, StaffOrderResult } from '../types/api';
+
+/** Qué pedirle al cliente al entregar, según cómo valida el negocio (migración 227 del back). */
+function deliveryPrompt(mode?: DeliveryValidation): string {
+  if (mode === 'qr') return 'Escanea el QR del pedido o la credencial del alumno. El código de 4 dígitos no sirve.';
+  if (mode === 'codigo') return 'Escribe el código de 4 dígitos que te dicta el cliente o escanea la credencial del alumno.';
+  return 'Escanea el QR del cliente o escribe el código de 4 dígitos que te dicta. Debe ser de este pedido.';
+}
+
+/** El aviso corto cuando se confirma sin nada en el campo. */
+function deliveryMissing(mode?: DeliveryValidation): string {
+  if (mode === 'qr') return 'Escanea su QR o su credencial.';
+  if (mode === 'codigo') return 'Escribe su código de 4 dígitos o escanea su credencial.';
+  return 'Escanea su QR o escribe su código de 4 dígitos.';
+}
 import type { AccountAbonoResult, CashLastClose } from '../types/api';
 import { CORTES_REPORTE_ENABLED, isPosMixedPaymentsEnabled } from '../lib/features';
 import { Link } from 'react-router-dom';
@@ -1045,7 +1059,7 @@ export function PosPage() {
         title={deliveryOrder ? `Entregar pedido ${deliveryOrder.folio}` : 'Entregar pedido'}
         contentClassName="staff-delivery-dialog"
         description={deliveryOrder && deliveryNeedsQr(deliveryOrder)
-          ? 'Escanea el QR del cliente o escribe el código de 4 dígitos que te dicta. Debe ser de este pedido.'
+          ? deliveryPrompt(deliveryQr.data?.validacion_entrega)
           : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
       >
         {deliveryOrder && (
@@ -1072,7 +1086,8 @@ export function PosPage() {
                 autoFocus
                 value={qrToken}
                 onChange={updateQrToken}
-                error={!qrToken.trim() && (qrMissing || deliveryMutation.isError) ? 'Escanea su QR o escribe su código de 4 dígitos.' : undefined}
+                mode={deliveryQr.data?.validacion_entrega}
+                error={!qrToken.trim() && (qrMissing || deliveryMutation.isError) ? deliveryMissing(deliveryQr.data?.validacion_entrega) : undefined}
               />
             )}
             <div className="form-actions">

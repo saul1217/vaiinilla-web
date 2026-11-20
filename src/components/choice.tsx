@@ -1,17 +1,18 @@
-// Elegir entre dos opciones con su explicación (sí/no de un ajuste del negocio).
-export function Choice({
+// Elegir una opción con su explicación (sí/no de un ajuste del negocio, o un modo de varios).
+export function Choice<T extends string | boolean>({
   name,
   value,
   options,
   onChange,
 }: {
   name: string;
-  value: boolean;
-  options: { value: boolean; label: string; hint: string; disabled?: boolean }[];
-  onChange: (value: boolean) => void;
+  value: T;
+  options: { value: T; label: string; hint: string; disabled?: boolean }[];
+  onChange: (value: T) => void;
 }) {
+  const columns = options.length > 2 ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2';
   return (
-    <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={name}>
+    <div className={`grid gap-2 ${columns}`} role="radiogroup" aria-label={name}>
       {options.map((option) => {
         const selected = option.value === value;
         return (

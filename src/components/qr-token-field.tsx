@@ -2,6 +2,27 @@ import { Camera, CameraOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import { Button, Field } from './ui';
+import type { DeliveryValidation } from '../types/api';
+
+// Lo que pide el campo según cómo valida la entrega el negocio (migración 227 del back). La
+// credencial del alumno sirve en todos los modos.
+const FIELD_COPY: Record<'qr_o_codigo' | 'qr' | 'codigo', { label: string; placeholder: string; hint: string }> = {
+  qr_o_codigo: {
+    label: 'QR o código de 4 dígitos',
+    placeholder: 'Escanea su QR o escribe el código que te dicta',
+    hint: 'El código y el QR son de un solo pedido. Tras 5 códigos equivocados, solo sirve su QR.',
+  },
+  qr: {
+    label: 'QR del pedido o credencial',
+    placeholder: 'Escanea su QR o su credencial',
+    hint: 'En este negocio el código de 4 dígitos no sirve para entregar.',
+  },
+  codigo: {
+    label: 'Código de 4 dígitos',
+    placeholder: 'Escribe el código que te dicta o escanea su credencial',
+    hint: 'El código es de un solo pedido. Tras 5 códigos equivocados, solo sirve su credencial.',
+  },
+};
 
 interface BarcodeResult {
   rawValue: string;
@@ -22,12 +43,16 @@ export function QrTokenField({
   onChange,
   error,
   autoFocus = false,
+  mode,
 }: {
   value: string;
   onChange: (value: string) => void;
   error?: string;
   autoFocus?: boolean;
+  /** Cómo valida la entrega el negocio; sin él, QR o código (lo de siempre). */
+  mode?: DeliveryValidation;
 }) {
+  const copy = FIELD_COPY[mode === 'qr' || mode === 'codigo' ? mode : 'qr_o_codigo'];
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -128,15 +153,15 @@ export function QrTokenField({
       <Field
         id="pickup-token"
         name="pickup-token"
-        label="QR o código de 4 dígitos"
+        label={copy.label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         autoComplete="off"
         spellCheck={false}
         autoFocus={autoFocus}
-        placeholder="Escanea su QR o escribe el código que te dicta"
+        placeholder={copy.placeholder}
         error={error}
-        hint="El código y el QR son de un solo pedido. Tras 5 códigos equivocados, solo sirve su QR."
+        hint={copy.hint}
       />
       <Button
         type="button"

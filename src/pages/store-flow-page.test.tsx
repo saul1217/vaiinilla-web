@@ -185,6 +185,30 @@ describe('Flujo de mi tienda', () => {
     expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeDisabled();
   });
 
+  it('con el tipo fijo por Vaiinilla no ofrece plantillas para cambiarlo', async () => {
+    apiMock.businessSettings.mockResolvedValue({ ...cafeteria, tipo_bloqueado: true });
+    renderFlow();
+    expect(await screen.findByText(/Vaiinilla dejó fijo el tipo de tu negocio/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Cafetería escolar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Bar o cantina/ })).not.toBeInTheDocument();
+  });
+
+  it('con modos de entrega elige «Solo código» y lo guarda con su QR amarrado', async () => {
+    apiMock.businessSettings.mockResolvedValue({ ...cafeteria, validacion_entrega: 'qr_o_codigo' });
+    apiMock.saveBusinessSettings.mockResolvedValue({ ...cafeteria, validacion_entrega: 'codigo' });
+    const user = userEvent.setup();
+    renderFlow();
+    expect(await screen.findByRole('radio', { name: /^QR o código/ })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('radio', { name: /^Solo código/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await waitFor(() =>
+      expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith(
+        'tenant-token',
+        expect.objectContaining({ validacion_entrega: 'codigo', entrega_requiere_qr: true }),
+      ),
+    );
+  });
+
   it('no ofrece hoteles', async () => {
     renderFlow();
     await screen.findByText('Cine, estadio o evento');

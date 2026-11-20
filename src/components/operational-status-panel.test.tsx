@@ -42,4 +42,12 @@ describe('estado operativo y franjas de pedidos', () => {
     render(<OperationalStatusPanel />, { wrapper: Wrapper });
     expect(await screen.findByText('Hace falta abrir la sesión de Caja.')).toBeInTheDocument();
   });
+
+  it('sin cocina no muestra ni pide la Cocina', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ ...base, cocina_en_linea: false, tiene_cocina: false, dentro_de_franja: true });
+    render(<OperationalStatusPanel />, { wrapper: Wrapper });
+    expect(await screen.findByText('El establecimiento no está disponible para operación nueva.')).toBeInTheDocument();
+    expect(screen.queryByText('Dispositivo Cocina')).not.toBeInTheDocument();
+    expect(screen.queryByText(/conectar Cocina/)).not.toBeInTheDocument();
+  });
 });

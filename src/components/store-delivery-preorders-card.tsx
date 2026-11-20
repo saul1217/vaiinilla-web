@@ -37,6 +37,12 @@ export function StoreDeliveryPreordersCard({
   const [datosTransferencia, setDatosTransferencia] = useState(settings.datos_transferencia ?? '');
   const [telefonoContacto, setTelefonoContacto] = useState(settings.telefono_contacto ?? '');
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  // El back acepta de 15 minutos a 2 días (2880). Se avisa aquí, con palabras, antes de guardar.
+  const minutos = optionalInt(minutosAceptar);
+  const minutosError =
+    requiereAceptar && minutosAceptar.trim() !== '' && (minutos === null || minutos < 15 || minutos > 2880)
+      ? 'Escribe de 15 a 2880 minutos (2 días), o déjalo vacío para no poner límite.'
+      : undefined;
 
   const save = useMutation({
     mutationFn: () => {
@@ -112,6 +118,8 @@ export function StoreDeliveryPreordersCard({
           placeholder="Ej. 60"
           value={minutosAceptar}
           onChange={(e) => { setSavedNotice(null); setMinutosAceptar(e.target.value); }}
+          error={minutosError}
+          hint="De 15 minutos a 2 días. Si nadie contesta a tiempo, el encargo se cancela solo."
         />
       )}
 
@@ -171,7 +179,7 @@ export function StoreDeliveryPreordersCard({
         />
       </div>
       <div>
-        <Button type="button" loading={save.isPending} onClick={() => save.mutate()}>
+        <Button type="button" loading={save.isPending} disabled={Boolean(minutosError)} onClick={() => save.mutate()}>
           Guardar encargos y reparto
         </Button>
       </div>
