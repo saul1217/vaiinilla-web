@@ -60,3 +60,25 @@ describe('Quién prepara', () => {
     expect(screen.getByRole('radio', { name: /^Todo en Cocina/ })).toHaveAttribute('aria-checked', 'true');
   });
 });
+
+describe('Pedir el código al cobrar (migración 225)', () => {
+  beforeEach(() => {
+    apiMock.preflightBusinessTransition.mockReset();
+    apiMock.saveBusinessSettings.mockReset().mockResolvedValue({ ...settings, cobro_requiere_codigo: true });
+  });
+
+  it('nace apagado y prenderlo se guarda como ajuste directo, sin transición', async () => {
+    const user = userEvent.setup();
+    render(<StoreOperationsCard token="t" scopeId="est-1" settings={{ ...settings, cobro_requiere_codigo: false }} />, { wrapper: Wrapper });
+    expect(screen.getByRole('radio', { name: /^Cobrar sin pedir código/ })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('radio', { name: /^Pedir el código del cliente al cobrar/ }));
+    await user.click(screen.getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('t', { cobro_requiere_codigo: true }));
+    expect(apiMock.preflightBusinessTransition).not.toHaveBeenCalled();
+  });
+
+  it('con un back sin la 225 no se ofrece', () => {
+    render(<StoreOperationsCard token="t" scopeId="est-1" settings={settings} />, { wrapper: Wrapper });
+    expect(screen.queryByRole('radio', { name: /^Pedir el código del cliente al cobrar/ })).not.toBeInTheDocument();
+  });
+});

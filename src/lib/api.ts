@@ -1,3 +1,4 @@
+import { notifySpacesChanged } from './spaces-changed';
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
 import type { StudentCard, StudentCredential, StudentPurchaseItem } from './student-counter';
@@ -195,13 +196,17 @@ function sameMixedPaymentBody(a: MixedPaymentAttempt['body'], b: MixedPaymentAtt
 }
 
 /** Manda el intento guardado con su llave. Solo se llama dentro del candado del pedido. */
-async function sendMixedPaymentAttempt(token: string, attempt: MixedPaymentAttempt): Promise<MixedPaymentResult> {
+async function sendMixedPaymentAttempt(
+  token: string,
+  attempt: MixedPaymentAttempt,
+  proof: ReturnType<typeof pickupBody> = {},
+): Promise<MixedPaymentResult> {
   try {
     const result = await request<MixedPaymentResult>(`/pedidos/${attempt.orderId}/pagos-mixtos`, {
       method: 'POST',
       token,
       idempotencyKey: attempt.idempotencyKey,
-      body: attempt.body,
+      body: { ...attempt.body, ...proof },
     });
     writeMixedPaymentAttempt({ ...attempt, completedRemaining: result.data.restante });
     return result.data;
@@ -661,6 +666,8 @@ export const api = {
     montoRecibido: string,
     versionEsperada: number,
     propina?: string,
+    /** QR o código del cliente, si el negocio pide código para cobrar (migración 225). */
+    proof?: string,
   ): Promise<CashPaymentResult> {
     return (
       await request<CashPaymentResult>(`/pedidos/${id}/cobros-efectivo`, {
@@ -671,6 +678,7 @@ export const api = {
           monto_recibido: montoRecibido,
           version_esperada: versionEsperada,
           ...(propina && propina !== '0.00' ? { propina } : {}),
+          ...pickupBody(proof),
         },
       })
     ).data;
@@ -680,7 +688,7 @@ export const api = {
     token: string,
     owner: MixedPaymentOwner,
     id: string,
-    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
+    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string; proof?: string },
     expectedRemaining: string,
   ): Promise<MixedPaymentResult> {
     const scope = mixedPaymentScope(owner);
@@ -716,7 +724,8 @@ export const api = {
         };
         writeMixedPaymentAttempt(attempt);
       }
-      return sendMixedPaymentAttempt(token, attempt);
+      // La prueba del cliente va solo en el envío: el intento guardado en la pestaña no lleva su QR.
+      return sendMixedPaymentAttempt(token, attempt, pickupBody(input.proof));
     });
   },
 
@@ -1350,11 +1359,15 @@ export const api = {
     input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number; capacidad?: number },
     idempotencyKey?: string,
   ): Promise<SpaceBatchResult> {
-    return (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+    const result = (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+    notifySpacesChanged();
+    return result;
   },
 
   async createSpace(token: string, input: { nombre: string; tipo: SpaceType }): Promise<ManagedSpace> {
-    return (await request<ManagedSpace>('/espacios', { method: 'POST', token, idempotent: true, body: input })).data;
+    const space = (await request<ManagedSpace>('/espacios', { method: 'POST', token, idempotent: true, body: input })).data;
+    notifySpacesChanged();
+    return space;
   },
 
   async updateSpace(
@@ -1363,7 +1376,9 @@ export const api = {
     input: SpaceUpdateInput,
     idempotencyKey?: string,
   ): Promise<ManagedSpace> {
-    return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, idempotencyKey, body: input })).data;
+    const space = (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, idempotencyKey, body: input })).data;
+    notifySpacesChanged();
+    return space;
   },
 
   async businessSettings(token: string): Promise<BusinessSettings> {
@@ -1541,7 +1556,9 @@ export const api = {
   },
 
   async deleteSpace(token: string, id: number): Promise<{ id: number; eliminado: boolean }> {
-    return (await request<{ id: number; eliminado: boolean }>(`/espacios/${id}`, { method: 'DELETE', token, idempotent: true })).data;
+    const result = (await request<{ id: number; eliminado: boolean }>(`/espacios/${id}`, { method: 'DELETE', token, idempotent: true })).data;
+    notifySpacesChanged();
+    return result;
   },
 
   async bookingSettings(token: string): Promise<BookingSettings> {

@@ -316,6 +316,32 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(await screen.findByText(/Cobro registrado/)).toHaveTextContent('$6.50 MXN');
   });
 
+  it('con el cobro con código, lo pedido en la app pide la prueba del cliente y la manda', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true, cobro_requiere_codigo: true, validacion_entrega: 'codigo' });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, origen: 'app', total: '85.00', saldo_pendiente: '85.00' }], cursor: null });
+    apiMock.collectCash.mockResolvedValue({ cambio: '15.00' });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Cobrar $85.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Efectivo recibido (MXN)'), '100');
+    const proof = await within(dialog).findByLabelText('Código de 4 dígitos');
+    expect(within(dialog).getByRole('button', { name: 'Confirmar cobro' })).toBeDisabled();
+    await user.type(proof, '0133');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
+    await waitFor(() => expect(apiMock.collectCash).toHaveBeenCalledWith('token', baseOrder.id, '100.00', 4, '0.00', '0133'));
+  });
+
+  it('lo de mostrador se cobra sin prueba aunque la opción esté prendida', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true, cobro_requiere_codigo: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, origen: 'mostrador', total: '85.00', saldo_pendiente: '85.00' }], cursor: null });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Cobrar $85.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByLabelText('QR o código de 4 dígitos')).not.toBeInTheDocument();
+  });
+
   it('oculta el pago mixto con el flag apagado', async () => {
     vi.stubEnv('VITE_POS_MIXED_PAYMENTS_ENABLED', 'false');
     render(<PosPage />, { wrapper: Wrapper });

@@ -1,8 +1,8 @@
 import { AppPageHeader } from '../components/app-page-header';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Clock3, Link2, CreditCard, MapPin, Image as ImageIcon, Workflow } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { CardPaymentsCard } from '../components/card-payments-card';
 import { StoreDirectoryCard } from '../components/store-directory-card';
 import { StoreImagesCard } from '../components/store-images-card';
@@ -34,6 +34,12 @@ import {
 } from '../lib/business-flow';
 import type { BusinessSettings, DeliveryValidation } from '../types/api';
 import { StoreFlowEditButton, StoreFlowEditorSheet, type StoreFlowEditor } from '../components/store-flow-editor-sheet';
+
+const EDITORS: Exclude<StoreFlowEditor, null>[] = ['flow', 'payments', 'directory', 'media'];
+
+function requestedEditor(value: string | null): StoreFlowEditor {
+  return EDITORS.find((editor) => editor === value) ?? null;
+}
 
 function mediaSummary(settings: BusinessSettings) {
   const images = [settings.logo_url, settings.imagen_url].filter(Boolean).length;
@@ -73,7 +79,18 @@ export function StoreFlowPage() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowSettings | null>(null);
   const [saved, setSaved] = useState(false);
-  const [editor, setEditor] = useState<StoreFlowEditor>(null);
+  // El buscador de ajustes llega con ?ajuste=: abre su editor o baja a su tarjeta. Cada búsqueda es
+  // una navegación nueva (location.key), así que vuelve a abrir aunque se pida el mismo ajuste, y la
+  // pantalla no se desmonta: lo que no se ha guardado se queda.
+  const location = useLocation();
+  const requested = new URLSearchParams(location.search).get('ajuste');
+  const [chosen, setEditor] = useState<StoreFlowEditor>(null);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const editor = chosen ?? (dismissedKey === location.key ? null : requestedEditor(requested));
+  const closeEditor = () => {
+    setEditor(null);
+    setDismissedKey(location.key);
+  };
   const opener = useRef<HTMLElement>(null);
   const openEditor = (next: Exclude<StoreFlowEditor, null>, event: React.MouseEvent<HTMLButtonElement>) => {
     opener.current = event.currentTarget;
@@ -104,6 +121,13 @@ export function StoreFlowPage() {
     enabled: Boolean(token),
     queryFn: () => api.businessSettings(token),
   });
+  const hasData = Boolean(query.data);
+  useEffect(() => {
+    if (!requested || !hasData || requestedEditor(requested)) return;
+    const section = document.getElementById(`ajuste-${requested}`);
+    section?.scrollIntoView?.({ block: 'start' });
+    section?.focus?.({ preventScroll: true });
+  }, [requested, hasData, location.key]);
   const current = query.data ? toSettings(query.data) : null;
   const settings = draft ?? current;
   const save = useMutation({
@@ -225,7 +249,7 @@ export function StoreFlowPage() {
       )}
       <StoreFlowEditorSheet
         open={editor === 'payments'}
-        onOpenChange={(open) => !open && setEditor(null)}
+        onOpenChange={(open) => !open && closeEditor()}
         title="Pagos con tarjeta"
         returnFocusRef={opener}
       >
@@ -234,7 +258,7 @@ export function StoreFlowPage() {
       {query.data && (
         <StoreFlowEditorSheet
           open={editor === 'directory'}
-          onOpenChange={(open) => !open && setEditor(null)}
+          onOpenChange={(open) => !open && closeEditor()}
           title="Dónde te encuentran"
           returnFocusRef={opener}
         >
@@ -244,7 +268,7 @@ export function StoreFlowPage() {
       {query.data && (
         <StoreFlowEditorSheet
           open={editor === 'media'}
-          onOpenChange={(open) => !open && setEditor(null)}
+          onOpenChange={(open) => !open && closeEditor()}
           title="Imagen y videos"
           returnFocusRef={opener}
         >
@@ -257,7 +281,7 @@ export function StoreFlowPage() {
 
       <StoreFlowEditorSheet
         open={editor === 'flow'}
-        onOpenChange={(open) => !open && setEditor(null)}
+        onOpenChange={(open) => !open && closeEditor()}
         title="Cómo funciona tu tienda"
         description="Ajusta el flujo y guarda cuando esté listo."
         returnFocusRef={opener}

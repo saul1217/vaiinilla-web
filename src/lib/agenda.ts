@@ -7,6 +7,14 @@ import { formatMoney } from './money';
 import type { BookingCancelRefund, CourtAvailabilityCourt, CourtAvailabilityDay, OperationalRole, StaffBooking, StaffBookingInput } from '../types/api';
 
 /** Roles que el back deja crear y cancelar reservas (reservas.routes.js), menos `cliente`. */
+/**
+ * ¿Hay algo que reservar? Una cancha activa con precio por hora: la misma regla con la que el back
+ * deja rentar (`reservas.repository.js`, canchas activas; sin precio no se rentan).
+ */
+export function hasRentableCourts(day: Pick<CourtAvailabilityDay, 'canchas'>): boolean {
+  return day.canchas.some((court) => court.precio_hora !== null && court.precio_hora !== undefined);
+}
+
 export const AGENDA_ROLES: OperationalRole[] = ['admin', 'cajero', 'mesero'];
 
 export const agendaKeys = {
