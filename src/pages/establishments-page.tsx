@@ -80,6 +80,8 @@ const establishmentSchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/, 'Usa el formato HH:mm:ss.'),
   identificador_cliente_etiqueta: z.string().trim().min(2, 'Captura la etiqueta visible.'),
   identificador_cliente_obligatorio: z.boolean(),
+  // Migración 225 del back: el negocio no puede cambiar su tipo. Solo al editar.
+  tipo_bloqueado: z.boolean().optional(),
   descripcion: z.string().trim().max(500, 'Usa máximo 500 caracteres.'),
   imagen_url: z.string().trim(),
   direccion: z.string().trim().max(240, 'Usa máximo 240 caracteres.'),
@@ -143,6 +145,7 @@ function createInput(data: EstablishmentForm) {
   const input = profileInput(data);
   delete (input as Partial<typeof input>).identificador_cliente_etiqueta;
   delete (input as Partial<typeof input>).identificador_cliente_obligatorio;
+  delete (input as Partial<typeof input>).tipo_bloqueado;
   return input;
 }
 
@@ -853,6 +856,7 @@ function EstablishmentFormModal({
         hora_cierre_forzado: establishment.hora_cierre_forzado,
         identificador_cliente_etiqueta: establishment.identificador_cliente_etiqueta,
         identificador_cliente_obligatorio: establishment.identificador_cliente_obligatorio,
+        ...(establishment.tipo_bloqueado !== undefined ? { tipo_bloqueado: establishment.tipo_bloqueado } : {}),
         descripcion: establishment.descripcion ?? '',
         imagen_url: establishment.imagen_url ?? '',
         direccion: establishment.direccion ?? '',
@@ -1027,6 +1031,12 @@ function EstablishmentFormModal({
               <input type="checkbox" {...form.register('identificador_cliente_obligatorio')} />
               <span><strong>Identificador obligatorio</strong><small>El cliente deberá capturarlo para completar su contexto.</small></span>
             </label>
+            {establishment?.tipo_bloqueado !== undefined && (
+              <label className="checkbox-field">
+                <input type="checkbox" {...form.register('tipo_bloqueado')} />
+                <span><strong>Tipo fijo</strong><small>El negocio ve su tipo pero no lo puede cambiar desde Flujo de mi tienda.</small></span>
+              </label>
+            )}
           </>
         )}
         <div className="form-section-heading form-grid__wide">

@@ -8,6 +8,14 @@ import { createIdempotencyKey } from '../lib/idempotency';
 import { transitionBlockedMessage } from '../lib/config-transition';
 import type { BusinessSettings, BusinessSettingsInput, ConfigTransitionPreflight } from '../types/api';
 
+// Quién prepara: tres modos sobre dos banderas del back. Sin cocina exige que la barra prepare.
+type PrepMode = 'cocina' | 'cocina_y_barra' | 'sin_cocina';
+
+function prepModeOf(settings: BusinessSettings): PrepMode {
+  if (settings.tiene_cocina === false) return 'sin_cocina';
+  return settings.barra_prepara === true ? 'cocina_y_barra' : 'cocina';
+}
+
 const DELIVERY_SPACE_OPTIONS = [
   { value: 'mesa', label: 'En mesa o espacio (el mesero lleva el pedido)' },
   { value: 'barra', label: 'Recogen en barra (el cliente pasa por él)' },
@@ -24,7 +32,11 @@ export function StoreOperationsCard({
   settings: BusinessSettings;
 }) {
   const queryClient = useQueryClient();
-  const [barraPrepara, setBarraPrepara] = useState(settings.barra_prepara === true);
+  const [prepMode, setPrepMode] = useState<PrepMode>(prepModeOf(settings));
+  // Un back sin la migración 223 no manda tiene_cocina: ahí no se ofrece «Sin cocina».
+  const kitchenOptional = settings.tiene_cocina !== undefined;
+  const barraPrepara = prepMode !== 'cocina';
+  const tieneCocina = prepMode !== 'sin_cocina';
   const [cajaEntrega, setCajaEntrega] = useState(settings.caja_entrega_en_espacio === true);
   const [cocinaSinCobrar, setCocinaSinCobrar] = useState(settings.cocina_prepara_sin_cobrar !== false);
   const [pagoEnCaja, setPagoEnCaja] = useState(settings.permite_pago_en_caja !== false);
@@ -37,6 +49,7 @@ export function StoreOperationsCard({
 
   const transitionChanges: Record<string, unknown> = {};
   if (barraPrepara !== (settings.barra_prepara === true)) transitionChanges.barra_prepara = barraPrepara;
+  if (kitchenOptional && tieneCocina !== (settings.tiene_cocina !== false)) transitionChanges.tiene_cocina = tieneCocina;
   if (cocinaSinCobrar !== (settings.cocina_prepara_sin_cobrar !== false)) transitionChanges.cocina_prepara_sin_cobrar = cocinaSinCobrar;
   if (pagoEnCaja !== (settings.permite_pago_en_caja !== false)) transitionChanges.permite_pago_en_caja = pagoEnCaja;
   if (entregaEnEspacio !== (settings.entrega_en_espacio ?? 'mesa')) transitionChanges.entrega_en_espacio = entregaEnEspacio;
@@ -88,13 +101,16 @@ export function StoreOperationsCard({
       {preflight && preflight.advertencias && preflight.advertencias.length > 0 && (
         <Feedback tone="info">{preflight.advertencias.map((a) => a.mensaje || a.codigo).filter(Boolean).join(' · ')}</Feedback>
       )}
-      <Choice
-        name="barra_prepara"
-        value={barraPrepara}
-        onChange={(v) => { setSavedNotice(null); setBarraPrepara(v); }}
+      <Choice<PrepMode>
+        name="Quién prepara"
+        value={prepMode}
+        onChange={(v) => { setSavedNotice(null); setPrepMode(v); }}
         options={[
-          { value: true, label: 'Barra/Caja prepara pedidos', hint: 'Caja prepara y avisa listo sin pasar por Cocina.' },
-          { value: false, label: 'Prepara Cocina', hint: 'Los pedidos pasan por la pantalla de Cocina.' },
+          { value: 'cocina', label: 'Todo en Cocina', hint: 'Cada pedido entra a la pantalla de Cocina y ahí se marca listo.' },
+          { value: 'cocina_y_barra', label: 'Cocina y barra', hint: 'La barra prepara bebidas y lo rápido; lo demás va a Cocina.' },
+          ...(kitchenOptional
+            ? [{ value: 'sin_cocina' as const, label: 'Sin cocina', hint: 'No hay Cocina: todo lo prepara la barra o Caja.' }]
+            : []),
         ]}
       />
       <Choice

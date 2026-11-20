@@ -19,6 +19,7 @@ import { cardPaymentsStep } from '../lib/card-payments';
 import {
   BUSINESS_TYPE_LABELS,
   buildFlow,
+  deliveryValidationOf,
   FLOW_TEMPLATES,
   flowSummary,
   franjasError,
@@ -31,7 +32,7 @@ import {
   type BusinessType,
   type FlowSettings,
 } from '../lib/business-flow';
-import type { BusinessSettings } from '../types/api';
+import type { BusinessSettings, DeliveryValidation } from '../types/api';
 import { StoreFlowEditButton, StoreFlowEditorSheet, type StoreFlowEditor } from '../components/store-flow-editor-sheet';
 
 function mediaSummary(settings: BusinessSettings) {
@@ -42,12 +43,22 @@ function mediaSummary(settings: BusinessSettings) {
 
 const KNOWN_TYPES = Object.keys(BUSINESS_TYPE_LABELS) as BusinessType[];
 
+// Cómo valida Caja la entrega para llevar. La credencial del alumno sirve en todos los que piden
+// algo, y en una mesa con su cuenta abierta nunca se pide nada.
+const DELIVERY_VALIDATION_OPTIONS: { value: DeliveryValidation; label: string; hint: string }[] = [
+  { value: 'qr_o_codigo', label: 'QR o código', hint: 'Caja escanea el QR del pedido o el cliente le dicta su código de 4 dígitos.' },
+  { value: 'qr', label: 'Solo QR', hint: 'Caja escanea el QR del pedido. El código de 4 dígitos no sirve.' },
+  { value: 'codigo', label: 'Solo código', hint: 'El cliente dicta su código de 4 dígitos; no hace falta escanear.' },
+  { value: 'ninguna', label: 'Sin validar', hint: 'Caja entrega sin pedir QR ni código.' },
+];
+
 function toSettings(data: BusinessSettings): FlowSettings | null {
   const tipo = KNOWN_TYPES.find((known) => known === data.tipo);
   if (!tipo) return null;
   return {
     tipo,
     entrega_requiere_qr: data.entrega_requiere_qr,
+    ...(data.validacion_entrega ? { validacion_entrega: data.validacion_entrega } : {}),
     permite_pago_al_final: data.permite_pago_al_final,
     permite_saldo: data.permite_saldo ?? true,
     gracia_liberacion_min: data.gracia_liberacion_min,
@@ -121,6 +132,9 @@ export function StoreFlowPage() {
   const steps = settings ? buildFlow(settings) : [];
   const summary = flowSummary(steps);
   const unknownType = Boolean(query.data && !current);
+  // Back con las migraciones 225 y 226: tipo fijo y modos de entrega.
+  const typeLocked = query.data?.tipo_bloqueado === true;
+  const deliveryModes = query.data?.validacion_entrega !== undefined;
 
   return (
     <div className="page-stack admin-screen admin-flow">
@@ -254,6 +268,13 @@ export function StoreFlowPage() {
               <h2 id="flow-templates-title" className="text-xl font-extrabold text-ink">
                 1. ¿Qué tipo de negocio es?
               </h2>
+              {typeLocked ? (
+                <p className="mt-1 text-sm text-muted">
+                  {settings ? BUSINESS_TYPE_LABELS[settings.tipo] : query.data?.tipo}. Vaiinilla dejó fijo el tipo
+                  de tu negocio; si necesitas cambiarlo, pídelo a Vaiinilla.
+                </p>
+              ) : (
+              <>
               <p className="mt-1 text-sm text-muted">
                 Una plantilla llena las opciones de abajo. No se guarda nada hasta que pulses «Guardar flujo».
               </p>
@@ -287,6 +308,8 @@ export function StoreFlowPage() {
                   Tus opciones no coinciden con una plantilla: es un flujo personalizado (
                   {BUSINESS_TYPE_LABELS[settings.tipo]}).
                 </p>
+              )}
+              </>
               )}
             </section>
 
@@ -341,6 +364,16 @@ export function StoreFlowPage() {
                   </div>
                   <div className="grid gap-2">
                     <p className="field__label">¿Cómo se entrega?</p>
+                    {deliveryModes ? (
+                      <Choice<DeliveryValidation>
+                        name="¿Cómo se entrega?"
+                        value={deliveryValidationOf(settings)}
+                        onChange={(value) =>
+                          change({ validacion_entrega: value, entrega_requiere_qr: value !== 'ninguna' })
+                        }
+                        options={DELIVERY_VALIDATION_OPTIONS}
+                      />
+                    ) : (
                     <Choice
                       name="¿Cómo se entrega?"
                       value={settings.entrega_requiere_qr}
@@ -358,6 +391,7 @@ export function StoreFlowPage() {
                         },
                       ]}
                     />
+                    )}
                   </div>
                   <div className="max-w-xs">
                     <Field

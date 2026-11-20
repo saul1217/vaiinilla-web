@@ -226,7 +226,14 @@ export interface OperationalStatus {
   entrega_requiere_qr?: boolean;
   /** Caja prepara los productos de la estación `caja` y los marca listos. Un backend anterior no lo manda. */
   barra_prepara?: boolean;
+  /** false = el negocio no tiene cocina (lo prepara la barra). Un backend anterior no lo manda. */
+  tiene_cocina?: boolean;
+  /** Qué pide Caja para entregar. Un backend anterior no lo manda. */
+  validacion_entrega?: DeliveryValidation;
 }
+
+/** Cómo valida Caja la entrega de un pedido para llevar (migración 226 del back). */
+export type DeliveryValidation = 'qr_o_codigo' | 'qr' | 'codigo' | 'ninguna';
 
 export interface OrderSpace {
   id: number;
@@ -644,6 +651,12 @@ export interface BusinessSettings {
   hora_corte_cancelacion?: string | null;
   /** Operación de Caja y Cocina. */
   barra_prepara?: boolean;
+  /** false = sin cocina: lo prepara la barra. Un backend anterior no lo manda. */
+  tiene_cocina?: boolean;
+  /** Cómo valida Caja la entrega. Un backend anterior no lo manda. */
+  validacion_entrega?: DeliveryValidation;
+  /** Vaiinilla fijó el tipo de negocio: no se puede cambiar aquí. Un backend anterior no lo manda. */
+  tipo_bloqueado?: boolean;
   caja_entrega_en_espacio?: boolean;
   entrega_en_espacio?: 'mesa' | 'barra' | 'ambas';
   cocina_prepara_sin_cobrar?: boolean;
@@ -1310,6 +1323,8 @@ export interface PlatformEstablishment {
   hora_cierre_forzado: string;
   identificador_cliente_etiqueta: string;
   identificador_cliente_obligatorio: boolean;
+  /** Vaiinilla fijó el tipo: el negocio no lo puede cambiar. Un backend anterior no lo manda. */
+  tipo_bloqueado?: boolean;
   descripcion?: string | null;
   imagen_url?: string | null;
   direccion?: string | null;
@@ -1336,6 +1351,7 @@ export interface EstablishmentInput {
   hora_cierre_forzado: string;
   identificador_cliente_etiqueta?: string;
   identificador_cliente_obligatorio?: boolean;
+  tipo_bloqueado?: boolean;
   descripcion?: string | null;
   imagen_url?: string | null;
   direccion?: string | null;

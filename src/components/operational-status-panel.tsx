@@ -49,7 +49,9 @@ export function OperationalStatusPanel() {
       <div className="operational-signals" aria-label="Señales operativas">
         <Signal icon={WalletCards} label="Sesión de Caja" active={data.sesion_caja_abierta} activeText="Abierta" inactiveText="Cerrada" />
         <Signal icon={Radio} label="Dispositivo Caja" active={data.caja_en_linea} activeText="En línea" inactiveText="Sin conexión" />
-        <Signal icon={ChefHat} label="Dispositivo Cocina" active={data.cocina_en_linea} activeText="En línea" inactiveText="Sin conexión" />
+        {data.tiene_cocina !== false && (
+          <Signal icon={ChefHat} label="Dispositivo Cocina" active={data.cocina_en_linea} activeText="En línea" inactiveText="Sin conexión" />
+        )}
         <div className="operational-signal">
           <Clock3 aria-hidden="true" />
           <span title={data.tiempo_estimado_min === null ? 'Tiempo estimado: Sin dato' : `Tiempo estimado: ${data.tiempo_estimado_min} min`}>
@@ -92,6 +94,7 @@ function operationalReason(status: {
   sesion_caja_abierta: boolean;
   caja_en_linea: boolean;
   cocina_en_linea: boolean;
+  tiene_cocina?: boolean;
   dentro_de_franja?: boolean;
   franjas_pedido?: { desde: string; hasta: string }[];
 }): string {
@@ -102,6 +105,7 @@ function operationalReason(status: {
   const missing = [];
   if (!status.sesion_caja_abierta) missing.push('abrir la sesión de Caja');
   if (!status.caja_en_linea) missing.push('conectar Caja');
-  if (!status.cocina_en_linea) missing.push('conectar Cocina');
+  // Un negocio sin cocina (lo prepara la barra) no la necesita.
+  if (!status.cocina_en_linea && status.tiene_cocina !== false) missing.push('conectar Cocina');
   return missing.length ? `Hace falta ${missing.join(', ')}.` : 'El establecimiento no está disponible para operación nueva.';
 }
