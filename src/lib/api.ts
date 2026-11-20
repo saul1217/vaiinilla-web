@@ -1391,19 +1391,19 @@ export const api = {
     ).data;
   },
 
+  /** Aplica la transición con la versión que dio la revisión previa. No devuelve la configuración. */
   async applyBusinessTransition(
     token: string,
     cambios: Record<string, unknown>,
+    versionEsperada: number,
     idempotencyKey: string,
-  ): Promise<BusinessSettings> {
-    return (
-      await request<BusinessSettings>('/establecimiento/configuracion/transiciones', {
-        method: 'POST',
-        token,
-        body: { cambios },
-        idempotencyKey,
-      })
-    ).data;
+  ): Promise<void> {
+    await request<unknown>('/establecimiento/configuracion/transiciones', {
+      method: 'POST',
+      token,
+      body: { cambios, version_esperada: versionEsperada },
+      idempotencyKey,
+    });
   },
 
   async preflightPlatformTransition(
@@ -1423,12 +1423,13 @@ export const api = {
     token: string,
     establishmentId: string,
     cambios: Record<string, unknown>,
+    versionEsperada: number,
     idempotencyKey: string,
   ): Promise<Record<string, unknown>> {
     return (
       await request<Record<string, unknown>>(
         `/plataforma/establecimientos/${encodeURIComponent(establishmentId)}/configuracion/transiciones`,
-        { method: 'POST', token, body: { cambios }, idempotencyKey },
+        { method: 'POST', token, body: { cambios, version_esperada: versionEsperada }, idempotencyKey },
       )
     ).data;
   },

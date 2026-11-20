@@ -712,9 +712,15 @@ export interface StaffShiftRow {
   usuario_id: string;
   nombre?: string | null;
   rol?: string | null;
-  pedidos_hoy?: number;
-  propinas_hoy?: string;
-  ventas_hoy?: string;
+  /** Pedidos que entregó hoy. */
+  entregas?: number;
+  /** Mesas distintas que atendió. */
+  mesas?: number;
+  /** "12.50" */
+  propinas?: string;
+  llamadas_atendidas?: number;
+  /** Minutos promedio en tomar una llamada de mesa; null sin llamadas. */
+  respuesta_min?: string | null;
   [key: string]: unknown;
 }
 
@@ -724,8 +730,12 @@ export interface StaffShiftsReport {
 
 export interface ConfigTransitionPreflight {
   permitido: boolean;
-  bloqueadores?: { codigo?: string; mensaje?: string; cantidad?: number }[];
+  /** Motivos del contrato (OPERATIONS_IN_FLIGHT, HOTEL_TYPE_LOCKED…). */
+  reason_codes?: string[];
+  /** Lo que está abierto y bloquea el cambio, con su mensaje y cuántos hay. */
+  bloqueos?: { code: string; count: number; blocking: boolean; message: string }[];
   advertencias?: { codigo?: string; mensaje?: string }[];
+  /** Hay que mandarla al aplicar (`version_esperada`). */
   version_actual?: number;
   [key: string]: unknown;
 }

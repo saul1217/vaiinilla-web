@@ -108,13 +108,19 @@ function CortesReporteContent({ scope, token, cashierOnly = false }: { scope: Co
         : <ul className="grid gap-2" aria-label="Turnos del personal">{data.personal.map((row) => (
           <li key={row.usuario_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink/10 px-4 py-3 text-sm">
             <span>
-              <strong>{String(row.nombre ?? row.usuario_id)}</strong>
+              <strong>{row.nombre?.trim() || 'Sin nombre'}</strong>
               {row.rol ? <small className="ml-2 text-muted">{staffRoleLabel(String(row.rol))}</small> : null}
             </span>
             <span className="flex flex-wrap items-center gap-3">
-              {typeof row.pedidos_hoy === 'number' && <span>{ordersText(row.pedidos_hoy)}</span>}
-              {row.ventas_hoy != null && <strong>{money(String(row.ventas_hoy))}</strong>}
-              {row.propinas_hoy != null && isNotZero(String(row.propinas_hoy)) && <small>Propinas {money(String(row.propinas_hoy))}</small>}
+              <span>{row.entregas === 1 ? '1 entrega' : `${row.entregas ?? 0} entregas`}</span>
+              {(row.mesas ?? 0) > 0 && <span>{row.mesas === 1 ? '1 mesa' : `${row.mesas} mesas`}</span>}
+              {(row.llamadas_atendidas ?? 0) > 0 && (
+                <span>
+                  {row.llamadas_atendidas === 1 ? '1 llamada' : `${row.llamadas_atendidas} llamadas`}
+                  {row.respuesta_min != null ? ` · ${row.respuesta_min} min en responder` : ''}
+                </span>
+              )}
+              {row.propinas != null && isNotZero(row.propinas) && <small>Propinas {money(row.propinas)}</small>}
             </span>
           </li>
         ))}</ul>}</QueryView>

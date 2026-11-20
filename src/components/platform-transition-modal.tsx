@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
 import type { ConfigTransitionPreflight, PlatformEstablishment } from '../types/api';
+import { transitionBlockedMessage } from '../lib/config-transition';
 
 const TRANSITION_TYPES = [
   { value: 'cafeteria', label: 'Cafetería' },
@@ -41,7 +42,8 @@ export function PlatformTransitionModal({
   });
 
   const applyMutation = useMutation({
-    mutationFn: () => api.applyPlatformTransition(token, establishment!.id, { tipo }, createIdempotencyKey()),
+    mutationFn: () =>
+      api.applyPlatformTransition(token, establishment!.id, { tipo }, preflight?.version_actual ?? 0, createIdempotencyKey()),
     onSuccess: async () => {
       setPreflight(null);
       await onApplied();
@@ -73,7 +75,7 @@ export function PlatformTransitionModal({
           <Feedback tone={preflight.permitido ? 'success' : 'error'}>
             {preflight.permitido
               ? 'Preflight aprobado: puedes aplicar la transición.'
-              : `Bloqueado: ${preflight.bloqueadores?.map((b) => b.mensaje || b.codigo).filter(Boolean).join(' · ') || 'hay operaciones activas.'}`}
+              : transitionBlockedMessage(preflight)}
           </Feedback>
         )}
         <div className="flex flex-wrap justify-end gap-2">

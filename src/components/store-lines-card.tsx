@@ -27,7 +27,10 @@ export function StoreLinesCard({
   const lines = cashierLines(spaces.data ?? []);
   const [mode, setMode] = useState<'lugar' | 'turno'>(settings.reparto_filas ?? 'lugar');
   const [expressId, setExpressId] = useState<number | null>(settings.fila_express_espacio_id ?? null);
-  const [cutoff, setCutoff] = useState(settings.fila_express_hora_corte ?? '');
+  // Una hora guardada sin fila express no sirve: se muestra vacía y se borra al guardar.
+  const [cutoff, setCutoff] = useState(
+    settings.fila_express_espacio_id == null ? '' : (settings.fila_express_hora_corte ?? ''),
+  );
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
   const trimmedCutoff = cutoff.trim();
@@ -78,7 +81,13 @@ export function StoreLinesCard({
         <SelectField
           label="Fila express"
           value={expressId == null ? '' : String(expressId)}
-          onChange={(e) => { touch(); setExpressId(e.target.value ? Number(e.target.value) : null); }}
+          onChange={(e) => {
+            touch();
+            const next = e.target.value ? Number(e.target.value) : null;
+            setExpressId(next);
+            // Sin fila express la hora de corte no aplica: se borra junto con ella.
+            if (next == null) setCutoff('');
+          }}
           hint="Recibe lo apartado y lo pedido antes de la hora de corte. Ya vacía, recibe pedidos como las demás."
         >
           <option value="">Sin fila express</option>

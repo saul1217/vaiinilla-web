@@ -5,6 +5,7 @@ import { Button, Feedback, Field, SelectField } from './ui';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
+import { transitionBlockedMessage } from '../lib/config-transition';
 import type { BusinessSettings, BusinessSettingsInput, ConfigTransitionPreflight } from '../types/api';
 
 const DELIVERY_SPACE_OPTIONS = [
@@ -59,11 +60,10 @@ export function StoreOperationsCard({
       if (hasTransition) {
         const check = await api.preflightBusinessTransition(token, transitionChanges);
         setPreflight(check);
-        if (!check.permitido) {
-          const reason = check.bloqueadores?.map((b) => b.mensaje || b.codigo).filter(Boolean).join(' · ');
-          throw new Error(reason || 'Hay operaciones activas que impiden cambiar el modo operativo ahora.');
-        }
-        latest = await api.applyBusinessTransition(token, transitionChanges, createIdempotencyKey());
+        const blocked = transitionBlockedMessage(check);
+        if (blocked) throw new Error(blocked);
+        await api.applyBusinessTransition(token, transitionChanges, check.version_actual ?? 0, createIdempotencyKey());
+        latest = await api.businessSettings(token);
       }
       if (hasPatch) {
         latest = await api.saveBusinessSettings(token, patchChanges);
