@@ -128,15 +128,15 @@ export function QrTokenField({
       <Field
         id="pickup-token"
         name="pickup-token"
-        label="Token QR de entrega"
+        label="QR o código de 4 dígitos"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         autoComplete="off"
         spellCheck={false}
         autoFocus={autoFocus}
-        placeholder="Dispara la pistola o escribe el código"
+        placeholder="Escanea su QR o escribe el código que te dicta"
         error={error}
-        hint="El token es de un solo pedido y no se guarda en esta Web."
+        hint="El código y el QR son de un solo pedido. Tras 5 códigos equivocados, solo sirve su QR."
       />
       <Button
         type="button"

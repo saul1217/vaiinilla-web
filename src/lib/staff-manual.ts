@@ -91,7 +91,7 @@ const CASHIER: ManualGuide[] = [
     section: 'Pedidos y entrega',
     steps: [
       step('Confirma que el pedido diga Listo', 'La entrega solo corresponde cuando Cocina ya terminó.'),
-      step('Toca Entregar', 'Se abre Entregar pedido con el campo Token QR de entrega.'),
+      step('Toca Entregar', 'Se abre Entregar pedido con el campo QR o código de 4 dígitos.'),
       step('Toca Escanear con cámara', 'Pide al cliente su QR y mantenlo dentro del recuadro hasta que se lea.'),
       step('Confirma la entrega', 'Solo el QR de ese pedido lo cambia a Entregado.'),
     ],
@@ -103,7 +103,7 @@ const CASHIER: ManualGuide[] = [
     section: 'Pedidos y entrega',
     steps: [
       step('Vuelve a encuadrar el código', 'Que se vea completo, sin reflejos; acerca o aleja la pantalla del cliente.'),
-      step('Si sigue sin leer, escríbelo', 'Escribe en Token QR de entrega el código que sale bajo el QR del cliente.'),
+      step('Si sigue sin leer, pide el código', 'Escribe en QR o código de 4 dígitos el código que el cliente ve en su app.'),
       step('Si dice inválido, pide su pedido actual', 'Que el cliente vuelva a la pantalla de su pedido y muestre el QR vigente. No entregues sin validarlo.'),
     ],
     completion: 'Recuperación de QR revisada',

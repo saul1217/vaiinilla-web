@@ -460,7 +460,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     render(<PosPage />, { wrapper: Wrapper });
     expect(await screen.findByRole('button', { name: 'Validar QR' })).toBeVisible();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Validar QR' }));
-    expect(await screen.findByLabelText('Token QR de entrega')).toBeVisible();
+    expect(await screen.findByLabelText('QR o código de 4 dígitos')).toBeVisible();
   });
 
   it('la pistola lectora entrega: el campo llega enfocado y su Enter confirma', async () => {
@@ -471,7 +471,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     render(<PosPage />, { wrapper: Wrapper });
 
     await user.click(await screen.findByRole('button', { name: 'Validar QR' }));
-    const campo = await screen.findByLabelText('Token QR de entrega');
+    const campo = await screen.findByLabelText('QR o código de 4 dígitos');
     expect(campo).toHaveFocus();
     await user.keyboard('VAI-7Q2K{Enter}');
     await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', 'order-14', 4, 'VAI-7Q2K'));
@@ -488,7 +488,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     const confirmar = screen.getByRole('button', { name: 'Confirmar entrega' });
     expect(confirmar).toBeEnabled();
     await user.click(confirmar);
-    expect(await screen.findByText('Escanea o escribe el código del cliente.')).toBeVisible();
+    expect(await screen.findByText('Escanea su QR o escribe su código de 4 dígitos.')).toBeVisible();
     expect(apiMock.deliverOrder).not.toHaveBeenCalled();
   });
 
@@ -508,7 +508,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     render(<PosPage />, { wrapper: Wrapper });
 
     await user.click(await screen.findByRole('button', { name: 'Entregar' }));
-    expect(screen.queryByLabelText('Token QR de entrega')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('QR o código de 4 dígitos')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Confirmar entrega' }));
     await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', 'order-14', 4, ''));
   });

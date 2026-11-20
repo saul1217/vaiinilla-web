@@ -35,7 +35,7 @@ describe('navegación con reparto prendido', () => {
     expect(within(mobile).getAllByRole('link').map((link) => link.textContent)).toEqual(['Caja', 'Saldo', 'Reparto']);
     fireEvent.click(within(mobile).getByRole('button', { name: 'Más' }));
     const more = screen.getByRole('navigation', { name: 'Más destinos' });
-    expect(within(more).getAllByRole('link').map((link) => link.textContent)).toEqual(['Agenda de reservas', 'Mi turno']);
+    expect(within(more).getAllByRole('link').map((link) => link.textContent)).toEqual(['Filas en vivo', 'Agenda de reservas', 'Mi turno']);
   });
 
   it('admin encuentra «Reparto y encargos» en «Más»', () => {

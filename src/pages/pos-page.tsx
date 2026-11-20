@@ -1045,7 +1045,7 @@ export function PosPage() {
         title={deliveryOrder ? `Entregar pedido ${deliveryOrder.folio}` : 'Entregar pedido'}
         contentClassName="staff-delivery-dialog"
         description={deliveryOrder && deliveryNeedsQr(deliveryOrder)
-          ? 'Escanea el código del cliente. El sistema verificará que corresponda exactamente a este pedido.'
+          ? 'Escanea el QR del cliente o escribe el código de 4 dígitos que te dicta. Debe ser de este pedido.'
           : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
       >
         {deliveryOrder && (
@@ -1072,7 +1072,7 @@ export function PosPage() {
                 autoFocus
                 value={qrToken}
                 onChange={updateQrToken}
-                error={!qrToken.trim() && (qrMissing || deliveryMutation.isError) ? 'Escanea o escribe el código del cliente.' : undefined}
+                error={!qrToken.trim() && (qrMissing || deliveryMutation.isError) ? 'Escanea su QR o escribe su código de 4 dígitos.' : undefined}
               />
             )}
             <div className="form-actions">

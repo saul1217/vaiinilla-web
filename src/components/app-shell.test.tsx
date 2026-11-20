@@ -95,8 +95,8 @@ it('Admin alcanza sus destinos (cashback oculto por flag) sin asignar aria-curre
   expect(more).not.toHaveAttribute('aria-current');
   fireEvent.click(more);
   const links = within(screen.getByRole('navigation', { name: 'Más destinos' })).getAllByRole('link');
-  // Con Saldo de clientes, Reparto y Agenda prendidos, «Más» suma esos destinos (y Cashback si se prende).
-  expect(links).toHaveLength(CASHBACK_ENABLED ? 7 : 6);
+  // Con Saldo de clientes, Reparto, Filas en vivo y Agenda, «Más» suma esos destinos (y Cashback si se prende).
+  expect(links).toHaveLength(CASHBACK_ENABLED ? 8 : 7);
   expect(links.find((link) => link.getAttribute('href') === '/app/saldo')).toHaveTextContent('Saldo de clientes');
   expect(links.find((link) => link.getAttribute('href') === '/app/espacios')).toHaveAttribute('aria-current', 'page');
 });
@@ -120,7 +120,7 @@ it('cajero deja Caja, Saldo y Reparto en la barra y lo demás en «Más»', () =
   expect(within(mobile).getAllByRole('link').map((link) => link.textContent)).toEqual(['Caja', 'Saldo', 'Reparto']);
   fireEvent.click(within(mobile).getByRole('button', { name: 'Más' }));
   const more = screen.getByRole('navigation', { name: 'Más destinos' });
-  expect(within(more).getAllByRole('link').map((link) => link.textContent)).toEqual(['Agenda de reservas', 'Mi turno']);
+  expect(within(more).getAllByRole('link').map((link) => link.textContent)).toEqual(['Filas en vivo', 'Agenda de reservas', 'Mi turno']);
 });
 
 it('mueve foco a main al navegar y no lo roba por un refresco de contenido', () => {
