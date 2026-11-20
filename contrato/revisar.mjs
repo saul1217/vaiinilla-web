@@ -262,6 +262,10 @@ function revisarForma({ objeto, extras }, esquema, camino, problemas) {
       problemas.add(`${camino}${nombre}`);
       continue;
     }
+    if (resolver(props[nombre])?.readOnly) {
+      problemas.add(`${camino}${nombre} (solo lectura)`);
+      continue;
+    }
     if (ts.isPropertyAssignment(p) && propiedades(props[nombre]) !== null) {
       for (const forma of formasDelBody(p.initializer) ?? [])
         revisarForma(forma, props[nombre], `${camino}${nombre}.`, problemas);
@@ -486,7 +490,9 @@ export function revisar() {
       problemas.push({
         donde: llamada.donde,
         llamada: legible,
-        problema: `manda «${campo}», que el contrato no documenta para ${encontrada.ruta}`,
+        problema: campo.endsWith(' (solo lectura)')
+          ? `manda «${campo.slice(0, -15)}», que es de solo lectura en ${encontrada.ruta}`
+          : `manda «${campo}», que el contrato no documenta para ${encontrada.ruta}`,
       });
     }
   }

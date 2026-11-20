@@ -11,7 +11,9 @@ const AQUI = dirname(fileURLToPath(import.meta.url));
 export const METODOS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 const PREFIJO_API = '/api/v1';
 
-export const contrato = JSON.parse(readFileSync(join(AQUI, 'openapi.json'), 'utf8'));
+// El contrato con el que se compara. Por defecto la copia de contrato/openapi.json; el arnés lo
+// cambia por el del backend al que le está hablando (usarContrato).
+export let contrato = JSON.parse(readFileSync(join(AQUI, 'openapi.json'), 'utf8'));
 export const excepciones = existsSync(join(AQUI, 'excepciones.json'))
   ? JSON.parse(readFileSync(join(AQUI, 'excepciones.json'), 'utf8'))
   : [];
@@ -58,9 +60,18 @@ export function cuerpoDe(operacion) {
   return resolver(operacion?.requestBody)?.content?.['application/json']?.schema ?? null;
 }
 
-const plantillas = Object.entries(contrato.paths)
-  .filter(([ruta]) => ruta.startsWith(`${PREFIJO_API}/`))
-  .map(([ruta, operaciones]) => ({ ruta, segmentos: ruta.slice(PREFIJO_API.length + 1).split('/'), operaciones }));
+const plantillasDe = (spec) =>
+  Object.entries(spec.paths)
+    .filter(([ruta]) => ruta.startsWith(`${PREFIJO_API}/`))
+    .map(([ruta, operaciones]) => ({ ruta, segmentos: ruta.slice(PREFIJO_API.length + 1).split('/'), operaciones }));
+let plantillas = plantillasDe(contrato);
+
+/** Compara contra otro contrato (el OpenAPI que sirve un backend en /api/docs.json). */
+export function usarContrato(spec) {
+  if (!spec?.paths) throw new Error('Eso no es un contrato OpenAPI: no trae paths.');
+  contrato = spec;
+  plantillas = plantillasDe(spec);
+}
 
 /**
  * Las operaciones que le quedan a una ruta. Los segmentos variables del código llegan como `{}` y
