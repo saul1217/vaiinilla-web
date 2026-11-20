@@ -72,25 +72,25 @@ function toSettings(data: BusinessSettings): FlowSettings | null {
   };
 }
 
-/**
- * Llegar desde «Buscar ajuste» estando ya en esta pantalla cambia solo el ?ajuste=: se vuelve a
- * montar para abrir el editor o bajar a la tarjeta que se pidió.
- */
 export function StoreFlowPage() {
-  const { search } = useLocation();
-  return <StoreFlowScreen key={new URLSearchParams(search).get('ajuste') ?? ''} />;
-}
-
-function StoreFlowScreen() {
   const { tenant } = useSessions();
   const token = tenant?.token ?? '';
   const scopeId = tenant?.context.establecimiento_id ?? '';
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowSettings | null>(null);
   const [saved, setSaved] = useState(false);
-  // El buscador de ajustes llega con ?ajuste=: abre su editor o baja a su tarjeta.
-  const requested = new URLSearchParams(useLocation().search).get('ajuste');
-  const [editor, setEditor] = useState<StoreFlowEditor>(() => requestedEditor(requested));
+  // El buscador de ajustes llega con ?ajuste=: abre su editor o baja a su tarjeta. Cada búsqueda es
+  // una navegación nueva (location.key), así que vuelve a abrir aunque se pida el mismo ajuste, y la
+  // pantalla no se desmonta: lo que no se ha guardado se queda.
+  const location = useLocation();
+  const requested = new URLSearchParams(location.search).get('ajuste');
+  const [chosen, setEditor] = useState<StoreFlowEditor>(null);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const editor = chosen ?? (dismissedKey === location.key ? null : requestedEditor(requested));
+  const closeEditor = () => {
+    setEditor(null);
+    setDismissedKey(location.key);
+  };
   const opener = useRef<HTMLElement>(null);
   const openEditor = (next: Exclude<StoreFlowEditor, null>, event: React.MouseEvent<HTMLButtonElement>) => {
     opener.current = event.currentTarget;
@@ -127,7 +127,7 @@ function StoreFlowScreen() {
     const section = document.getElementById(`ajuste-${requested}`);
     section?.scrollIntoView?.({ block: 'start' });
     section?.focus?.({ preventScroll: true });
-  }, [requested, hasData]);
+  }, [requested, hasData, location.key]);
   const current = query.data ? toSettings(query.data) : null;
   const settings = draft ?? current;
   const save = useMutation({
@@ -249,7 +249,7 @@ function StoreFlowScreen() {
       )}
       <StoreFlowEditorSheet
         open={editor === 'payments'}
-        onOpenChange={(open) => !open && setEditor(null)}
+        onOpenChange={(open) => !open && closeEditor()}
         title="Pagos con tarjeta"
         returnFocusRef={opener}
       >
@@ -258,7 +258,7 @@ function StoreFlowScreen() {
       {query.data && (
         <StoreFlowEditorSheet
           open={editor === 'directory'}
-          onOpenChange={(open) => !open && setEditor(null)}
+          onOpenChange={(open) => !open && closeEditor()}
           title="Dónde te encuentran"
           returnFocusRef={opener}
         >
@@ -268,7 +268,7 @@ function StoreFlowScreen() {
       {query.data && (
         <StoreFlowEditorSheet
           open={editor === 'media'}
-          onOpenChange={(open) => !open && setEditor(null)}
+          onOpenChange={(open) => !open && closeEditor()}
           title="Imagen y videos"
           returnFocusRef={opener}
         >
@@ -281,7 +281,7 @@ function StoreFlowScreen() {
 
       <StoreFlowEditorSheet
         open={editor === 'flow'}
-        onOpenChange={(open) => !open && setEditor(null)}
+        onOpenChange={(open) => !open && closeEditor()}
         title="Cómo funciona tu tienda"
         description="Ajusta el flujo y guarda cuando esté listo."
         returnFocusRef={opener}

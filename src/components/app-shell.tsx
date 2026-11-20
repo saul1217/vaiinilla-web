@@ -38,6 +38,7 @@ import { INVENTARIO_ENABLED } from '../lib/inventory-feature';
 import { AGENDA_ENABLED } from '../lib/agenda-feature';
 import { AGENDA_ROLES, hasRentableCourts } from '../lib/agenda';
 import { SettingsSearch } from './settings-search';
+import { onSpacesChanged } from '../lib/spaces-changed';
 import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
 import { BOWLING_ADMIN_ENABLED } from '../lib/bowling-admin-feature';
 import { REPARTO_ENABLED } from '../lib/reparto-feature';
@@ -150,6 +151,12 @@ const courtsByStore = new Map<string, Promise<boolean>>();
 function useAgendaNavigationLive(role: OperationalRole, token: string, storeId: string): NavItem[] {
   const allowed = AGENDA_ROLES.includes(role);
   const [noCourts, setNoCourts] = useState<string | null>(null);
+  // Al cambiar los espacios se olvida lo sabido y se vuelve a preguntar (crear la primera cancha).
+  const [spacesVersion, setSpacesVersion] = useState(0);
+  useEffect(() => onSpacesChanged(() => {
+    courtsByStore.clear();
+    setSpacesVersion((v) => v + 1);
+  }), []);
   useEffect(() => {
     if (!allowed || !token || !storeId) return;
     let alive = true;
@@ -162,7 +169,7 @@ function useAgendaNavigationLive(role: OperationalRole, token: string, storeId: 
     }
     pending.then((has) => { if (alive) setNoCourts(has ? null : storeId); }, () => undefined);
     return () => { alive = false; };
-  }, [allowed, token, storeId]);
+  }, [allowed, token, storeId, spacesVersion]);
   if (!allowed || noCourts === storeId) return [];
   return [agendaItem];
 }

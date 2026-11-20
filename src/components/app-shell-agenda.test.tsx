@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, cleanup, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, cleanup, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TenantShell } from './app-shell';
+import { notifySpacesChanged } from '../lib/spaces-changed';
 
 // El enlace «Pistas» pregunta el tipo de negocio; aquí no es lo que se prueba.
 vi.mock('../lib/bowling-admin-feature', () => ({ BOWLING_ADMIN_ENABLED: false }));
@@ -110,4 +111,18 @@ it('si la consulta falla, la agenda se muestra como antes', async () => {
   render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(screen.getAllByRole('link', { name: 'Agenda de reservas' }).length).toBeGreaterThan(0);
+});
+
+it('al crear la primera cancha con precio, la agenda aparece sin recargar', async () => {
+  session.role = 'admin';
+  session.token = 't';
+  session.storeId = 'escuela-con-cancha-nueva';
+  courts.courtAvailability.mockReset().mockResolvedValueOnce(day([]));
+  render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
+  await waitFor(() => expect(courts.courtAvailability).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.queryByRole('link', { name: 'Agenda de reservas' })).not.toBeInTheDocument());
+  courts.courtAvailability.mockResolvedValueOnce(day(['300.00']));
+  act(() => notifySpacesChanged());
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'Navegación móvil' })).getByRole('button', { name: 'Más' }));
+  expect((await screen.findAllByRole('link', { name: 'Agenda de reservas' })).length).toBeGreaterThan(0);
 });

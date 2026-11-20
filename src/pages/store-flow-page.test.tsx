@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StoreFlowPage } from './store-flow-page';
 
@@ -300,6 +300,24 @@ describe('llegar desde «Buscar ajuste»', () => {
   it('?ajuste=flow abre «Cómo funciona tu tienda»', async () => {
     renderAt('/app/flujo?ajuste=flow');
     expect(await screen.findByRole('button', { name: 'Guardar flujo' })).toBeInTheDocument();
+  });
+
+  it('estando ya en Flujo, buscar un ajuste abre su editor sin desmontar la pantalla', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter initialEntries={['/app/flujo']}>
+        <QueryClientProvider client={client}>
+          <Link to="/app/flujo?ajuste=flow">ir al flujo</Link>
+          <StoreFlowPage />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByRole('button', { name: 'Configurar cómo funciona tu tienda' });
+    await waitFor(() => expect(apiMock.businessSettings).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Guardar flujo' })).toBeNull();
+    fireEvent.click(screen.getByRole('link', { name: 'ir al flujo' }));
+    expect(await screen.findByRole('button', { name: 'Guardar flujo' })).toBeInTheDocument();
+    expect(apiMock.businessSettings).toHaveBeenCalledTimes(1);
   });
 
   it('?ajuste=operacion pone el foco en la tarjeta de Operación de Caja', async () => {

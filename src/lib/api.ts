@@ -1,3 +1,4 @@
+import { notifySpacesChanged } from './spaces-changed';
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
 import type { StudentCard, StudentCredential, StudentPurchaseItem } from './student-counter';
@@ -1358,11 +1359,15 @@ export const api = {
     input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number; capacidad?: number },
     idempotencyKey?: string,
   ): Promise<SpaceBatchResult> {
-    return (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+    const result = (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+    notifySpacesChanged();
+    return result;
   },
 
   async createSpace(token: string, input: { nombre: string; tipo: SpaceType }): Promise<ManagedSpace> {
-    return (await request<ManagedSpace>('/espacios', { method: 'POST', token, idempotent: true, body: input })).data;
+    const space = (await request<ManagedSpace>('/espacios', { method: 'POST', token, idempotent: true, body: input })).data;
+    notifySpacesChanged();
+    return space;
   },
 
   async updateSpace(
@@ -1371,7 +1376,9 @@ export const api = {
     input: SpaceUpdateInput,
     idempotencyKey?: string,
   ): Promise<ManagedSpace> {
-    return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, idempotencyKey, body: input })).data;
+    const space = (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, idempotencyKey, body: input })).data;
+    notifySpacesChanged();
+    return space;
   },
 
   async businessSettings(token: string): Promise<BusinessSettings> {
@@ -1549,7 +1556,9 @@ export const api = {
   },
 
   async deleteSpace(token: string, id: number): Promise<{ id: number; eliminado: boolean }> {
-    return (await request<{ id: number; eliminado: boolean }>(`/espacios/${id}`, { method: 'DELETE', token, idempotent: true })).data;
+    const result = (await request<{ id: number; eliminado: boolean }>(`/espacios/${id}`, { method: 'DELETE', token, idempotent: true })).data;
+    notifySpacesChanged();
+    return result;
   },
 
   async bookingSettings(token: string): Promise<BookingSettings> {
