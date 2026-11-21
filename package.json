@@ -18,7 +18,9 @@
     "e2e:real": "node e2e/real/harness.mjs",
     "e2e:conteo": "node scripts/e2e-conteo.mjs",
     "e2e:conteo:aceptacion": "node scripts/e2e-conteo.mjs --exigir-minimo --resultados test-results/e2e-real.json",
-    "lhci": "npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.cjs"
+    "lhci": "npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.cjs",
+    "contrato:revisar": "node contrato/revisar.mjs",
+    "contrato:traer": "cp ../vaiinilla_back/contrato/openapi.json contrato/openapi.json && node contrato/revisar.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
