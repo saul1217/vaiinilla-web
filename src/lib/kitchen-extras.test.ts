@@ -15,7 +15,7 @@ const order = (id: string, version = 1) => ({ id, folio: Number(id.replace(/\D/g
 const alerts = (over: Partial<InventoryAlerts> = {}): InventoryAlerts => ({ agotados: [], para_manana: [], bajo_minimo: [], ...over });
 
 describe('deshacer «lista»', () => {
-  it('no manda nada antes de 10 s y manda una sola vez al vencer', () => {
+  it('no manda nada antes de 5 s y manda una sola vez al vencer', () => {
     const q = new PendingReadyQueue();
     q.add(order('a1', 3), 1_000);
     expect(q.takeDue(1_000 + UNDO_WINDOW_MS - 1)).toEqual([]);

@@ -201,7 +201,7 @@ describe('tablero de Cocina', () => {
     expect(apiMock.transitionOrder).toHaveBeenCalledWith('tenant-token', 'otro-pedido', 'preparando', 5);
   });
 
-  it('marca como listo un pedido que estaba en preparación después de 10 s, con la versión vigente', async () => {
+  it('marca como listo un pedido que estaba en preparación después de 5 s, con la versión vigente', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       const preparingOrder: OrderDetail = { ...pendingOrder, estado: 'preparando', version: 3 };
@@ -225,7 +225,7 @@ describe('tablero de Cocina', () => {
     }
   });
 
-  it('«Deshacer» dentro de los 10 s no manda nada y regresa la comanda', async () => {
+  it('«Deshacer» dentro de los 5 s no manda nada y regresa la comanda', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       const preparingOrder: OrderDetail = { ...pendingOrder, estado: 'preparando', version: 3 };

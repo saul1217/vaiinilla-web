@@ -7,7 +7,10 @@ import type { BusinessSettings } from '../types/api';
 
 /** Lo que decide si una pantalla muestra un ajuste. Sin ajustes cargados, solo se usan las banderas. */
 export interface SettingsIndexContext {
-  settings?: Pick<BusinessSettings, 'tipo_bloqueado' | 'modo_escuela' | 'cobro_requiere_codigo' | 'tiene_cocina'> | null;
+  settings?: Pick<
+    BusinessSettings,
+    'tipo_bloqueado' | 'modo_escuela' | 'cobro_requiere_codigo' | 'tiene_cocina' | 'cuenta_obligatoria' | 'alerta_retraso_activa'
+  > | null;
   flags?: Partial<Record<'cashback' | 'wallet' | 'inventory' | 'school' | 'offline' | 'assistant', boolean>>;
 }
 
@@ -117,6 +120,23 @@ export const SETTINGS_INDEX: SettingEntry[] = [
     to: '/app/flujo?ajuste=operacion',
     // La casilla solo sale con un back que ya tiene la migración 225.
     visible: (ctx) => ctx.settings?.cobro_requiere_codigo !== undefined,
+  },
+  {
+    id: 'cuenta-obligatoria',
+    label: 'Pedir con cuenta (quitar «pedir sin cuenta»)',
+    where: `${FLOW} › Operación de Caja`,
+    keywords: ['cuenta', 'invitado', 'sin cuenta', 'registro', 'escuela', 'alumno'],
+    to: '/app/flujo?ajuste=operacion',
+    // La casilla solo sale con un back que ya tiene la migración 228.
+    visible: (ctx) => ctx.settings?.cuenta_obligatoria != null,
+  },
+  {
+    id: 'aviso-retraso',
+    label: 'Avisar de pedidos pagados que tardan',
+    where: `${FLOW} › Operación de Caja`,
+    keywords: ['retraso', 'tarde', 'demora', 'alerta', 'aviso', 'minutos', 'entregar'],
+    to: '/app/flujo?ajuste=operacion',
+    visible: (ctx) => ctx.settings?.alerta_retraso_activa != null,
   },
   {
     id: 'fondo-y-corte',

@@ -2414,6 +2414,12 @@
             },
             "type": "object"
           },
+          "cobrado_en": {
+            "description": "Cuándo entró el dinero del pedido. Null mientras sigue por cobrar. El aviso de retraso del admin cuenta desde aquí.",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
           "codigo_entrega": {
             "description": "Solo al cliente dueño, desde en_camino: lo dice a quien entrega.",
             "pattern": "^[0-9]{4}$",
@@ -3184,6 +3190,10 @@
         "properties": {
           "asistente_clientes": {
             "description": "Si es true, la tienda tiene el asistente de pedidos para clientes (POST /asistente-cliente): la app enseña «Pregúntame qué pedir».",
+            "type": "boolean"
+          },
+          "cuenta_obligatoria": {
+            "description": "Migración 228. En true el negocio no deja pedir sin cuenta: la app pide entrar antes de pedir y crear una sesión de invitado responde 403 GUEST_NOT_ALLOWED. Por defecto false.",
             "type": "boolean"
           },
           "descripcion": {
@@ -8086,6 +8096,23 @@
                   "properties": {
                     "data": {
                       "properties": {
+                        "alerta_retraso_activa": {
+                          "description": "Migración 228. null si el servidor aún no la tiene.",
+                          "nullable": true,
+                          "type": "boolean"
+                        },
+                        "alerta_retraso_cocina_min": {
+                          "maximum": 240,
+                          "minimum": 1,
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "alerta_retraso_sin_cocina_min": {
+                          "maximum": 120,
+                          "minimum": 1,
+                          "nullable": true,
+                          "type": "integer"
+                        },
                         "asistente_modo": {
                           "description": "null si el servidor aún no tiene la migración 180.",
                           "enum": [
@@ -8103,6 +8130,11 @@
                         "contrato_v1": {
                           "description": "Capacidades efectivas de lectura (no autoriza transiciones).",
                           "type": "object"
+                        },
+                        "cuenta_obligatoria": {
+                          "description": "Migración 228. null si el servidor aún no la tiene.",
+                          "nullable": true,
+                          "type": "boolean"
                         }
                       },
                       "type": "object"
@@ -8133,6 +8165,23 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "alerta_retraso_activa": {
+                    "default": false,
+                    "description": "Migración 228. El panel del admin avisa de un pedido pagado que no se ha entregado pasados alerta_retraso_sin_cocina_min (sin nada de cocina) o alerta_retraso_cocina_min (con algo de cocina), contados desde cobrado_en.",
+                    "type": "boolean"
+                  },
+                  "alerta_retraso_cocina_min": {
+                    "default": 5,
+                    "maximum": 240,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "alerta_retraso_sin_cocina_min": {
+                    "default": 2,
+                    "maximum": 120,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
                   "anticipo_porcentaje": {
                     "maximum": 90,
                     "minimum": 10,
@@ -8183,6 +8232,11 @@
                     ],
                     "nullable": true,
                     "type": "string"
+                  },
+                  "cuenta_obligatoria": {
+                    "default": false,
+                    "description": "Migración 228. En true nadie pide sin cuenta en este negocio: crear o renovar una sesión de invitado y los pedidos de un invitado responden 403 GUEST_NOT_ALLOWED. Viaja en la vista pública del negocio.",
+                    "type": "boolean"
                   },
                   "datos_transferencia": {
                     "description": "Datos para pagar por transferencia que ve el cliente.",
@@ -19859,7 +19913,7 @@
     },
     "/api/v1/publico/invitados": {
       "post": {
-        "description": "Compra sin cuenta: pide solo el nombre y la aceptación de la versión vigente de términos y privacidad. Devuelve una `llave` (guárdala en el dispositivo: es lo único que identifica al invitado y no se puede recuperar) y una sesión de cliente de 15 min. Un invitado no paga con saldo ni acumula cashback. Negocios que exigen identificador (matrícula) responden 403 GUEST_NOT_ALLOWED. Límite por IP. Contrato: docs/compra-sin-cuenta.md.\n",
+        "description": "Compra sin cuenta: pide solo el nombre y la aceptación de la versión vigente de términos y privacidad. Devuelve una `llave` (guárdala en el dispositivo: es lo único que identifica al invitado y no se puede recuperar) y una sesión de cliente de 15 min. Un invitado no paga con saldo ni acumula cashback. Negocios que exigen identificador (matrícula) o tienen `cuenta_obligatoria` responden 403 GUEST_NOT_ALLOWED. Límite por IP. Contrato: docs/compra-sin-cuenta.md.\n",
         "requestBody": {
           "content": {
             "application/json": {

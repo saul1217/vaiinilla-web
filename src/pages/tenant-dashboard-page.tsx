@@ -20,6 +20,7 @@ import { Link } from 'react-router-dom';
 import { PeriodSelector, RankedBarChart, SalesTrendChart } from '../components/analytics-dashboard';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { CardErrorBoundary } from '../components/card-error-boundary';
+import { DelayAlertsCard } from '../components/delay-alerts-card';
 import { UnpaidAccountsCard } from '../components/unpaid-accounts-card';
 import { Feedback } from '../components/ui';
 import { useSessions } from '../context/session-context';
@@ -84,6 +85,13 @@ export function TenantDashboardPage() {
     queryFn: () => api.businessSettings(token),
   });
 
+  // Para el aviso de pedidos que tardan (migración 228); es la misma consulta de Flujo de mi tienda.
+  const businessSettings = useQuery({
+    queryKey: ['business-settings', scopeId],
+    enabled: Boolean(token),
+    queryFn: () => api.businessSettings(token),
+  });
+
   const cashSession = useQuery({
     queryKey: ['cash-session', scopeId],
     enabled: Boolean(token),
@@ -129,6 +137,8 @@ export function TenantDashboardPage() {
           </div>
         </div>
       )}
+
+      <DelayAlertsCard orders={activeOrders.data?.orders} settings={businessSettings.data} />
 
       {analytics.isError && <Feedback tone="error">{errorMessage(analytics.error)}</Feedback>}
 

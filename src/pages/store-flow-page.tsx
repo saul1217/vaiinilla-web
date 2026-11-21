@@ -79,6 +79,7 @@ export function StoreFlowPage() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowSettings | null>(null);
   const [saved, setSaved] = useState(false);
+  const [opsNotice, setOpsNotice] = useState<string | null>(null);
   // El buscador de ajustes llega con ?ajuste=: abre su editor o baja a su tarjeta. Cada búsqueda es
   // una navegación nueva (location.key), así que vuelve a abrir aunque se pida el mismo ajuste, y la
   // pantalla no se desmonta: lo que no se ha guardado se queda.
@@ -243,7 +244,7 @@ export function StoreFlowPage() {
       </section>
       {query.data && (
         <div className="grid gap-4">
-          <StoreOperationsCard key={`ops-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
+          <StoreOperationsCard key={`ops-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} notice={opsNotice} onNotice={setOpsNotice} />
           <StoreDeliveryPreordersCard key={`del-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
           <StoreLinesCard key={`lines-${scopeId}`} token={token} scopeId={scopeId} settings={query.data} />
         </div>

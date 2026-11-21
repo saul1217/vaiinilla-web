@@ -101,7 +101,7 @@ export function KitchenPage() {
     },
   });
 
-  // «Lista» espera 10 s antes de mandarse para poder deshacerla (Doop N02). Al salir se manda ya.
+  // «Lista» espera 5 s antes de mandarse para poder deshacerla (Doop N02). Al salir se manda ya.
   const readyQueue = useRef(new PendingReadyQueue());
   const [waitingReady, setWaitingReady] = useState<PendingReady[]>([]);
   const [clock, setClock] = useState(() => Date.now());

@@ -163,7 +163,7 @@ const KITCHEN: ManualGuide[] = [
     section: 'Preparación',
     steps: [
       step('Asegúrate de que todo esté terminado', 'No la marques lista hasta que todos los productos estén preparados.'),
-      step('Toca Marcar como listo', 'Tienes 10 segundos para tocar Deshacer si te equivocaste; después pasa a Listos.'),
+      step('Toca Marcar como listo', 'Tienes 5 segundos para tocar Deshacer si te equivocaste; después pasa a Listos.'),
       step('Comprueba que aparezca en Listos', 'Caja y Mesero ven el pedido listo y pueden entregarlo.'),
     ],
     completion: 'Comanda lista para entrega',

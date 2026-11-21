@@ -310,6 +310,11 @@ export interface OrderDetail {
   motivo_pendiente_operativo?: 'caja_inactiva' | 'cocina_inactiva' | null;
   /** Drive-thru: cuándo el cliente avisó que llegó por su pedido; null si no ha avisado. */
   llegada_en?: string | null;
+  /** Cuándo entró el dinero; null mientras sigue por cobrar. Un back anterior no lo manda. */
+  cobrado_en?: string | null;
+  /** Encargos y pedidos de la semana: día (YYYY-MM-DD) y franja ("13:00-14:00") de entrega. */
+  fecha_entrega?: string | null;
+  franja_entrega?: string | null;
   /** Cuándo quedó listo: a esa hora le llegó el aviso al cliente. */
   listo_en?: string | null;
   /** Con la barra preparando, las estaciones que todavía no sellan su parte. */
@@ -640,6 +645,14 @@ export interface BusinessSettings {
   /** Logo del negocio (carrito y seguimiento en la app). Se cambia con su propia ruta. */
   logo_url?: string | null;
   tipos_disponibles: string[];
+  /** Sin «pedir sin cuenta» en este negocio (migración 228). null o ausente: el back no la tiene. */
+  cuenta_obligatoria?: boolean | null;
+  /** Aviso en Inicio de pedidos pagados sin entregar (migración 228). null o ausente: el back no lo tiene. */
+  alerta_retraso_activa?: boolean | null;
+  /** Minutos para avisar de un pedido sin nada de cocina (1 a 120, 2 por defecto). */
+  alerta_retraso_sin_cocina_min?: number | null;
+  /** Minutos para avisar de un pedido con algo de cocina (1 a 240, 5 por defecto). */
+  alerta_retraso_cocina_min?: number | null;
   /** Caja pide el QR, el código o la credencial del cliente para cobrar lo pedido en la app (migración 225). Un back anterior no lo manda. */
   cobro_requiere_codigo?: boolean;
   /** Padres e hijos: solo con true se muestra el admin de Escuela. Un backend anterior no lo manda. */

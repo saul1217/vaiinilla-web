@@ -82,3 +82,48 @@ describe('Pedir el código al cobrar (migración 225)', () => {
     expect(screen.queryByRole('radio', { name: /^Pedir el código del cliente al cobrar/ })).not.toBeInTheDocument();
   });
 });
+
+describe('Pedir con cuenta y aviso de retraso (migración 228)', () => {
+  const con228 = { ...settings, cuenta_obligatoria: false, alerta_retraso_activa: false, alerta_retraso_sin_cocina_min: 2, alerta_retraso_cocina_min: 5 };
+  beforeEach(() => {
+    apiMock.saveBusinessSettings.mockReset().mockResolvedValue({ ...con228, cuenta_obligatoria: true });
+  });
+
+  it('sin la migración no ofrece los ajustes', () => {
+    render(<StoreOperationsCard token="t" scopeId="est-1" settings={settings} />, { wrapper: Wrapper });
+    expect(screen.queryByRole('radio', { name: /^Pedir con cuenta/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /^Avisar de pedidos pagados/ })).not.toBeInTheDocument();
+  });
+
+  it('guarda «Pedir con cuenta» solo con ese cambio', async () => {
+    const user = userEvent.setup();
+    render(<StoreOperationsCard token="t" scopeId="est-1" settings={con228} />, { wrapper: Wrapper });
+    await user.click(screen.getByRole('radio', { name: /^Pedir con cuenta/ }));
+    await user.click(screen.getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('t', { cuenta_obligatoria: true }));
+  });
+
+  it('un límite fuera de rango no deja guardar y dice por qué', async () => {
+    const user = userEvent.setup();
+    render(<StoreOperationsCard token="t" scopeId="est-1" settings={con228} />, { wrapper: Wrapper });
+    await user.click(screen.getByRole('radio', { name: /^Avisar de pedidos pagados/ }));
+    const campo = screen.getByLabelText(/Límite con cocina/);
+    await user.clear(campo);
+    expect(screen.getByText('Escribe un número de 1 a 240.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Guardar/ })).toBeDisabled();
+    await user.type(campo, '7');
+    await user.click(screen.getByRole('button', { name: /Guardar/ }));
+    await waitFor(() =>
+      expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith('t', { alerta_retraso_activa: true, alerta_retraso_cocina_min: 7 }),
+    );
+  });
+
+  it('el aviso de guardado vive en quien la monta, para que sobreviva al remontar', async () => {
+    const user = userEvent.setup();
+    const onNotice = vi.fn();
+    render(<StoreOperationsCard token="t" scopeId="est-1" settings={con228} notice={null} onNotice={onNotice} />, { wrapper: Wrapper });
+    await user.click(screen.getByRole('radio', { name: /^Pedir con cuenta/ }));
+    await user.click(screen.getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith('Ajustes operativos guardados.'));
+  });
+});

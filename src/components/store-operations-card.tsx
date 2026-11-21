@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Choice } from './choice';
 import { Button, Feedback, Field, SelectField } from './ui';
+import { DEFAULT_KITCHEN_MIN, DEFAULT_NO_KITCHEN_MIN } from '../lib/delay-alerts';
 import { api } from '../lib/api';
 import { errorMessage } from '../lib/api-error';
 import { createIdempotencyKey } from '../lib/idempotency';
@@ -26,10 +27,15 @@ export function StoreOperationsCard({
   token,
   scopeId,
   settings,
+  notice,
+  onNotice,
 }: {
   token: string;
   scopeId: string;
   settings: BusinessSettings;
+  /** Store flow remounts this card after each save (its key changes): the notice lives there so it survives. */
+  notice?: string | null;
+  onNotice?: (text: string | null) => void;
 }) {
   const queryClient = useQueryClient();
   const [prepMode, setPrepMode] = useState<PrepMode>(prepModeOf(settings));
@@ -47,8 +53,19 @@ export function StoreOperationsCard({
   // Un back sin la migración 225 no manda cobro_requiere_codigo: ahí no se ofrece.
   const cobroCodigoDisponible = settings.cobro_requiere_codigo !== undefined;
   const [cobroCodigo, setCobroCodigo] = useState(settings.cobro_requiere_codigo === true);
+  // Migración 228: un back sin ella manda null o nada y no se ofrecen.
+  const cuentaDisponible = settings.cuenta_obligatoria != null;
+  const [cuentaObligatoria, setCuentaObligatoria] = useState(settings.cuenta_obligatoria === true);
+  const retrasoDisponible = settings.alerta_retraso_activa != null;
+  const [retrasoActivo, setRetrasoActivo] = useState(settings.alerta_retraso_activa === true);
+  const savedNoKitchen = String(settings.alerta_retraso_sin_cocina_min ?? DEFAULT_NO_KITCHEN_MIN);
+  const savedKitchen = String(settings.alerta_retraso_cocina_min ?? DEFAULT_KITCHEN_MIN);
+  const [retrasoSinCocina, setRetrasoSinCocina] = useState(savedNoKitchen);
+  const [retrasoCocina, setRetrasoCocina] = useState(savedKitchen);
   const [preflight, setPreflight] = useState<ConfigTransitionPreflight | null>(null);
-  const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [localNotice, setLocalNotice] = useState<string | null>(null);
+  const savedNotice = notice !== undefined ? notice : localNotice;
+  const setSavedNotice = onNotice ?? setLocalNotice;
 
   const transitionChanges: Record<string, unknown> = {};
   if (barraPrepara !== (settings.barra_prepara === true)) transitionChanges.barra_prepara = barraPrepara;
@@ -61,6 +78,14 @@ export function StoreOperationsCard({
   if (cajaEntrega !== (settings.caja_entrega_en_espacio === true)) patchChanges.caja_entrega_en_espacio = cajaEntrega;
   if (modoEscuela !== (settings.modo_escuela === true)) patchChanges.modo_escuela = modoEscuela;
   if (cobroCodigoDisponible && cobroCodigo !== (settings.cobro_requiere_codigo === true)) patchChanges.cobro_requiere_codigo = cobroCodigo;
+  if (cuentaDisponible && cuentaObligatoria !== (settings.cuenta_obligatoria === true)) patchChanges.cuenta_obligatoria = cuentaObligatoria;
+  if (retrasoDisponible && retrasoActivo !== (settings.alerta_retraso_activa === true)) patchChanges.alerta_retraso_activa = retrasoActivo;
+  const minutesProblem = (raw: string, max: number) =>
+    /^\d+$/.test(raw.trim()) && Number(raw) >= 1 && Number(raw) <= max ? null : `Escribe un número de 1 a ${max}.`;
+  const noKitchenProblem = retrasoDisponible && retrasoActivo ? minutesProblem(retrasoSinCocina, 120) : null;
+  const kitchenProblem = retrasoDisponible && retrasoActivo ? minutesProblem(retrasoCocina, 240) : null;
+  if (retrasoDisponible && !noKitchenProblem && retrasoSinCocina.trim() !== savedNoKitchen) patchChanges.alerta_retraso_sin_cocina_min = Number(retrasoSinCocina.trim());
+  if (retrasoDisponible && !kitchenProblem && retrasoCocina.trim() !== savedKitchen) patchChanges.alerta_retraso_cocina_min = Number(retrasoCocina.trim());
   const trimmedFondo = fondoSugerido.trim();
   const currentFondo = settings.fondo_sugerido ?? '';
   if (trimmedFondo !== currentFondo) patchChanges.fondo_sugerido = trimmedFondo || null;
@@ -155,6 +180,50 @@ export function StoreOperationsCard({
           ]}
         />
       )}
+      {cuentaDisponible && (
+        <Choice
+          name="cuenta_obligatoria"
+          value={cuentaObligatoria}
+          onChange={(v) => { setSavedNotice(null); setCuentaObligatoria(v); }}
+          options={[
+            { value: false, label: 'Se puede pedir sin cuenta', hint: 'El cliente pide como invitado con solo su nombre.' },
+            { value: true, label: 'Pedir con cuenta', hint: 'Quita «pedir sin cuenta»: el cliente entra o crea su cuenta antes de pedir. Útil en escuelas.' },
+          ]}
+        />
+      )}
+      {retrasoDisponible && (
+        <div className="grid gap-3">
+          <Choice
+            name="alerta_retraso_activa"
+            value={retrasoActivo}
+            onChange={(v) => { setSavedNotice(null); setRetrasoActivo(v); }}
+            options={[
+              { value: false, label: 'Sin aviso de pedidos que tardan', hint: 'Inicio no avisa de retrasos.' },
+              { value: true, label: 'Avisar de pedidos pagados que tardan', hint: 'Inicio avisa cuando un pedido pagado pasa su límite sin entregarse.' },
+            ]}
+          />
+          {retrasoActivo && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="Límite sin cocina (min)"
+                inputMode="numeric"
+                value={retrasoSinCocina}
+                onChange={(e) => { setSavedNotice(null); setRetrasoSinCocina(e.target.value); }}
+                hint="De 1 a 120. Ej. una botella de agua."
+                error={noKitchenProblem ?? undefined}
+              />
+              <Field
+                label="Límite con cocina (min)"
+                inputMode="numeric"
+                value={retrasoCocina}
+                onChange={(e) => { setSavedNotice(null); setRetrasoCocina(e.target.value); }}
+                hint="De 1 a 240. Ej. un burrito."
+                error={kitchenProblem ?? undefined}
+              />
+            </div>
+          )}
+        </div>
+      )}
       <SelectField
         label="Entrega en mesa o espacio"
         value={entregaEnEspacio}
@@ -190,7 +259,7 @@ export function StoreOperationsCard({
         ]}
       />
       <div>
-        <Button type="button" loading={save.isPending} disabled={!hasChanges} onClick={() => save.mutate()}>
+        <Button type="button" loading={save.isPending} disabled={!hasChanges || Boolean(noKitchenProblem || kitchenProblem)} onClick={() => save.mutate()}>
           Guardar ajustes operativos
         </Button>
       </div>
