@@ -26,7 +26,8 @@ it('con SCHOOL_ADMIN_ENABLED en false no llama a la API de la escuela ni muestra
   // Espera a que el inicio cargue lo que sí consulta.
   await vi.waitFor(() => expect(apiMock.tenantAnalytics).toHaveBeenCalled());
   await vi.waitFor(() => expect(apiMock.activeCashSession).toHaveBeenCalled());
-  expect(apiMock.businessSettings).not.toHaveBeenCalled();
+  // La configuración del negocio sí se pide una vez: de ahí sale el aviso de pedidos que tardan, no la escuela.
+  expect(apiMock.businessSettings).toHaveBeenCalledTimes(1);
   expect(apiMock.schoolRoster).not.toHaveBeenCalled();
   expect(apiMock.saveSchoolRoster).not.toHaveBeenCalled();
   expect(apiMock.saveSchoolSettings).not.toHaveBeenCalled();
