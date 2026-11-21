@@ -3,7 +3,7 @@
 import type { InventoryAlertSupply, InventoryAlerts } from '../types/api';
 
 /** Cuánto se puede deshacer una marca de «lista» antes de mandarla al servidor. */
-export const UNDO_WINDOW_MS = 10_000;
+export const UNDO_WINDOW_MS = 5_000;
 
 export interface PendingReady {
   orderId: string;
