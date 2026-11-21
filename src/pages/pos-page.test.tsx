@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
@@ -16,8 +17,8 @@ const apiMock = vi.hoisted(() => ({
   isMixedPaymentUnavailable: vi.fn(() => mixedUnavailable.value),
   markMixedPaymentUnavailable: vi.fn(() => { mixedUnavailable.value = true; }),
   collectCash: vi.fn(), deliverOrder: vi.fn(), closeCashSession: vi.fn(),
-  rejectOrder: vi.fn(), rejectOrderItem: vi.fn(), catalog: vi.fn(), spaceAvailability: vi.fn(), createStaffOrder: vi.fn(),
-  businessSettings: vi.fn(),
+  rejectOrder: vi.fn(), rejectOrderItem: vi.fn(), catalog: vi.fn(), spaceAvailability: vi.fn(), spaces: vi.fn().mockResolvedValue([]), createStaffOrder: vi.fn(),
+  businessSettings: vi.fn(), transitionOrder: vi.fn(), remindOrder: vi.fn(), markNotPickedUp: vi.fn(),
 }));
 
 const sesion = vi.hoisted(() => ({ rol: 'cajero' }));
@@ -93,7 +94,7 @@ const PEDIDO_CREADO = {
 
 function Wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return <MemoryRouter><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></MemoryRouter>;
 }
 
 async function enviarCobroAlInstante(user: UserEvent) {
@@ -131,6 +132,8 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
       precio_digital_unitario: '125.00', subtotal: '125.00', opciones: [], rechazo: null,
     }] }], cursor: null });
     render(<PosPage />, { wrapper: Wrapper });
+    // Quitar un artículo vive en el ticket completo, que se abre con «Ver pedido».
+    await user.click(await screen.findByRole('button', { name: /^Ver pedido 14 de / }));
     await user.click(await screen.findByRole('button', { name: 'Quitar artículo' }));
     const dialog = await screen.findByRole('dialog', { name: 'Rechazar pedido' });
     expect(within(dialog).getByRole('radio', { name: 'Todo el pedido' })).toBeChecked();
@@ -238,7 +241,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     expect(screen.getByRole('button', { name: 'Abrir Caja' })).toBeEnabled();
   });
 
-  it('pide preparando, por_cobrar y listo al backend y muestra preparando sin pagar en Por cobrar', async () => {
+  it('sin «La barra prepara» pide por_cobrar, preparando y listo, no cobrado, y muestra preparando sin pagar en Por cobrar', async () => {
     const preparing = {
       ...baseOrder,
       id: 'order-prep',
@@ -255,7 +258,7 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
         expect.objectContaining({ estado: ['por_cobrar', 'preparando', 'listo'] }),
       ),
     );
-    expect(await screen.findByRole('button', { name: 'Cobrar' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Cobrar $125.00 MXN' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Entregar' })).not.toBeInTheDocument();
   });
 
@@ -276,9 +279,12 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
 
     await waitFor(() => expect(apiMock.collectCash).toHaveBeenCalledWith('token', baseOrder.id, '125.00', 4, '0.00'));
-    expect(await screen.findByRole('button', { name: 'Imprimir ticket' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Entregar' })).toBeVisible();
-    expect(screen.getByText('PAGADO')).toBeVisible();
+    // La tarjeta ya ofrece entregar; imprimir queda en el ticket completo.
+    expect(await screen.findByRole('button', { name: 'Entregar' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: /^Ver pedido 14 de / }));
+    const ticket = await screen.findByRole('dialog', { name: 'Pedido #14' });
+    expect(within(ticket).getByRole('button', { name: 'Imprimir ticket' })).toBeVisible();
+    expect(within(ticket).getByText('PAGADO')).toBeVisible();
   });
 
   it('conserva efectivo y propina tras error y reintenta con el mismo payload', async () => {
@@ -308,6 +314,32 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
       ['token', baseOrder.id, '100.00', 4, '8.50'],
     ]);
     expect(await screen.findByText(/Cobro registrado/)).toHaveTextContent('$6.50 MXN');
+  });
+
+  it('con el cobro con código, lo pedido en la app pide la prueba del cliente y la manda', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true, cobro_requiere_codigo: true, validacion_entrega: 'codigo' });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, origen: 'app', total: '85.00', saldo_pendiente: '85.00' }], cursor: null });
+    apiMock.collectCash.mockResolvedValue({ cambio: '15.00' });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Cobrar $85.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Efectivo recibido (MXN)'), '100');
+    const proof = await within(dialog).findByLabelText('Código de 4 dígitos');
+    expect(within(dialog).getByRole('button', { name: 'Confirmar cobro' })).toBeDisabled();
+    await user.type(proof, '0133');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar cobro' }));
+    await waitFor(() => expect(apiMock.collectCash).toHaveBeenCalledWith('token', baseOrder.id, '100.00', 4, '0.00', '0133'));
+  });
+
+  it('lo de mostrador se cobra sin prueba aunque la opción esté prendida', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true, cobro_requiere_codigo: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, origen: 'mostrador', total: '85.00', saldo_pendiente: '85.00' }], cursor: null });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+    await user.click(await screen.findByRole('button', { name: 'Cobrar $85.00 MXN' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByLabelText('QR o código de 4 dígitos')).not.toBeInTheDocument();
   });
 
   it('oculta el pago mixto con el flag apagado', async () => {
@@ -454,7 +486,36 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     render(<PosPage />, { wrapper: Wrapper });
     expect(await screen.findByRole('button', { name: 'Validar QR' })).toBeVisible();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Validar QR' }));
-    expect(await screen.findByLabelText('Token QR de entrega')).toBeVisible();
+    expect(await screen.findByLabelText('QR o código de 4 dígitos')).toBeVisible();
+  });
+
+  it('la pistola lectora entrega: el campo llega enfocado y su Enter confirma', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, monto_pagado: '125.00', saldo_pendiente: '0.00' }], cursor: null });
+    apiMock.deliverOrder.mockResolvedValue({ folio: 14 });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Validar QR' }));
+    const campo = await screen.findByLabelText('QR o código de 4 dígitos');
+    expect(campo).toHaveFocus();
+    await user.keyboard('VAI-7Q2K{Enter}');
+    await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', 'order-14', 4, 'VAI-7Q2K'));
+  });
+
+  it('confirmar sin código no entrega y pide escanearlo', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: true });
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, monto_pagado: '125.00', saldo_pendiente: '0.00' }], cursor: null });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Validar QR' }));
+    // El botón queda habilitado para que el Enter de la pistola siempre llegue al formulario.
+    const confirmar = screen.getByRole('button', { name: 'Confirmar entrega' });
+    expect(confirmar).toBeEnabled();
+    await user.click(confirmar);
+    expect(await screen.findByText('Escanea su QR o escribe su código de 4 dígitos.')).toBeVisible();
+    expect(apiMock.deliverOrder).not.toHaveBeenCalled();
   });
 
   it('permite entregar sin QR un pedido de una sesión activa aunque el ajuste global lo requiera', async () => {
@@ -473,9 +534,126 @@ describe('Caja: cobrar, imprimir y entregar pedido listo', () => {
     render(<PosPage />, { wrapper: Wrapper });
 
     await user.click(await screen.findByRole('button', { name: 'Entregar' }));
-    expect(screen.queryByLabelText('Token QR de entrega')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('QR o código de 4 dígitos')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Confirmar entrega' }));
     await waitFor(() => expect(apiMock.deliverOrder).toHaveBeenCalledWith('token', 'order-14', 4, ''));
+  });
+});
+
+describe('Caja: filas, la barra que prepara y el aviso de listo', () => {
+  const barra1 = { id: 1, nombre: 'Barra 1', tipo: 'barra' as const };
+  const barra2 = { id: 2, nombre: 'Barra 2', tipo: 'barra' as const };
+  const chocolate = { id: 1, producto_id: 1, nombre_producto: 'Chocolate caliente', estacion_preparacion: 'caja' as const, cantidad: 2, precio_digital_unitario: '23.00', subtotal: '46.00', opciones: [] };
+  const torta = { ...chocolate, id: 2, nombre_producto: 'Torta de jamón', estacion_preparacion: 'cocina' as const, cantidad: 1 };
+  const pagado = { monto_pagado: '125.00', saldo_pendiente: '0.00', metodo_pago: 'saldo' as const };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    sesion.rol = 'cajero';
+    apiMock.activeCashSession.mockResolvedValue({ id: 'cash-1', estado: 'abierta', fondo_inicial: '500.00', abierta_en: '2026-10-07T10:00:00.000Z' });
+    apiMock.operationalStatus.mockResolvedValue({ entrega_requiere_qr: false, barra_prepara: true });
+    apiMock.spaces.mockResolvedValue([barra2, { id: 9, nombre: 'Mesa 9', tipo: 'mesa' }, barra1]);
+  });
+
+  it('cada caja elige su fila y deja de ver la de las demás', async () => {
+    apiMock.listOrders.mockResolvedValue({ orders: [
+      { ...baseOrder, ...pagado, id: 'a', folio: 21, espacio: barra1, usuario: { nombre: 'Emilio', matricula: null } },
+      { ...baseOrder, ...pagado, id: 'b', folio: 18, espacio: barra2, usuario: { nombre: 'Mateo', matricula: null } },
+      { ...baseOrder, ...pagado, id: 'f', folio: 30, espacio: null, usuario: { nombre: 'Lía', matricula: null } },
+    ], cursor: null });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await waitFor(() => expect(apiMock.listOrders).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({ estado: ['por_cobrar', 'cobrado', 'preparando', 'listo'] }),
+    ));
+    const filas = await screen.findByRole('group', { name: 'Qué fila atiendes' });
+    // Cada pestaña cuenta lo que nació en su fila, igual que su columna; lo sin fila no se suma.
+    expect(within(filas).getByRole('button', { name: /Todas/ })).toHaveTextContent('3');
+    expect(within(filas).getByRole('button', { name: /Barra 2/ })).toHaveTextContent(/^Barra 2 1$/);
+    expect(within(filas).getByRole('button', { name: /Todas/ })).toHaveAttribute('aria-pressed', 'true');
+    // Con «Todas» y varias filas, una columna por fila.
+    expect(await screen.findByRole('region', { name: 'Barra 1' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Barra 2' })).toBeVisible();
+    // Cada renglón trae su botón principal: entregar sin abrir el ticket.
+    expect(within(screen.getByRole('region', { name: 'Barra 1' })).getByRole('button', { name: 'Entregar' })).toBeVisible();
+
+    await user.click(within(filas).getByRole('button', { name: /Barra 2/ }));
+    expect(screen.getByText('1 pedido de otra fila no se muestra aquí.')).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Barra 1' })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('caja.fila.v1:store-1')).toBe('2');
+  });
+
+  it('la barra marca listo lo suyo: pasa por preparando y avisa', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    const cobrado = { ...baseOrder, ...pagado, id: 'c', folio: 15, estado: 'cobrado' as const, version: 2, items: [chocolate, torta], usuario: { nombre: 'Prof. Olmos', matricula: null } };
+    apiMock.listOrders.mockResolvedValue({ orders: [cobrado], cursor: null });
+    apiMock.transitionOrder
+      .mockResolvedValueOnce({ ...cobrado, estado: 'preparando', version: 3 })
+      .mockResolvedValueOnce({ ...cobrado, estado: 'preparando', version: 4, estaciones_pendientes: ['cocina'] });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    const barra = await screen.findByRole('region', { name: /La barra prepara/ });
+    // La barra solo lee lo que le toca, no la torta de cocina.
+    expect(within(barra).getByText('2× Chocolate caliente')).toBeVisible();
+    expect(within(barra).queryByText(/Torta/)).not.toBeInTheDocument();
+
+    await user.click(within(barra).getByRole('button', { name: 'Marcar listo el pedido 15 y avisar al cliente' }));
+    await waitFor(() => expect(apiMock.transitionOrder).toHaveBeenNthCalledWith(1, 'token', 'c', 'preparando', 2));
+    expect(apiMock.transitionOrder).toHaveBeenNthCalledWith(2, 'token', 'c', 'listo', 3);
+    expect(await screen.findByText('Lo de la barra del pedido 15 está listo; falta cocina.')).toBeVisible();
+  });
+
+  it('«Ver pedido» dice el nombre del cliente al lector de pantalla', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    apiMock.listOrders.mockResolvedValue({ orders: [{ ...baseOrder, ...pagado, id: 'g', folio: 31, usuario: { nombre: 'Lía Prado', matricula: null } }], cursor: null });
+    render(<PosPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('button', { name: 'Ver pedido 31 de Lía Prado' })).toBeVisible();
+  });
+
+  it('«Avisar otra vez» le recuerda al cliente y «No vino» se confirma antes', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    const listo = { ...baseOrder, ...pagado, id: 'h', folio: 32, version: 6, destino: 'para_llevar' as const };
+    apiMock.listOrders.mockResolvedValue({ orders: [listo], cursor: null });
+    apiMock.remindOrder.mockResolvedValue(undefined);
+    apiMock.markNotPickedUp.mockResolvedValue({ ...listo, estado: 'no_recogido' });
+    const user = userEvent.setup();
+    render(<PosPage />, { wrapper: Wrapper });
+
+    await user.click(await screen.findByRole('button', { name: 'Avisar otra vez al cliente del pedido 32' }));
+    await waitFor(() => expect(apiMock.remindOrder).toHaveBeenCalledWith('token', 'h'));
+    expect(await screen.findByText('Le volvimos a avisar al cliente del pedido 32.')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'No vino por el pedido 32' }));
+    const dialog = await screen.findByRole('dialog', { name: '¿No vino por el pedido #32?' });
+    // Nada se manda hasta confirmar.
+    expect(apiMock.markNotPickedUp).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, no vino' }));
+    await waitFor(() => expect(apiMock.markNotPickedUp).toHaveBeenCalledWith('token', 'h', 6));
+    expect(await screen.findByText('El pedido 32 quedó como no recogido.')).toBeVisible();
+  });
+
+  it('una cuenta abierta de mesa no ofrece «No vino» ni avisar', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    const deMesa = { ...baseOrder, id: 'i', folio: 33, destino: 'en_espacio' as const, espacio: { id: 9, nombre: 'Mesa 9', tipo: 'mesa' as const }, pago_diferido: true, pago_pendiente: true };
+    apiMock.listOrders.mockResolvedValue({ orders: [deMesa], cursor: null });
+    render(<PosPage />, { wrapper: Wrapper });
+    expect(await screen.findByRole('button', { name: /^Ver pedido 33 de / })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /No vino/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Avisar otra vez/ })).not.toBeInTheDocument();
+  });
+
+  it('un pedido listo dice cuánto lleva avisado el cliente', async () => {
+    apiMock.spaces.mockResolvedValue([]);
+    const listo = { ...baseOrder, ...pagado, id: 'd', folio: 9, listo_en: new Date(Date.now() - 4 * 60_000 - 5_000).toISOString() };
+    const otro = { ...listo, id: 'e', folio: 11 };
+    apiMock.listOrders.mockResolvedValue({ orders: [listo, otro], cursor: null });
+    render(<PosPage />, { wrapper: Wrapper });
+    // Cada tarjeta lista dice cuánto lleva avisado su cliente.
+    expect(await screen.findAllByText('Avisado hace 4 min')).toHaveLength(2);
   });
 });
 

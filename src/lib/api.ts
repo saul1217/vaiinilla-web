@@ -1,5 +1,7 @@
+import { notifySpacesChanged } from './spaces-changed';
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
+import type { StudentCard, StudentCredential, StudentPurchaseItem } from './student-counter';
 import {
   clearMixedPaymentAttempt,
   isCompleteScope,
@@ -12,9 +14,15 @@ import {
   type MixedPaymentScope,
 } from './mixed-payment-attempts';
 import type {
+  LinesLiveBoard,
   ApiEnvelope,
   ApiErrorEnvelope,
+  OrderSpace,
   AccountDeletion,
+  CashDrawerReport,
+  CashLastClose,
+  InventoryAlerts,
+  MyShift,
   CashSession,
   CashPaymentResult,
   MixedPaymentResult,
@@ -39,6 +47,8 @@ import type {
   PlatformSummary,
   StripeOnboarding,
   StripePlatformConfiguration,
+  PlatformCardApproval,
+  PlatformCardApprovalDecision,
   LegalVersions,
   OperationalRole,
   OperationalStatus,
@@ -69,6 +79,7 @@ import type {
   StaffBooking,
   BookingRefund,
   BookingRefundInput,
+  CancelledBooking,
   SpaceAvailability,
   SpaceSessionDetail,
   ClosedSpaceSessionDetail,
@@ -82,6 +93,11 @@ import type {
   StoreAssistantReply,
   InventoryMovementInput,
   InventoryOverview,
+  InventoryStock,
+  SupplyProductLink,
+  InventoryMovement,
+  InventoryReport,
+  InventoryAssistantReply,
   InventoryProduct,
   InventorySupply,
   InventorySupplyInput,
@@ -180,13 +196,17 @@ function sameMixedPaymentBody(a: MixedPaymentAttempt['body'], b: MixedPaymentAtt
 }
 
 /** Manda el intento guardado con su llave. Solo se llama dentro del candado del pedido. */
-async function sendMixedPaymentAttempt(token: string, attempt: MixedPaymentAttempt): Promise<MixedPaymentResult> {
+async function sendMixedPaymentAttempt(
+  token: string,
+  attempt: MixedPaymentAttempt,
+  proof: ReturnType<typeof pickupBody> = {},
+): Promise<MixedPaymentResult> {
   try {
     const result = await request<MixedPaymentResult>(`/pedidos/${attempt.orderId}/pagos-mixtos`, {
       method: 'POST',
       token,
       idempotencyKey: attempt.idempotencyKey,
-      body: attempt.body,
+      body: { ...attempt.body, ...proof },
     });
     writeMixedPaymentAttempt({ ...attempt, completedRemaining: result.data.restante });
     return result.data;
@@ -257,6 +277,37 @@ function params(values: Record<string, string | number | undefined>): string {
   });
   const query = search.toString();
   return query ? `?${query}` : '';
+}
+
+/** Cada cuánto se pregunta por un trabajo del asistente de la tienda. */
+export const ASSISTANT_POLL_MS = 2000;
+
+interface StoreAssistantJob {
+  trabajo_id: string;
+  /** pensando, listo o error. */
+  estado: string;
+  respuesta?: StoreAssistantReply;
+  error?: { code?: string; message?: string } | null;
+}
+
+function waitOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cancelled = () => new DOMException('Cancelado', 'AbortError');
+    if (signal?.aborted) return reject(cancelled());
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(timer); reject(cancelled()); };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * Lo que se tecleó o escaneó al entregar: 4 dígitos son el código que el cliente dicta en la barra
+ * (`codigo_recoger`); lo demás es el token de su QR.
+ */
+export function pickupBody(pickup?: string): { qr_token?: string; codigo_recoger?: string } {
+  const value = pickup?.trim();
+  if (!value) return {};
+  return /^\d{4}$/.test(value) ? { codigo_recoger: value } : { qr_token: value };
 }
 
 export const api = {
@@ -510,6 +561,50 @@ export const api = {
     ).data;
   },
 
+  /** Mi turno: propinas que cobré, entregas, mesas y llamadas de hoy, y propinas de la semana. Personal y admin. */
+  async myShift(token: string): Promise<MyShift> {
+    return (await request<MyShift>('/reportes/mi-turno', { token, cache: 'no-store' })).data;
+  },
+
+  /** Con la caja cerrada: el último cierre del negocio, o null si nunca se ha cerrado. Caja y admin. */
+  async lastCashClose(token: string): Promise<CashLastClose | null> {
+    return (await request<CashLastClose | null>('/sesiones-caja/ultimo-cierre', { token, cache: 'no-store' })).data;
+  },
+
+  /** Renglones y totales del cajón de un turno: cuánto debe haber y de dónde sale. Caja y admin. */
+  async cashDrawer(token: string, sessionId: string): Promise<CashDrawerReport> {
+    return (
+      await request<CashDrawerReport>(`/sesiones-caja/${encodeURIComponent(sessionId)}/movimientos`, {
+        token,
+        cache: 'no-store',
+      })
+    ).data;
+  },
+
+  /**
+   * Caja mete o saca efectivo con un motivo (3 a 160 caracteres). La llave la da quien llama y se
+   * repite en un reintento del mismo movimiento, para que no se anote dos veces.
+   */
+  async registerCashDrawerMovement(
+    token: string,
+    sessionId: string,
+    movement: { tipo: 'entrada' | 'salida'; monto: string; motivo: string },
+    idempotencyKey: string,
+  ): Promise<{ efectivo_esperado: string | null }> {
+    const data = (
+      await request<{ efectivo_esperado?: string | null }>(
+        `/sesiones-caja/${encodeURIComponent(sessionId)}/movimientos`,
+        { method: 'POST', token, idempotencyKey, body: movement },
+      )
+    ).data;
+    return { efectivo_esperado: data?.efectivo_esperado ?? null };
+  },
+
+  /** Aviso de insumos para el personal: agotados, lo que no alcanza para mañana y lo bajo el mínimo. */
+  async inventoryAlerts(token: string): Promise<InventoryAlerts> {
+    return (await request<InventoryAlerts>('/inventario/avisos', { token, cache: 'no-store' })).data;
+  },
+
   async operationalStatus(token: string): Promise<OperationalStatus> {
     return (await request<OperationalStatus>('/estado-operativo', { token })).data;
   },
@@ -571,6 +666,8 @@ export const api = {
     montoRecibido: string,
     versionEsperada: number,
     propina?: string,
+    /** QR o código del cliente, si el negocio pide código para cobrar (migración 225). */
+    proof?: string,
   ): Promise<CashPaymentResult> {
     return (
       await request<CashPaymentResult>(`/pedidos/${id}/cobros-efectivo`, {
@@ -581,6 +678,7 @@ export const api = {
           monto_recibido: montoRecibido,
           version_esperada: versionEsperada,
           ...(propina && propina !== '0.00' ? { propina } : {}),
+          ...pickupBody(proof),
         },
       })
     ).data;
@@ -590,7 +688,7 @@ export const api = {
     token: string,
     owner: MixedPaymentOwner,
     id: string,
-    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string },
+    input: { metodoPago: 'efectivo' | 'terminal'; monto: string; montoRecibido?: string; proof?: string },
     expectedRemaining: string,
   ): Promise<MixedPaymentResult> {
     const scope = mixedPaymentScope(owner);
@@ -626,7 +724,8 @@ export const api = {
         };
         writeMixedPaymentAttempt(attempt);
       }
-      return sendMixedPaymentAttempt(token, attempt);
+      // La prueba del cliente va solo en el envío: el intento guardado en la pestaña no lleva su QR.
+      return sendMixedPaymentAttempt(token, attempt, pickupBody(input.proof));
     });
   },
 
@@ -658,7 +757,7 @@ export const api = {
   async transitionOrder(
     token: string,
     id: string,
-    targetStatus: Extract<OrderStatus, 'preparando' | 'listo' | 'entregado'>,
+    targetStatus: Extract<OrderStatus, 'preparando' | 'listo' | 'entregado' | 'no_recogido'>,
     expectedVersion: number,
     pickupToken?: string,
   ): Promise<OrderDetail> {
@@ -670,7 +769,67 @@ export const api = {
         body: {
           estado_objetivo: targetStatus,
           version_esperada: expectedVersion,
-          ...(pickupToken ? { qr_token: pickupToken } : {}),
+          ...pickupBody(pickupToken),
+        },
+      })
+    ).data;
+  },
+
+  /** «No vino»: el cliente nunca pasó por su pedido listo. No devuelve dinero solo. */
+  async markNotPickedUp(token: string, id: string, expectedVersion: number): Promise<OrderDetail> {
+    return api.transitionOrder(token, id, 'no_recogido', expectedVersion);
+  },
+
+  /** «Avisar otra vez»: le recuerda al cliente que su pedido sigue listo (uno por minuto). */
+  async remindOrder(token: string, id: string): Promise<void> {
+    await request<unknown>(`/pedidos/${id}/avisos`, { method: 'POST', token });
+  },
+
+  /** Caja › Alumnos: busca por nombre o matrícula (2 a 80 letras). */
+  async searchStudents(token: string, query: string, signal?: AbortSignal): Promise<StudentCard[]> {
+    return (await request<StudentCard[]>(`/alumnos?q=${encodeURIComponent(query.trim())}`, { token, signal })).data;
+  },
+
+  /** El alumno de una credencial QR o de una tarjeta NFC; null si no es de nadie. */
+  async findStudentByCredential(token: string, credential: string): Promise<StudentCard | null> {
+    return (await request<StudentCard[]>(`/alumnos?credencial=${encodeURIComponent(credential.trim())}`, { token })).data[0] ?? null;
+  },
+
+  /** Cobra de su saldo y manda el pedido a cocina. El PIN solo si su tutor lo puso. */
+  async studentPurchase(token: string, studentId: string, items: StudentPurchaseItem[], pin: string | null, idempotencyKey: string): Promise<OrderDetail> {
+    return (
+      await request<OrderDetail>(`/alumnos/${encodeURIComponent(studentId)}/compras`, {
+        method: 'POST',
+        token,
+        idempotencyKey,
+        body: { items, ...(pin ? { pin } : {}) },
+      })
+    ).data;
+  },
+
+  /** Hace su credencial QR (la anterior deja de servir) o le liga una tarjeta NFC por su número de serie. */
+  async assignStudentCredential(token: string, studentId: string, tipo: 'qr' | 'nfc', valor: string | null, idempotencyKey: string): Promise<StudentCredential> {
+    return (
+      await request<{ credencial: StudentCredential }>(`/alumnos/${encodeURIComponent(studentId)}/credenciales`, {
+        method: 'POST',
+        token,
+        idempotencyKey,
+        body: { tipo, ...(tipo === 'nfc' && valor ? { valor } : {}) },
+      })
+    ).data.credencial;
+  },
+
+  /** Entrega el pedido del alumno; su credencial escaneada hace de QR del pedido. */
+  async deliverStudentOrder(token: string, orderId: string, expectedVersion: number, credential: string | null): Promise<OrderDetail> {
+    return (
+      await request<OrderDetail>(`/pedidos/${orderId}/transiciones`, {
+        method: 'POST',
+        token,
+        idempotent: true,
+        body: {
+          estado_objetivo: 'entregado',
+          version_esperada: expectedVersion,
+          ...(credential ? { credencial_alumno: credential } : {}),
         },
       })
     ).data;
@@ -684,8 +843,38 @@ export const api = {
     });
   },
 
-  async catalog(token: string): Promise<CatalogResponse> {
-    return (await request<CatalogResponse>('/catalogo', { token })).data;
+  async catalog(token: string, options: { includeArchived?: boolean } = {}): Promise<CatalogResponse> {
+    return (await request<CatalogResponse>(options.includeArchived ? '/catalogo?incluir_archivados=true' : '/catalogo', { token })).data;
+  },
+
+  /** Solo admin. Saca el producto del menú sin borrarlo; los pedidos viejos lo siguen mostrando. */
+  async setProductArchived(token: string, id: number, archived: boolean): Promise<CatalogProduct> {
+    return (await request<CatalogProduct>(`/catalogo/productos/${id}/${archived ? 'archivar' : 'desarchivar'}`, { method: 'POST', token, idempotent: true, body: {} })).data;
+  },
+
+  /** Solo admin. Se archiva solo si ya no le quedan productos activos (409 CATEGORY_NOT_EMPTY). */
+  async archiveCategory(token: string, id: number): Promise<void> {
+    await request(`/catalogo/categorias/${id}/archivar`, { method: 'POST', token, idempotent: true, body: {} });
+  },
+
+  /** El asistente sugiere alérgenos por nombre e ingredientes (y la receta, si el producto ya tiene). */
+  async suggestAllergens(
+    token: string,
+    input: { nombre: string; ingredientes?: string | null; descripcion?: string | null; productoId?: number | null },
+  ): Promise<{ alergenos: string[]; motivo: string | null }> {
+    const data = (
+      await request<{ alergenos?: string[]; motivo?: string | null }>('/catalogo/productos/alergenos-sugeridos', {
+        method: 'POST',
+        token,
+        body: {
+          nombre: input.nombre.trim(),
+          ...(input.descripcion?.trim() ? { descripcion: input.descripcion.trim() } : {}),
+          ...(input.ingredientes?.trim() ? { ingredientes: input.ingredientes.trim() } : {}),
+          ...(input.productoId ? { producto_id: input.productoId } : {}),
+        },
+      })
+    ).data;
+    return { alergenos: [...new Set((data.alergenos ?? []).map(String))], motivo: data.motivo?.trim() || null };
   },
 
   async createCategory(token: string, input: CatalogCategoryInput, idempotencyKey?: string): Promise<CatalogCategory> {
@@ -922,6 +1111,17 @@ export const api = {
     return (await request<SpaceAvailability[]>('/espacios/disponibilidad', { token })).data;
   },
 
+  /** Tablero de Caja: cómo va hoy cada fila y cada integrante del personal. Admin y cajero. */
+  async linesLive(token: string): Promise<LinesLiveBoard> {
+    return (await request<LinesLiveBoard>('/reportes/filas-en-vivo', { token })).data;
+  },
+
+  /** Espacios activos del negocio; Caja los usa para saber qué filas hay. Cualquier rol del personal. */
+  async spaces(token: string): Promise<OrderSpace[]> {
+    const data = (await request<OrderSpace[]>('/espacios', { token })).data;
+    return data.map(({ id, nombre, tipo }) => ({ id, nombre, tipo }));
+  },
+
   /** Devoluciones pendientes (sobrante de cuenta, artículo o pedido quitado ya pagado). */
   async pendingRefunds(token: string, spaceId?: number): Promise<PendingRefund[]> {
     const query = spaceId ? `?espacio_id=${spaceId}` : '';
@@ -1013,6 +1213,29 @@ export const api = {
     ).data;
   },
 
+  /**
+   * Abre la cuenta de un espacio libre. Con `duracionMin` abre un turno con fin (cancha sin precio).
+   * La llave se repite en el reintento del mismo toque para no abrir dos veces.
+   */
+  async openSpaceSession(token: string, spaceId: number, idempotencyKey: string, duracionMin?: number): Promise<void> {
+    await request(`/espacios/${spaceId}/sesion`, {
+      method: 'POST',
+      token,
+      idempotencyKey,
+      body: duracionMin ? { duracion_min: duracionMin } : {},
+    });
+  },
+
+  /** Alarga el turno abierto de un espacio; `version` evita alargar una sesión que ya cambió. */
+  async extendSpaceSession(token: string, spaceId: number, minutos: number, version: number | undefined, idempotencyKey: string): Promise<void> {
+    await request(`/espacios/${spaceId}/sesion/extensiones`, {
+      method: 'POST',
+      token,
+      idempotencyKey,
+      body: { minutos, ...(version ? { version } : {}) },
+    });
+  },
+
   /** Libera el espacio. El backend lo rechaza con pedidos sin cobrar. */
   async releaseSpace(token: string, spaceId: number, version?: number, force = false, note?: string): Promise<void> {
     await request(`/espacios/${spaceId}/sesion/cierres`, {
@@ -1068,14 +1291,18 @@ export const api = {
 
   /** Suelta el horario apartado si no se cobró. */
   /** Sin `refund` cancela una reserva por pagar; con él cancela una pagada y reembolsa de 0 al total pagado. */
-  async cancelCounterRental(token: string, rentalId: string, refund?: BookingRefundInput, idempotencyKey?: string): Promise<void> {
-    await request(`/reservas/${rentalId}/cancelacion`, {
+  /**
+   * Cancela la reserva; si estaba pagada, `data.reembolso` trae la vía y el monto reales.
+   * Un reintento de la misma cancelación debe mandar la misma `idempotencyKey`.
+   */
+  async cancelCounterRental(token: string, rentalId: string, refund?: BookingRefundInput, idempotencyKey?: string): Promise<CancelledBooking> {
+    return (await request<CancelledBooking>(`/reservas/${rentalId}/cancelacion`, {
       method: 'POST',
       token,
       idempotent: true,
       idempotencyKey,
       body: refund ? { motivo: refund.motivo, monto_reembolso: refund.monto_reembolso } : undefined,
-    });
+    })).data;
   },
 
   /** Reporte de reembolsos de reservas de cancha (solo Administración del negocio). */
@@ -1132,11 +1359,15 @@ export const api = {
     input: { tipo: SpaceType; prefijo: string; desde: number; hasta: number; capacidad?: number },
     idempotencyKey?: string,
   ): Promise<SpaceBatchResult> {
-    return (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+    const result = (await request<SpaceBatchResult>('/espacios/lote', { method: 'POST', token, idempotent: true, idempotencyKey, body: input })).data;
+    notifySpacesChanged();
+    return result;
   },
 
   async createSpace(token: string, input: { nombre: string; tipo: SpaceType }): Promise<ManagedSpace> {
-    return (await request<ManagedSpace>('/espacios', { method: 'POST', token, idempotent: true, body: input })).data;
+    const space = (await request<ManagedSpace>('/espacios', { method: 'POST', token, idempotent: true, body: input })).data;
+    notifySpacesChanged();
+    return space;
   },
 
   async updateSpace(
@@ -1145,7 +1376,9 @@ export const api = {
     input: SpaceUpdateInput,
     idempotencyKey?: string,
   ): Promise<ManagedSpace> {
-    return (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, idempotencyKey, body: input })).data;
+    const space = (await request<ManagedSpace>(`/espacios/${id}`, { method: 'PATCH', token, idempotent: true, idempotencyKey, body: input })).data;
+    notifySpacesChanged();
+    return space;
   },
 
   async businessSettings(token: string): Promise<BusinessSettings> {
@@ -1158,6 +1391,83 @@ export const api = {
 
   async saveBusinessSettings(token: string, input: BusinessSettingsInput): Promise<BusinessSettings> {
     return (await request<BusinessSettings>('/establecimiento/configuracion', { method: 'PATCH', token, body: input })).data;
+  },
+
+  async preflightBusinessTransition(
+    token: string,
+    cambios: Record<string, unknown>,
+  ): Promise<import('../types/api').ConfigTransitionPreflight> {
+    return (
+      await request<import('../types/api').ConfigTransitionPreflight>('/establecimiento/configuracion/transiciones/preflight', {
+        method: 'POST',
+        token,
+        body: { cambios },
+      })
+    ).data;
+  },
+
+  /** Aplica la transición con la versión que dio la revisión previa. No devuelve la configuración. */
+  async applyBusinessTransition(
+    token: string,
+    cambios: Record<string, unknown>,
+    versionEsperada: number,
+    idempotencyKey: string,
+  ): Promise<void> {
+    await request<unknown>('/establecimiento/configuracion/transiciones', {
+      method: 'POST',
+      token,
+      body: { cambios, version_esperada: versionEsperada },
+      idempotencyKey,
+    });
+  },
+
+  async preflightPlatformTransition(
+    token: string,
+    establishmentId: string,
+    cambios: Record<string, unknown>,
+  ): Promise<import('../types/api').ConfigTransitionPreflight> {
+    return (
+      await request<import('../types/api').ConfigTransitionPreflight>(
+        `/plataforma/establecimientos/${encodeURIComponent(establishmentId)}/configuracion/transiciones/preflight`,
+        { method: 'POST', token, body: { cambios } },
+      )
+    ).data;
+  },
+
+  async applyPlatformTransition(
+    token: string,
+    establishmentId: string,
+    cambios: Record<string, unknown>,
+    versionEsperada: number,
+    idempotencyKey: string,
+  ): Promise<Record<string, unknown>> {
+    return (
+      await request<Record<string, unknown>>(
+        `/plataforma/establecimientos/${encodeURIComponent(establishmentId)}/configuracion/transiciones`,
+        { method: 'POST', token, body: { cambios, version_esperada: versionEsperada }, idempotencyKey },
+      )
+    ).data;
+  },
+
+  async platformVilloDevices(token: string, signal?: AbortSignal): Promise<import('../types/api').PlatformVilloDevice[]> {
+    const res = await request<import('../types/api').PlatformVilloDevice[] | { dispositivos?: import('../types/api').PlatformVilloDevice[] }>(
+      '/plataforma/villo/dispositivos',
+      { token, signal, cache: 'no-store' },
+    );
+    return Array.isArray(res.data) ? res.data : (res.data?.dispositivos ?? []);
+  },
+
+  async platformAuthority(firebaseToken: string): Promise<import('../types/api').PlatformAuthority> {
+    return (
+      await request<import('../types/api').PlatformAuthority>('/plataforma/sesiones/autoridad', {
+        token: firebaseToken,
+        cache: 'no-store',
+      })
+    ).data;
+  },
+
+  async staffShiftsReport(token: string, signal?: AbortSignal): Promise<import('../types/api').StaffShiftsReport> {
+    return (await request<import('../types/api').StaffShiftsReport>('/reportes/turnos-personal', { token, signal, cache: 'no-store' })).data;
   },
 
   async setOfflinePause(token: string, enabled: boolean): Promise<BusinessSettings> {
@@ -1175,7 +1485,16 @@ export const api = {
     signal?: AbortSignal,
   ): Promise<StoreAssistantReply> {
     const body = files.length ? { mensajes: messages, archivos: files } : { mensajes: messages };
-    return (await request<StoreAssistantReply>('/establecimiento/asistente', { method: 'POST', token, body, signal })).data;
+    // Como Expo: se manda como trabajo en segundo plano y se pregunta cada 2 s hasta que conteste.
+    // Así una respuesta larga (un menú completo, un Excel) no se corta por el tiempo de la petición.
+    const started = (await request<{ trabajo_id: string; estado: string }>('/establecimiento/asistente/trabajos', { method: 'POST', token, body, signal })).data;
+    if (typeof started?.trabajo_id !== 'string') throw new Error('La respuesta no trae trabajo_id.');
+    for (;;) {
+      await waitOrAbort(ASSISTANT_POLL_MS, signal);
+      const job = (await request<StoreAssistantJob>(`/establecimiento/asistente/trabajos/${encodeURIComponent(started.trabajo_id)}`, { token, signal, cache: 'no-store' })).data;
+      if (job.estado === 'listo' && job.respuesta) return job.respuesta;
+      if (job.estado === 'error') throw new Error(job.error?.message?.trim() || 'El asistente no pudo contestar. Vuelve a intentarlo.');
+    }
   },
 
   /** Insumos activos del inventario (GET /inventario/insumos). */
@@ -1237,7 +1556,9 @@ export const api = {
   },
 
   async deleteSpace(token: string, id: number): Promise<{ id: number; eliminado: boolean }> {
-    return (await request<{ id: number; eliminado: boolean }>(`/espacios/${id}`, { method: 'DELETE', token, idempotent: true })).data;
+    const result = (await request<{ id: number; eliminado: boolean }>(`/espacios/${id}`, { method: 'DELETE', token, idempotent: true })).data;
+    notifySpacesChanged();
+    return result;
   },
 
   async bookingSettings(token: string): Promise<BookingSettings> {
@@ -1338,17 +1659,106 @@ export const api = {
     return (await request<Record<string, unknown>>(`/reportes/contable${params({ desde: from, hasta: to })}`, { token, signal })).data;
   },
 
+  /** El mismo reporte contable en CSV (UTF-8 con BOM, listo para Excel). Solo admin. */
+  async accountingReportCsv(token: string, from: string, to: string): Promise<Blob> {
+    const response = await fetch(`${apiUrl}/reportes/contable${params({ desde: from, hasta: to, formato: 'csv' })}`, {
+      headers: { Accept: 'text/csv', Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as ApiErrorEnvelope | null;
+      throw new VaiinillaApiError(
+        response.status,
+        payload?.error ?? { code: 'HTTP_ERROR', message: 'No se pudo descargar el reporte.' },
+      );
+    }
+    return response.blob();
+  },
+
   /**
    * Pantalla de inventario: insumos con existencia y, desde la migración 205, `permisos`
    * (`puede_editar` de esta sesión y `cocina_edita` del negocio). Un backend anterior no los manda.
    */
-  async inventoryOverview(token: string): Promise<InventoryOverview> {
-    return (await request<InventoryOverview>('/inventario/insumos', { token })).data;
+  async inventoryOverview(token: string, includeInactive = false): Promise<InventoryOverview> {
+    return (await request<InventoryOverview>(`/inventario/insumos${includeInactive ? '?inactivos=true' : ''}`, { token })).data;
+  },
+
+  /** Edita un insumo: nombre, etiqueta, unidad, mínimo, costo, proveedor o darlo de baja. */
+  async updateInventorySupply(token: string, id: number, input: Partial<InventorySupplyInput>): Promise<InventoryStock> {
+    return (await request<InventoryStock>(`/inventario/insumos/${id}`, { method: 'PATCH', token, idempotent: true, body: input })).data;
+  },
+
+  /** Conteo físico de varios insumos; cada renglón lleva su UUID. Regresa cuántos no cuadraron. */
+  async registerInventoryCount(token: string, conteos: { id: string; insumo_id: number; cantidad: number }[], nota?: string): Promise<{ con_diferencia: number }> {
+    return (await request<{ con_diferencia: number }>('/inventario/conteos', { method: 'POST', token, body: { conteos, ...(nota?.trim() ? { nota: nota.trim() } : {}) } })).data;
+  },
+
+  /** Historial de movimientos; sin fechas el servidor da las últimas 24 h. */
+  async inventoryMovements(token: string, query: { desde?: string; hasta?: string; insumoId?: number | null } = {}): Promise<InventoryMovement[]> {
+    const params = new URLSearchParams({ limite: '300' });
+    if (query.desde) params.set('desde', query.desde);
+    if (query.hasta) params.set('hasta', query.hasta);
+    if (query.insumoId) params.set('insumo_id', String(query.insumoId));
+    return (await request<{ movimientos: InventoryMovement[] }>(`/inventario/movimientos?${params}`, { token })).data.movimientos;
+  },
+
+  /** Reporte por periodo (admin y caja). */
+  async inventoryReport(token: string, query: { desde?: string; hasta?: string } = {}): Promise<InventoryReport> {
+    const params = new URLSearchParams();
+    if (query.desde) params.set('desde', query.desde);
+    if (query.hasta) params.set('hasta', query.hasta);
+    const qs = params.toString();
+    return (await request<InventoryReport>(`/inventario/reporte${qs ? `?${qs}` : ''}`, { token })).data;
+  },
+
+  /** El asistente de inventario contesta con lo que hay, lo que se acaba y lo que falta. */
+  async inventoryAssistant(token: string, mensajes: { rol: 'personal' | 'asistente'; texto: string }[]): Promise<InventoryAssistantReply> {
+    return (await request<InventoryAssistantReply>('/inventario/asistente', { method: 'POST', token, body: { mensajes } })).data;
+  },
+
+  /** Los productos que gastan un insumo. */
+  async supplyProducts(token: string, supplyId: number): Promise<SupplyProductLink[]> {
+    return (await request<SupplyProductLink[]>(`/inventario/insumos/${supplyId}/productos`, { token })).data;
+  },
+
+  /** El insumo queda exactamente en esos productos, con lo que gasta cada uno. */
+  async saveSupplyProducts(token: string, supplyId: number, productos: { producto_id: number; cantidad: number }[]): Promise<SupplyProductLink[]> {
+    return (await request<SupplyProductLink[]>(`/inventario/insumos/${supplyId}/productos`, { method: 'PUT', token, idempotent: true, body: { productos, categorias: [] } })).data;
   },
 
   /** Solo admin: deja o no a Cocina editar el inventario (`cocina_edita_inventario`, migración 205). */
   async setInventoryKitchenPermission(token: string, allow: boolean): Promise<{ cocina_edita: boolean }> {
     return (await request<{ cocina_edita: boolean }>('/inventario/permisos', { method: 'PATCH', token, body: { cocina_edita: allow } })).data;
+  },
+
+  /** Aprobación de tarjeta del negocio, con su historial reciente (solo Super Admin). */
+  async platformCardApproval(token: string, id: string): Promise<PlatformCardApproval> {
+    return (
+      await request<PlatformCardApproval>(`/plataforma/establecimientos/${id}/stripe/aprobacion`, { token })
+    ).data;
+  },
+
+  /**
+   * Aprobar (solo cafeterías) o revocar la tarjeta. No prende la tarjeta: después la activa el
+   * dueño. Revocar la apaga. El motivo es obligatorio y queda en el historial. Un reintento del
+   * mismo intento debe mandar la misma `idempotencyKey`.
+   */
+  async decidePlatformCardApproval(
+    token: string,
+    id: string,
+    decision: 'aprobar' | 'revocar',
+    motivo: string,
+    idempotencyKey: string,
+  ): Promise<PlatformCardApprovalDecision> {
+    const path = `/plataforma/establecimientos/${id}/stripe/aprobacion${decision === 'revocar' ? '/revocar' : ''}`;
+    return (
+      await request<PlatformCardApprovalDecision>(path, {
+        method: 'POST',
+        token,
+        idempotencyKey,
+        body: { motivo },
+      })
+    ).data;
   },
 
   async configurePlatformStripe(
@@ -1594,6 +2004,23 @@ export const api = {
         method: 'POST',
         token,
         body: { monto: amount },
+        idempotencyKey,
+      })
+    ).data;
+  },
+
+  /** Ajuste manual de cartera con auditoría (rol admin). */
+  async adjustWallet(
+    token: string,
+    userId: string,
+    input: { monto: string; bucket: 'pagada' | 'pendiente'; motivo: string },
+    idempotencyKey: string,
+  ): Promise<import('../types/api').WalletAdjustment> {
+    return (
+      await request<import('../types/api').WalletAdjustment>(`/wallets/${encodeURIComponent(userId)}/ajustes`, {
+        method: 'POST',
+        token,
+        body: input,
         idempotencyKey,
       })
     ).data;

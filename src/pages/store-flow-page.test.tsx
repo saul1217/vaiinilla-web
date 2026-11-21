@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StoreFlowPage } from './store-flow-page';
 
@@ -41,6 +41,26 @@ describe('Flujo de mi tienda', () => {
   beforeEach(() => {
     apiMock.businessSettings.mockReset().mockResolvedValue(cafeteria);
     apiMock.saveBusinessSettings.mockReset().mockResolvedValue({ ...cafeteria, tipo: 'padel' });
+    apiMock.cardPayments.mockReset().mockResolvedValue(null);
+  });
+
+  it('en una cafetería con tarjeta aprobada, el panel de tarjeta no deja pasar la comisión al cliente', async () => {
+    apiMock.cardPayments.mockResolvedValue({
+      stripe_enabled: true,
+      stripe_account_id: 'acct_1',
+      charges_enabled: true,
+      payouts_enabled: true,
+      estado_onboarding: 'habilitada',
+      pasar_comision_al_cliente: false,
+      aprobacion_plataforma: { estado: 'aprobada', vigente: true },
+    });
+    const user = userEvent.setup();
+    render(<StoreFlowPage />, { wrapper: Wrapper });
+    await screen.findByText('Pagos con tarjeta activos');
+    await user.click(screen.getByRole('button', { name: 'Configurar pagos con tarjeta' }));
+
+    expect(await screen.findByRole('radio', { name: /^el cliente/i })).toBeDisabled();
+    expect(screen.getByText(/la comisión ya va incluida en los precios del menú/i)).toBeVisible();
   });
 
   it('muestra el flujo actual y no hay nada que guardar sin cambios', async () => {
@@ -165,6 +185,30 @@ describe('Flujo de mi tienda', () => {
     expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeDisabled();
   });
 
+  it('con el tipo fijo por Vaiinilla no ofrece plantillas para cambiarlo', async () => {
+    apiMock.businessSettings.mockResolvedValue({ ...cafeteria, tipo_bloqueado: true });
+    renderFlow();
+    expect(await screen.findByText(/Vaiinilla dejó fijo el tipo de tu negocio/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Cafetería escolar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Bar o cantina/ })).not.toBeInTheDocument();
+  });
+
+  it('con modos de entrega elige «Solo código» y lo guarda con su QR amarrado', async () => {
+    apiMock.businessSettings.mockResolvedValue({ ...cafeteria, validacion_entrega: 'qr_o_codigo' });
+    apiMock.saveBusinessSettings.mockResolvedValue({ ...cafeteria, validacion_entrega: 'codigo' });
+    const user = userEvent.setup();
+    renderFlow();
+    expect(await screen.findByRole('radio', { name: /^QR o código/ })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('radio', { name: /^Solo código/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar flujo' }));
+    await waitFor(() =>
+      expect(apiMock.saveBusinessSettings).toHaveBeenCalledWith(
+        'tenant-token',
+        expect.objectContaining({ validacion_entrega: 'codigo', entrega_requiere_qr: true }),
+      ),
+    );
+  });
+
   it('no ofrece hoteles', async () => {
     renderFlow();
     await screen.findByText('Cine, estadio o evento');
@@ -235,5 +279,49 @@ describe('Flujo de mi tienda', () => {
     expect(screen.getByLabelText('Franja 1: desde')).toHaveValue('12:00');
     expect(screen.getByLabelText('Franja 1: hasta')).toHaveValue('15:00');
     expect(screen.getByRole('button', { name: 'Guardar flujo' })).toBeEnabled();
+  });
+});
+
+describe('llegar desde «Buscar ajuste»', () => {
+  beforeEach(() => {
+    apiMock.businessSettings.mockReset().mockResolvedValue(cafeteria);
+    apiMock.cardPayments.mockReset().mockResolvedValue(null);
+  });
+
+  function renderAt(url: string) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <MemoryRouter initialEntries={[url]}>
+        <QueryClientProvider client={client}><StoreFlowPage /></QueryClientProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  it('?ajuste=flow abre «Cómo funciona tu tienda»', async () => {
+    renderAt('/app/flujo?ajuste=flow');
+    expect(await screen.findByRole('button', { name: 'Guardar flujo' })).toBeInTheDocument();
+  });
+
+  it('estando ya en Flujo, buscar un ajuste abre su editor sin desmontar la pantalla', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter initialEntries={['/app/flujo']}>
+        <QueryClientProvider client={client}>
+          <Link to="/app/flujo?ajuste=flow">ir al flujo</Link>
+          <StoreFlowPage />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByRole('button', { name: 'Configurar cómo funciona tu tienda' });
+    await waitFor(() => expect(apiMock.businessSettings).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Guardar flujo' })).toBeNull();
+    fireEvent.click(screen.getByRole('link', { name: 'ir al flujo' }));
+    expect(await screen.findByRole('button', { name: 'Guardar flujo' })).toBeInTheDocument();
+    expect(apiMock.businessSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('?ajuste=operacion pone el foco en la tarjeta de Operación de Caja', async () => {
+    renderAt('/app/flujo?ajuste=operacion');
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('id', 'ajuste-operacion'));
   });
 });

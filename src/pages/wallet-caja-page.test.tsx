@@ -196,7 +196,7 @@ describe('WalletCajaPage', () => {
     renderPage();
     await openClient(user);
     expect(screen.getByRole('list', { name: 'Movimientos de Ana Pérez' })).toBeInTheDocument();
-    expect(screen.getByText('Solo Caja puede recargar saldo. Desde aquí lo consultas.')).toBeInTheDocument();
+    expect(screen.getByText('Ajuste manual de saldo (Administración)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Recargar/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Monto' })).not.toBeInTheDocument();
   });

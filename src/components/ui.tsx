@@ -271,6 +271,7 @@ export function Modal({
   header,
   footer,
   returnFocusRef,
+  initialFocusRef,
   fallbackFocusRef,
   headingRef,
 }: {
@@ -285,6 +286,7 @@ export function Modal({
   header?: ReactNode;
   footer?: ReactNode;
   returnFocusRef?: RefObject<HTMLElement | null>;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
   headingRef?: RefObject<HTMLHeadingElement | null>;
 }) {
@@ -302,6 +304,11 @@ export function Modal({
           {...(!description ? { 'aria-describedby': undefined } : {})}
           onOpenAutoFocus={(event) => {
             opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            if (initialFocusRef?.current) {
+              event.preventDefault();
+              initialFocusRef.current.focus();
+              return;
+            }
             if (sheet) {
               event.preventDefault();
               titleRef.current?.focus();

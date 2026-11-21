@@ -5,6 +5,9 @@ import { useAdminTheme } from '../lib/admin-theme';
 import { CASHBACK_ENABLED } from '../lib/features';
 import { PlatformShell, TenantShell } from './app-shell';
 
+// El enlace «Pistas» pregunta el tipo de negocio; aquí no es lo que se prueba.
+vi.mock('../lib/bowling-admin-feature', () => ({ BOWLING_ADMIN_ENABLED: false }));
+
 const session = vi.hoisted(() => ({ role: 'mesero' }));
 vi.mock('../context/auth-context', () => ({ useAuth: () => ({ signOut: vi.fn() }) }));
 vi.mock('../context/session-context', () => ({
@@ -23,7 +26,7 @@ afterEach(() => {
 });
 
 describe('tema compartido en la navegación', () => {
-  it('admin no muestra cashback cuando el feature flag está apagado', () => {
+  it('admin encuentra «Cashback y wallet» en «Más» con la bandera prendida', () => {
     session.role = 'admin';
     render(
       <MemoryRouter>
@@ -31,9 +34,8 @@ describe('tema compartido en la navegación', () => {
       </MemoryRouter>,
     );
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Navegación móvil' })).getByRole('button', { name: 'Más' }));
-    expect(screen.queryByRole('link', { name: 'Cashback y wallet' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /cashback/i })).not.toBeInTheDocument();
-    expect(CASHBACK_ENABLED).toBe(false);
+    expect(screen.getByRole('link', { name: 'Cashback y wallet' })).toHaveAttribute('href', '/app/cashback');
+    expect(CASHBACK_ENABLED).toBe(true);
   });
 
   it.each(['mesero', 'cajero', 'cocina', 'admin'])('%s recorre y recuerda los tres temas desde el menú móvil', (role) => {
@@ -93,17 +95,32 @@ it('Admin alcanza sus destinos (cashback oculto por flag) sin asignar aria-curre
   expect(more).not.toHaveAttribute('aria-current');
   fireEvent.click(more);
   const links = within(screen.getByRole('navigation', { name: 'Más destinos' })).getAllByRole('link');
-  expect(links).toHaveLength(CASHBACK_ENABLED ? 4 : 3);
+  // Con Saldo de clientes, Reparto, Filas en vivo y Agenda, «Más» suma esos destinos (y Cashback si se prende).
+  expect(links).toHaveLength(CASHBACK_ENABLED ? 8 : 7);
+  expect(links.find((link) => link.getAttribute('href') === '/app/saldo')).toHaveTextContent('Saldo de clientes');
   expect(links.find((link) => link.getAttribute('href') === '/app/espacios')).toHaveAttribute('aria-current', 'page');
 });
 
-it.each([['mesero', 'Mesas'], ['cajero', 'Caja'], ['cocina', 'Cocina']])('%s solo expone su destino', (role, label) => {
+it.each([
+  ['mesero', ['Mesas', 'Agenda de reservas', 'Mi turno']],
+  ['cocina', ['Cocina', 'Inventario', 'Mi turno']],
+] as const)('%s ve sus destinos en la barra móvil, con «Mi turno» al final', (role, labels) => {
   session.role = role;
   render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
   const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
-  expect(within(mobile).getAllByRole('link')).toHaveLength(1);
-  expect(within(mobile).getByRole('link', { name: label })).toBeInTheDocument();
+  expect(within(mobile).getAllByRole('link').map((link) => link.textContent)).toEqual([...labels]);
+  expect(within(mobile).getByRole('link', { name: 'Mi turno' })).toHaveAttribute('href', '/app/mi-turno');
   expect(screen.queryByRole('button', { name: 'Más' })).not.toBeInTheDocument();
+});
+
+it('cajero deja Caja, Saldo y Reparto en la barra y lo demás en «Más»', () => {
+  session.role = 'cajero';
+  render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
+  const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
+  expect(within(mobile).getAllByRole('link').map((link) => link.textContent)).toEqual(['Caja', 'Saldo', 'Reparto']);
+  fireEvent.click(within(mobile).getByRole('button', { name: 'Más' }));
+  const more = screen.getByRole('navigation', { name: 'Más destinos' });
+  expect(within(more).getAllByRole('link').map((link) => link.textContent)).toEqual(['Filas en vivo', 'Agenda de reservas', 'Mi turno']);
 });
 
 it('mueve foco a main al navegar y no lo roba por un refresco de contenido', () => {

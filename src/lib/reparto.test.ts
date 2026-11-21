@@ -17,6 +17,9 @@ import {
   reasonIsValid,
   remainingCodeAttempts,
   stateLabel,
+  doneMessage,
+  paidBefore,
+  refundSentence,
 } from './reparto';
 import type { HomeOrder } from '../types/api';
 
@@ -160,5 +163,22 @@ describe('acciones', () => {
       .toBe('https://www.google.com/maps/dir/?api=1&destination=28.63,-106.08');
     expect(phoneHref('614 123-4567')).toBe('tel:6141234567');
     expect(phoneHref('12')).toBeNull();
+  });
+});
+
+describe('dinero al rechazar o cancelar', () => {
+  it('lee lo pagado antes y lo dice: nada, la cantidad o el texto de antes', () => {
+    expect(paidBefore({ monto_pagado: '0.00' })).toBe(0n);
+    expect(paidBefore({ monto_pagado: '45.50' })).toBe(4550n);
+    expect(paidBefore({})).toBeNull();
+    expect(refundSentence(0n)).toBe('No se le cobró nada.');
+    expect(refundSentence(4550n)).toBe('Se le devuelven $45.50 MXN.');
+    expect(refundSentence(null)).toBe('Lo que ya pagó se le devuelve.');
+  });
+
+  it('el aviso final usa lo pagado antes, no lo que queda después', () => {
+    expect(doneMessage({ type: 'rechazar', motivo: 'cerrado' }, 0n)).toBe('Encargo rechazado. No se le cobró nada.');
+    expect(doneMessage({ type: 'cancelaciones', motivo: 'cerrado', versionEsperada: 1 }, 2000n)).toMatch(/^Pedido cancelado\. Se le devuelven/);
+    expect(doneMessage({ type: 'rechazar', motivo: 'cerrado' })).toBe('Encargo rechazado; se le devuelve lo que pagó.');
   });
 });

@@ -7,7 +7,8 @@ import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { AGENDA_ENABLED } from '../lib/agenda-feature';
 import { AgendaPage } from './agenda-page';
 
-// Bandera real (apagada): la página no monta nada que llame a la API y regresa al inicio del rol.
+// Con la bandera apagada la página no monta nada que llame a la API y regresa al inicio del rol.
+vi.mock('../lib/agenda-feature', () => ({ AGENDA_ENABLED: false }));
 const server = setupServer();
 const seen: string[] = [];
 vi.mock('../context/session-context', () => ({

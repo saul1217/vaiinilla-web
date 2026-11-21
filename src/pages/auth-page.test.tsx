@@ -9,6 +9,7 @@ import { AuthPage } from './auth-page';
 const mocks = vi.hoisted(() => ({
   passwordSignIn: vi.fn(),
   completeTotpSignIn: vi.fn(),
+  googleSignIn: vi.fn(),
   signOut: vi.fn(),
   openPlatformSession: vi.fn(),
   requestEmailVerification: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock('../context/session-context', () => ({
 vi.mock('../lib/firebase', () => ({
   passwordSignIn: mocks.passwordSignIn,
   completeTotpSignIn: mocks.completeTotpSignIn,
+  googleSignIn: mocks.googleSignIn,
   beginTotpEnrollment: vi.fn(),
   completeTotpEnrollment: vi.fn(),
   firebaseSignOut: vi.fn(),
@@ -163,5 +165,47 @@ describe('preparación de una cuenta de plataforma existente', () => {
     await actor.click(screen.getByRole('button', { name: 'Confirmar y entrar' }));
 
     expect(await screen.findByRole('heading', { name: 'Confirma tu identidad' })).toBeVisible();
+  });
+});
+
+describe('entrar con Google', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const renderTenant = () => render(
+    <MemoryRouter initialEntries={['/acceso']}>
+      <AuthPage surface="tenant" />
+    </MemoryRouter>,
+  );
+
+  it('si la cuenta tiene código de la app autenticadora, lo pide igual que con contraseña', async () => {
+    const resolver = { hints: [] };
+    mocks.googleSignIn.mockResolvedValue({ mfaResolver: resolver });
+    const actor = userEvent.setup();
+    renderTenant();
+    await actor.click(screen.getByRole('button', { name: /Entrar con Google/ }));
+    expect(await screen.findByRole('heading', { name: 'Confirma tu segundo factor' })).toBeInTheDocument();
+    expect(mocks.passwordSignIn).not.toHaveBeenCalled();
+  });
+
+  it('cerrar la ventana de Google no enseña error; un dominio sin autorizar sí lo explica', async () => {
+    const { FirebaseError } = await import('firebase/app');
+    mocks.googleSignIn
+      .mockRejectedValueOnce(new FirebaseError('auth/popup-closed-by-user', 'closed'))
+      .mockRejectedValueOnce(new FirebaseError('auth/unauthorized-domain', 'domain'));
+    const actor = userEvent.setup();
+    renderTenant();
+    await actor.click(screen.getByRole('button', { name: /Entrar con Google/ }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await actor.click(screen.getByRole('button', { name: /Entrar con Google/ }));
+    expect(await screen.findByText(/no está autorizado para entrar con Google/)).toBeInTheDocument();
+  });
+
+  it('Plataforma no ofrece Google: pide contraseña y código', () => {
+    render(
+      <MemoryRouter initialEntries={['/plataforma/acceso']}>
+        <AuthPage surface="platform" />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('button', { name: /Entrar con Google/ })).not.toBeInTheDocument();
   });
 });

@@ -3,11 +3,11 @@ import { CASHBACK_ENABLED } from './features';
 import { SIN_INTERNET_ENABLED } from './sin-internet-flag';
 
 describe('feature flags del panel', () => {
-  it('cashback desactivado en admin hasta reactivarlo', () => {
-    expect(CASHBACK_ENABLED).toBe(false);
+  it('cashback está prendido en develop', () => {
+    expect(CASHBACK_ENABLED).toBe(true);
   });
 
-  it('sin internet queda apagado hasta que QA lo libere', () => {
-    expect(SIN_INTERNET_ENABLED).toBe(false);
+  it('sin internet está prendido en develop', () => {
+    expect(SIN_INTERNET_ENABLED).toBe(true);
   });
 });

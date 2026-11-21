@@ -1,14 +1,18 @@
 const STORAGE_KEY = 'vaiinilla.pending-invitation';
-const TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
+// Un día: quien crea su cuenta puede verificar el correo más tarde. La invitación vence en el back.
+const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface StoredInvitation {
   token: string;
   savedAt: number;
 }
 
+// localStorage y no sessionStorage: el enlace para verificar el correo abre otra pestaña, y con
+// sessionStorage la invitación se quedaba en la primera. Ahí la persona ya tenía cuenta en Firebase
+// sin registro ni términos, y al volver a «Crear cuenta» le salía que la cuenta ya existe.
 function storage(): Storage | null {
   try {
-    return window.sessionStorage;
+    return window.localStorage;
   } catch {
     return null;
   }

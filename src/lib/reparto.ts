@@ -1,6 +1,6 @@
 import { VaiinillaApiError } from './api-error';
 import { createIdempotencyKey } from './idempotency';
-import { centsToMoney, moneyToCents } from './money';
+import { centsToMoney, formatMoney, moneyToCents } from './money';
 import type { HomeAgendaDay, HomeOrder, HomeOrderDelivery, HomeOrderStatus } from '../types/api';
 
 /*
@@ -248,13 +248,32 @@ export function actionBody(action: HomeOrderAction): Record<string, unknown> {
   }
 }
 
+/**
+ * Lo que el cliente ya pagó, leído ANTES de rechazar o cancelar: `monto_pagado` descuenta los
+ * reembolsos, así que después de la acción puede quedar en 0 aunque sí se le devolvió dinero.
+ * `null` si el back no lo manda (entonces se usa el texto de antes).
+ */
+export function paidBefore(order: Pick<HomeOrder, 'monto_pagado'>): bigint | null {
+  if (order.monto_pagado === undefined || order.monto_pagado === null) return null;
+  return moneyToCents(order.monto_pagado) ?? null;
+}
+
+/** Qué pasa con el dinero al rechazar o cancelar, según lo pagado antes. */
+export function refundSentence(paidCents: bigint | null): string {
+  if (paidCents === null) return 'Lo que ya pagó se le devuelve.';
+  if (paidCents <= 0n) return 'No se le cobró nada.';
+  return `Se le devuelven ${formatMoney(centsToMoney(paidCents))}.`;
+}
+
 /** El aviso al terminar, como AdminViewModel.doneMessage. */
-export function doneMessage(action: HomeOrderAction): string {
+export function doneMessage(action: HomeOrderAction, paidCents: bigint | null = null): string {
   switch (action.type) {
     case 'aceptar':
       return 'Encargo aceptado.';
     case 'rechazar':
-      return 'Encargo rechazado; se le devuelve lo que pagó.';
+      return paidCents === null
+        ? 'Encargo rechazado; se le devuelve lo que pagó.'
+        : `Encargo rechazado. ${refundSentence(paidCents)}`;
     case 'en-camino':
       return 'En camino; al cliente le llegó su código.';
     case 'entregar-domicilio':
@@ -262,7 +281,9 @@ export function doneMessage(action: HomeOrderAction): string {
     case 'cobrar-entrega':
       return 'Cobrado.';
     case 'cancelaciones':
-      return 'Pedido cancelado; al cliente le llega el motivo.';
+      return paidCents === null
+        ? 'Pedido cancelado; al cliente le llega el motivo.'
+        : `Pedido cancelado. ${refundSentence(paidCents)}`;
   }
 }
 

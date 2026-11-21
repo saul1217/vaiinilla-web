@@ -5,8 +5,8 @@ import { SegmentedControl } from './segmented-control';
 // con precio, además rentar o renovar en mostrador cobrando en efectivo (la renta se paga
 // primero). Contrato: GET/POST /espacios/:id/sesion*, POST /reservas y /reservas/:id/pago.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock3, Printer, ReceiptText, Unlock, Wallet } from 'lucide-react';
-import { useImperativeHandle, useMemo, useState, type Ref, type RefObject } from 'react';
+import { Clock3, DoorOpen, Printer, ReceiptText, Timer, Unlock, Wallet } from 'lucide-react';
+import { useImperativeHandle, useMemo, useRef, useState, type Ref, type RefObject } from 'react';
 import { AccountAbonoForm } from './account-abono-form';
 import { PendingRefunds } from './pending-refunds';
 import { RollingMoney } from './rolling-money';
@@ -17,6 +17,7 @@ import { buildSpaceAccountPrintHtml } from '../lib/space-account-print';
 import { claimAliases } from '../lib/account-split';
 import { addMoney, tipAmount, type TipChoice } from '../lib/tips';
 import { errorMessage } from '../lib/api-error';
+import { createIdempotencyKey } from '../lib/idempotency';
 import { MONEY_PATTERN, calculateChange, centsToMoney, formatMoney, normalizeMoneyInput } from '../lib/money';
 import { clock, spaceStatusLine } from '../lib/space-status';
 import type {
@@ -31,6 +32,9 @@ import type {
 
 // Pádel se renta por turnos de 1 h 30 (uno, dos, tres o cuatro seguidos).
 const RENTAL_DURATIONS = [90, 180, 270, 360];
+// Una cancha sin precio no se renta: se le abre un turno y se alarga por pasos.
+const TURN_DURATIONS = [60, 90, 120];
+const EXTENSION_STEPS = [15, 30, 60];
 
 function durationLabel(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -159,6 +163,17 @@ export function SpaceAccountPanel({
   const [tip, setTip] = useState<TipChoice>({ kind: 'none' });
   const [rental, setRental] = useState<CounterRental | null>(null);
   const [rentalReceived, setRentalReceived] = useState('');
+  const [confirmRelease, setConfirmRelease] = useState<string | null>(null);
+  // Una llave por toque: si se reintenta el mismo (sin respuesta), el servidor no lo aplica dos veces.
+  const attemptKeys = useRef(new Map<string, string>());
+  const keyFor = (signature: string) => {
+    let key = attemptKeys.current.get(signature);
+    if (!key) {
+      key = createIdempotencyKey();
+      attemptKeys.current.set(signature, key);
+    }
+    return key;
+  };
 
   const detail = useQuery({
     queryKey: ['space-session', spaceId],
@@ -210,14 +225,46 @@ export function SpaceAccountPanel({
     onError: async () => refresh(),
   });
 
+  const openSession = useMutation({
+    mutationFn: (minutes: number | undefined) =>
+      api.openSpaceSession(token, spaceId, keyFor(`abrir:${minutes ?? 0}`), minutes),
+    onSuccess: async (_, minutes) => {
+      attemptKeys.current.delete(`abrir:${minutes ?? 0}`);
+      setNotice({ tone: 'success', text: minutes ? `Turno de ${minutes} min abierto.` : 'Cuenta abierta.' });
+      await refresh();
+    },
+    onError: async (error) => {
+      setNotice({ tone: 'error', text: errorMessage(error) });
+      await refresh();
+    },
+  });
+
+  const extendSession = useMutation({
+    mutationFn: ({ minutes, version }: { minutes: number; version: number | undefined }) =>
+      api.extendSpaceSession(token, spaceId, minutes, version, keyFor(`alargar:${minutes}:${version ?? 0}`)),
+    onSuccess: async (_, { minutes, version }) => {
+      attemptKeys.current.delete(`alargar:${minutes}:${version ?? 0}`);
+      setNotice({ tone: 'success', text: `Turno alargado ${minutes} min.` });
+      await refresh();
+    },
+    onError: async (error) => {
+      setNotice({ tone: 'error', text: errorMessage(error) });
+      await refresh();
+    },
+  });
+
   const release = useMutation({
     mutationFn: () => api.releaseSpace(token, spaceId, detail.data?.sesion?.version),
     onSuccess: async () => {
+      setConfirmRelease(null);
       setNotice({ tone: 'success', text: 'Espacio liberado.' });
       await refresh();
       onReleased?.();
     },
-    onError: (error) => setNotice({ tone: 'error', text: errorMessage(error) }),
+    onError: (error) => {
+      setConfirmRelease(null);
+      setNotice({ tone: 'error', text: errorMessage(error) });
+    },
   });
 
   const startRental = useMutation({
@@ -273,6 +320,8 @@ export function SpaceAccountPanel({
   }
 
   const isRentalCourt = availability?.espacio.tipo === 'cancha' && availability.precio_hora !== null;
+  // Cancha sin precio: se abre un turno con duración, se alarga y se libera.
+  const isTurnCourt = availability?.espacio.tipo === 'cancha' && availability.precio_hora === null;
   const occupied = detail.data?.estado === 'ocupada' || detail.data?.estado === 'en_gracia';
   const rentalChange = rental && MONEY_PATTERN.test(rentalReceived) ? calculateChange(rentalReceived, rental.monto) : null;
 
@@ -314,6 +363,44 @@ export function SpaceAccountPanel({
             ))}
           </div>
           <p className="space-account__hint">La renta se cobra primero, en efectivo.</p>
+        </div>
+      )}
+
+      {isTurnCourt && (
+        <div className="space-account__rent">
+          <p className="eyebrow">{data.sesion ? (data.sesion.fin_previsto ? 'Alargar turno' : 'Iniciar turno') : 'Abrir turno'}</p>
+          <div className="space-account__chips">
+            {(data.sesion ? EXTENSION_STEPS : TURN_DURATIONS).map((minutes) => {
+              const busy = openSession.isPending || extendSession.isPending;
+              const mine = data.sesion
+                ? extendSession.isPending && extendSession.variables?.minutes === minutes
+                : openSession.isPending && openSession.variables === minutes;
+              return (
+                <Button
+                  key={minutes}
+                  variant="secondary"
+                  loading={mine}
+                  disabled={busy}
+                  onClick={() =>
+                    data.sesion
+                      ? extendSession.mutate({ minutes, version: data.sesion.version })
+                      : openSession.mutate(minutes)
+                  }
+                >
+                  <Timer aria-hidden="true" className="size-4" /> {data.sesion ? '+' : ''}{minutes} min
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!data.sesion && data.espacio.tipo !== 'cancha' && !(account?.pedidos.length) && (
+        <div className="space-account__open">
+          <Button loading={openSession.isPending} onClick={() => openSession.mutate(undefined)}>
+            <DoorOpen aria-hidden="true" className="size-5" /> Abrir cuenta
+          </Button>
+          <p className="space-account__hint">Abre la cuenta cuando lleguen. Se libera a mano cuando esté cobrada y entregada.</p>
         </div>
       )}
 
@@ -373,9 +460,22 @@ export function SpaceAccountPanel({
       )}
 
       {data.sesion && (account?.saldada ?? true) && (
-        <Button variant="ghost" loading={release.isPending} onClick={() => release.mutate()}>
-          <Unlock aria-hidden="true" className="size-5" /> Liberar espacio
-        </Button>
+        <>
+          {isTurnCourt && confirmRelease && (
+            <p className="space-account__hint" role="status">{confirmRelease}</p>
+          )}
+          <Button
+            variant={isTurnCourt && confirmRelease ? 'danger' : 'ghost'}
+            loading={release.isPending}
+            onClick={() => {
+              if (!isTurnCourt || confirmRelease) return release.mutate();
+              const left = data.fin_previsto !== null && Date.parse(data.fin_previsto) > Date.now();
+              setConfirmRelease(`${left ? 'El tiempo que le quedaba se pierde. ' : ''}La cuenta se cierra y el siguiente cliente empieza una nueva.`);
+            }}
+          >
+            <Unlock aria-hidden="true" className="size-5" /> {isTurnCourt && confirmRelease ? '¿Seguro? Toca otra vez para liberar' : 'Liberar espacio'}
+          </Button>
+        </>
       )}
 
       <SpacePaymentSheet embedded={embedded} fallbackFocusRef={fallbackFocusRef}

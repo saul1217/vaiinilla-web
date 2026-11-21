@@ -17,3 +17,33 @@ export async function writeNfcUrl(url: string, target: Window = window): Promise
   if (!Reader) throw new Error('Este navegador no puede grabar etiquetas NFC.');
   await new Reader().write({ records: [{ recordType: 'url', data: url }] });
 }
+
+interface NdefReadingEvent extends Event {
+  serialNumber: string;
+}
+interface NdefScanner extends EventTarget {
+  scan(options?: { signal?: AbortSignal }): Promise<void>;
+}
+type NdefScanWindow = Window & { NDEFReader?: new () => NdefScanner };
+
+/**
+ * Lee el número de serie de la próxima tarjeta NFC que se acerque (Chrome en Android).
+ * Se cancela con `signal`. Es el mismo número que guarda la credencial NFC del alumno.
+ */
+export function readNfcSerial(signal: AbortSignal, target: Window = window): Promise<string> {
+  const Reader = (target as NdefScanWindow).NDEFReader;
+  if (!Reader) return Promise.reject(new Error('Este navegador no puede leer tarjetas NFC.'));
+  const reader = new Reader();
+  return new Promise<string>((resolve, reject) => {
+    const onAbort = () => reject(new DOMException('Lectura cancelada', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    reader.addEventListener('reading', (event) => {
+      const serial = (event as NdefReadingEvent).serialNumber?.trim();
+      if (!serial) return;
+      signal.removeEventListener('abort', onAbort);
+      resolve(serial);
+    }, { signal });
+    reader.addEventListener('readingerror', () => reject(new Error('No se pudo leer la tarjeta. Acércala otra vez.')), { signal, once: true });
+    reader.scan({ signal }).catch(reject);
+  });
+}

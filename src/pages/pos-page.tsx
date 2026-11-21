@@ -1,6 +1,10 @@
 import { CashierHome } from '../components/cashier-home';
-import { CashierQueue } from '../components/cashier-queue';
+import { CashierReceipt } from '../components/cashier-receipt';
+import { CashierBoard, CashierLineTabs, ScannerBar } from '../components/cashier-lines';
+import { cashierLines, ordersInLine, readSavedLine, saveLine } from '../lib/cashier-lines';
 import { AppSheet } from '../components/app-sheet';
+import { CashDrawer } from '../components/cash-drawer';
+import { CashierSearch } from '../components/cashier-search';
 import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,9 +14,10 @@ import {
   Clock3,
   ReceiptText,
   ScanLine,
+  Search,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { RejectOrderDialog } from '../components/reject-order-dialog';
 import { Card, Chip, Skeleton, VaiButton } from '../components/vai';
 import { itemRejectionNotice } from '../lib/rejection-notice';
@@ -23,14 +28,17 @@ import { z } from 'zod';
 import { OperationalStatusPanel } from '../components/operational-status-panel';
 import { OrderDetailContent } from '../components/order-card';
 import { QrTokenField } from '../components/qr-token-field';
+import { paymentNeedsProof, paymentProofMode } from '../lib/cobro-codigo';
 import { StaffOrderForm } from '../components/staff-order-form';
 import { Button, Feedback, Field } from '../components/ui';
 import { PendingRefunds } from '../components/pending-refunds';
+import { AdminCashSummary } from '../components/admin-cash-summary';
 import { AccountAbonoForm } from '../components/account-abono-form';
 import { WaiterBoard } from '../components/waiter-board';
 import { useStaffTheme } from '../lib/staff-ui';
 import { apiUrl } from '../lib/api';
 import { SIN_INTERNET_ENABLED } from '../lib/sin-internet-flag';
+import { WALLET_CAJA_ENABLED } from '../lib/wallet-caja-feature';
 import { environmentOf, type FlushEvent, type OfflineStaffOrder, type OfflineStaffScope } from '../lib/offline-staff-orders';
 import { useOfflineStaffOrders } from '../hooks/use-offline-staff-orders';
 import { OfflineStaffOrdersPanel } from '../components/offline-staff-orders-panel';
@@ -42,9 +50,24 @@ import { MONEY_PATTERN, calculateChange, centsToMoney, formatMoney, moneyToCents
 import { hasOutstandingCashBalance, isCashierCashOrder, isCashierDeferredDeliveryOrder, isCashierDeliveryOrder, isCashierPaidDeliveryOrder } from '../lib/cashier-queue';
 import { deliveryRequiresQr } from '../lib/delivery-policy';
 import { printOrderTicket } from '../lib/order-ticket-print';
-import type { OrderDetail, StaffOrderResult } from '../types/api';
-import type { AccountAbonoResult } from '../types/api';
-import { isPosMixedPaymentsEnabled } from '../lib/features';
+import type { DeliveryValidation, OrderDetail, StaffOrderResult } from '../types/api';
+
+/** Qué pedirle al cliente al entregar, según cómo valida el negocio (migración 227 del back). */
+function deliveryPrompt(mode?: DeliveryValidation): string {
+  if (mode === 'qr') return 'Escanea el QR del pedido o la credencial del alumno. El código de 4 dígitos no sirve.';
+  if (mode === 'codigo') return 'Escribe el código de 4 dígitos que te dicta el cliente o escanea la credencial del alumno.';
+  return 'Escanea el QR del cliente o escribe el código de 4 dígitos que te dicta. Debe ser de este pedido.';
+}
+
+/** El aviso corto cuando se confirma sin nada en el campo. */
+function deliveryMissing(mode?: DeliveryValidation): string {
+  if (mode === 'qr') return 'Escanea su QR o su credencial.';
+  if (mode === 'codigo') return 'Escribe su código de 4 dígitos o escanea su credencial.';
+  return 'Escanea su QR o escribe su código de 4 dígitos.';
+}
+import type { AccountAbonoResult, CashLastClose } from '../types/api';
+import { CORTES_REPORTE_ENABLED, isPosMixedPaymentsEnabled } from '../lib/features';
+import { Link } from 'react-router-dom';
 
 /** El servidor no tiene la ruta (backend anterior a vaiinilla_back#211); un pedido inexistente no cuenta. */
 function isMixedEndpointMissing(error: unknown): boolean {
@@ -63,6 +86,7 @@ function MixedOrderPayment({
   onDone,
   onUnavailable,
   onCancel,
+  proofMode,
 }: {
   token: string;
   owner: MixedPaymentOwner;
@@ -70,7 +94,11 @@ function MixedOrderPayment({
   onDone: (remaining: string, liquidated: boolean) => void;
   onUnavailable: () => void;
   onCancel: () => void;
+  /** Con el cobro con código (migración 225), qué prueba del cliente pide; sin él, ninguna. */
+  proofMode?: DeliveryValidation;
 }) {
+  const [proof, setProof] = useState('');
+  const proofMissing = Boolean(proofMode) && !proof.trim();
   const [pendingAttempt, setPendingAttempt] = useState(() => api.pendingMixedPayment(owner, order.id));
   const [method, setMethod] = useState<'efectivo' | 'terminal'>(pendingAttempt?.body.metodo_pago ?? 'efectivo');
   const [amount, setAmount] = useState(pendingAttempt?.body.monto ?? order.saldo_pendiente ?? order.total);
@@ -86,6 +114,7 @@ function MixedOrderPayment({
       metodoPago: method,
       monto: normalizeMoneyInput(amount),
       ...(method === 'efectivo' ? { montoRecibido: normalizeMoneyInput(received) } : {}),
+      ...(proofMode ? { proof } : {}),
     }, due),
     onSuccess: (result) => {
       setPendingAttempt(null);
@@ -140,9 +169,11 @@ function MixedOrderPayment({
       onBlur={() => { const normalized = normalizeMoneyInput(received); if (normalized !== received) setReceived(normalized); }}
       error={received && !enoughCash ? 'El efectivo recibido es menor al pago.' : undefined}
       hint={enoughCash && receivedCents !== null ? `Cambio: ${formatMoney(centsToMoney(receivedCents - amountCents))}` : 'Solo se registra para pagos en efectivo.'} />}
+    {proofMode && <QrTokenField value={proof} onChange={setProof} mode={proofMode}
+      error={proofMissing && payment.isError ? 'Pide la prueba del cliente para cobrar.' : undefined} />}
     <div className="form-actions mixed-payment__actions">
       <VaiButton variant="quiet" onClick={onCancel}>Cancelar</VaiButton>
-      <VaiButton type="submit" variant="accent" loading={payment.isPending} disabled={!validAmount || !enoughCash}>{pendingAttempt ? 'Reintentar el mismo pago' : 'Registrar pago'}</VaiButton>
+      <VaiButton type="submit" variant="accent" loading={payment.isPending} disabled={!validAmount || !enoughCash || proofMissing}>{pendingAttempt ? 'Reintentar el mismo pago' : 'Registrar pago'}</VaiButton>
     </div>
   </form>;
 }
@@ -274,6 +305,19 @@ export function PosPage() {
   const focusClosingSummary = useCallback((node: HTMLDivElement | null) => node?.focus(), []);
   const [sessionOpen, setSessionOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  // El pedido abierto en el panel «Ver pedido»: el ticket completo con todo lo que se puede hacer.
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [remindBusyId, setRemindBusyId] = useState<string | null>(null);
+  // «No vino» se confirma antes: saca el pedido de la fila y no tiene vuelta.
+  const [noShowOrder, setNoShowOrder] = useState<OrderDetail | null>(null);
+  const [noShowBusy, setNoShowBusy] = useState(false);
+  // La fila se lee una vez por negocio: cambiar de negocio en la misma pestaña trae la suya.
+  const [lineChoice, setLineChoice] = useState<{ scope: string; lineId: number | null } | null>(null);
+  const [readyBusyId, setReadyBusyId] = useState<string | null>(null);
+  const readyInFlight = useRef(false);
+  const [now, setNow] = useState(() => new Date());
   const [cashOrder, setCashOrder] = useState<OrderDetail | null>(null);
   const usuarioId = tenant?.context.usuario_id ?? '';
   const mixedPaymentOwner = useMemo<MixedPaymentOwner>(() => ({ establecimientoId: scopeId, usuarioId }), [scopeId, usuarioId]);
@@ -291,6 +335,7 @@ export function PosPage() {
   const [closingAmount, setClosingAmount] = useState<string | null>(null);
   const [deliveryOrder, setDeliveryOrder] = useState<OrderDetail | null>(null);
   const [qrToken, setQrToken] = useState('');
+  const [qrMissing, setQrMissing] = useState(false);
   // Caja quita un artículo que no se puede entregar; si ya se pagó, se devuelve esa parte.
   const [removingFrom, setRemovingFrom] = useState<OrderDetail | null>(null);
   // El staff registra pedidos de quien no usa la app (mesero, cajero y admin).
@@ -325,6 +370,13 @@ export function PosPage() {
     refetchInterval: 15_000,
   });
 
+  // Con la caja cerrada, Caja ve cuánto contó el último cierre antes de volver a abrir.
+  const lastClose = useQuery({
+    queryKey: ['cash-last-close', scopeId],
+    enabled: Boolean(token) && canOperateSession && session.isSuccess && !session.data,
+    queryFn: () => api.lastCashClose(token),
+  });
+
   const heartbeat = useOperationalHeartbeat({ token, scopeId, role });
   // La configuración aplica a entrega para llevar; una sesión activa de mesa no requiere QR.
   const deliveryQr = useQuery({
@@ -334,13 +386,29 @@ export function PosPage() {
     staleTime: 60_000,
   });
   const deliveryNeedsQr = (order: OrderDetail) => deliveryRequiresQr(order, deliveryQr.data?.entrega_requiere_qr);
+  const barPrepares = deliveryQr.data?.barra_prepara === true;
+  // Cobro con código (migración 225): qué prueba pide este cobro, o nada.
+  const cashProofMode = cashOrder && paymentNeedsProof(cashOrder, deliveryQr.data)
+    ? paymentProofMode(deliveryQr.data?.validacion_entrega)
+    : undefined;
+  const [paymentProof, setPaymentProof] = useState('');
+
+  // Las filas cambian poco: el dueño las crea en Mesas y espacios.
+  const spaces = useQuery({
+    queryKey: ['spaces', 'cashier-lines', scopeId],
+    enabled: Boolean(token) && isCashier,
+    queryFn: () => api.spaces(token),
+    staleTime: 5 * 60_000,
+  });
 
   const cashierQueue = useInfiniteQuery({
-    queryKey: ['orders', 'cashier-queue', scopeId],
+    queryKey: ['orders', 'cashier-queue', scopeId, barPrepares],
     initialPageParam: undefined as string | undefined,
     enabled: Boolean(token) && isCashier,
     queryFn: ({ pageParam }) => api.listOrders(token, {
-      estado: ['por_cobrar', 'preparando', 'listo'],
+      // `cobrado` solo hace falta con «La barra prepara»: sin ella no hay nada que Caja haga ahí,
+      // y pedirlo ocuparía la paginación de la cola.
+      estado: barPrepares ? ['por_cobrar', 'cobrado', 'preparando', 'listo'] : ['por_cobrar', 'preparando', 'listo'],
       cursor: pageParam,
       limit: 50,
     }),
@@ -404,11 +472,14 @@ export function PosPage() {
     return () => window.clearTimeout(timer);
   }, [notice]);
   const collectMutation = useMutation({
-    mutationFn: ({ order, amount, propina }: { order: OrderDetail; amount: string; propina: string }) =>
-      api.collectCash(token, order.id, amount, order.version, propina),
+    mutationFn: ({ order, amount, propina, proof }: { order: OrderDetail; amount: string; propina: string; proof?: string }) =>
+      proof === undefined
+        ? api.collectCash(token, order.id, amount, order.version, propina)
+        : api.collectCash(token, order.id, amount, order.version, propina, proof),
     onSuccess: async (result) => {
       setNotice(<>Cobro registrado. Cambio para el cliente: <strong>{formatMoney(result.cambio)}</strong>.</>);
       setCashOrder(null);
+      setPaymentProof('');
       cashForm.reset({ amount: '' });
       await refreshOperation();
     },
@@ -453,28 +524,184 @@ export function PosPage() {
     () => cashierQueue.data?.pages.flatMap((page) => page.orders) ?? [],
     [cashierQueue.data],
   );
+  const lines = useMemo(() => cashierLines(spaces.data ?? []), [spaces.data]);
+  const savedLine = lineChoice?.scope === scopeId ? lineChoice.lineId : readSavedLine(scopeId);
+  // Una fila que el dueño borró ya no filtra nada: se vuelve a ver todo.
+  const activeLine = savedLine !== null && lines.some((line) => line.id === savedLine) ? savedLine : null;
+  const lineOrders = useMemo(() => ordersInLine(queuedOrders, activeLine), [queuedOrders, activeLine]);
   const cashOrders = useMemo(
-    () => queuedOrders.filter(isCashierCashOrder),
-    [queuedOrders],
+    () => lineOrders.filter(isCashierCashOrder),
+    [lineOrders],
   );
   const readyOrders = useMemo(
-    () => queuedOrders.filter(isCashierDeliveryOrder),
-    [queuedOrders],
+    () => lineOrders.filter(isCashierDeliveryOrder),
+    [lineOrders],
   );
+
+  function chooseLine(lineId: number | null) {
+    setLineChoice({ scope: scopeId, lineId });
+    saveLine(scopeId, lineId);
+  }
+
+  // Los avisos de «hace X min» se recalculan solos; no hace falta más precisión que el minuto.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  /**
+   * La barra sella su parte. Desde `cobrado` hay que pasar por `preparando`: el servidor no
+   * acepta el salto, y así el cliente ve que ya se está preparando lo suyo.
+   */
+  async function markBarReady(order: OrderDetail) {
+    if (readyInFlight.current) return;
+    readyInFlight.current = true;
+    setReadyBusyId(order.id);
+    try {
+      const started = order.estado === 'cobrado' ? await api.transitionOrder(token, order.id, 'preparando', order.version) : order;
+      const done = await api.transitionOrder(token, started.id, 'listo', started.version);
+      setNotice((done.estaciones_pendientes ?? []).length > 0
+        ? `Lo de la barra del pedido ${order.folio} está listo; falta cocina.`
+        : `Pedido ${order.folio} listo. Le avisamos al cliente.`);
+      await refreshOperation();
+    } catch (error) {
+      setNotice(errorMessage(error));
+      await refreshOperation();
+    } finally {
+      readyInFlight.current = false;
+      setReadyBusyId(null);
+    }
+  }
+  async function remindCustomer(order: OrderDetail) {
+    setRemindBusyId(order.id);
+    try {
+      await api.remindOrder(token, order.id);
+      setNotice(`Le volvimos a avisar al cliente del pedido ${order.folio}.`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setRemindBusyId(null);
+    }
+  }
+
+  async function confirmNoShow() {
+    if (!noShowOrder || noShowBusy) return;
+    setNoShowBusy(true);
+    try {
+      await api.markNotPickedUp(token, noShowOrder.id, noShowOrder.version);
+      setNotice(`El pedido ${noShowOrder.folio} quedó como no recogido.`);
+      setNoShowOrder(null);
+    } catch (error) {
+      setNotice(errorMessage(error));
+      setNoShowOrder(null);
+    } finally {
+      setNoShowBusy(false);
+      await refreshOperation();
+    }
+  }
+
+  // Lo que se puede abrir en el ticket de la fila: lo que está por cobrar o listo para entregar.
+  const searchableOrders = useMemo(() => [...cashOrders, ...readyOrders], [cashOrders, readyOrders]);
   const updateQrToken = useCallback((value: string) => setQrToken(value), []);
 
   function beginCash(order: OrderDetail) {
+    setDetailId(null);
     collectMutation.reset();
     setTip({ kind: 'none' });
     setCashOrder(order);
+    setPaymentProof('');
     cashForm.reset({ amount: '' });
   }
 
   function beginDelivery(order: OrderDetail) {
+    setDetailId(null);
     deliveryMutation.reset();
     setQrToken('');
+    setQrMissing(false);
     setDeliveryOrder(order);
   }
+
+  const boardTitle = lines.length >= 2
+    ? activeLine === null ? 'Todas las filas' : lines.find((line) => line.id === activeLine)?.nombre ?? 'Pedidos pendientes'
+    : 'Pedidos pendientes';
+  const detailOrder = (detailId && queuedOrders.find((order) => order.id === detailId)) || null;
+  // En el renglón compacto de «Todas» el monto va sin «MXN» para que quepa el nombre del cliente.
+  const cashButtonLabel = (order: OrderDetail, due: string, compact = false) => {
+    const amount = compact ? formatMoney(due).replace(/\s*MXN$/, '') : formatMoney(due);
+    if (mixedPaymentsEnabled && isAccountOrder(order)) return 'Abonar cuenta';
+    return mixedFlowActive ? `Pago mixto · ${amount}` : `Cobrar ${amount}`;
+  };
+  const deliverButton = (order: OrderDetail) => (
+    <Button variant="dark" onClick={() => beginDelivery(order)}>
+      {deliveryNeedsQr(order)
+        ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
+        : 'Entregar'}
+    </Button>
+  );
+  /** Lo principal de cada tarjeta: cobrar lo que se debe o entregar lo que ya está pagado. */
+  const primaryAction = (order: OrderDetail, stage: 'cash' | 'ready', compact = false): ReactNode => {
+    const icon = compact ? null : <CircleDollarSign aria-hidden="true" className="size-5" />;
+    if (stage === 'cash') {
+      return (
+        <Button disabled={!active} onClick={() => beginCash(order)}>
+          {icon} {cashButtonLabel(order, order.saldo_pendiente ?? order.total, compact)}
+        </Button>
+      );
+    }
+    if (hasOutstandingCashBalance(order)) {
+      return (
+        <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
+          {icon} {cashButtonLabel(order, order.saldo_pendiente!, compact)}
+        </Button>
+      );
+    }
+    if (isCashierPaidDeliveryOrder(order) || isCashierDeferredDeliveryOrder(order)) return deliverButton(order);
+    return <span className="text-sm" role="status">Pago pendiente</span>;
+  };
+  const ticketActions = (order: OrderDetail, group: 'cash' | 'ready'): ReactNode => group === 'cash' ? (<>
+                        <Button disabled={!active} onClick={() => beginCash(order)}>
+                          <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order) ? 'Abonar cuenta' : mixedFlowActive ? 'Pago mixto' : 'Cobrar'}
+                        </Button>
+                        <Button variant="ghost" onClick={() => { setDetailId(null); setRemovingFrom(order); }}>
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                        </Button>
+                      </>) : (<>
+                        {hasOutstandingCashBalance(order) ? (
+                          <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
+                            <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order)
+                              ? 'Abonar cuenta'
+                              : mixedFlowActive
+                                ? `Pago mixto · ${formatMoney(order.saldo_pendiente!)}`
+                                : `Cobrar ${formatMoney(order.saldo_pendiente!)}`}
+                          </Button>
+                        ) : isCashierPaidDeliveryOrder(order) ? (
+                          <>
+                            <strong className="text-sm" role="status">PAGADO</strong>
+                            <Button variant="secondary" onClick={() => printOrderTicket(order, businessName ?? 'Establecimiento')}>
+                              <ReceiptText aria-hidden="true" className="size-5" /> Imprimir ticket
+                            </Button>
+                            <Button variant="dark" onClick={() => beginDelivery(order)}>
+                              {deliveryNeedsQr(order)
+                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
+                                : 'Entregar'}
+                            </Button>
+                          </>
+                        ) : isCashierDeferredDeliveryOrder(order) ? (
+                          <>
+                            <strong className="text-sm" role="status">Pendiente en cuenta</strong>
+                            <Button variant="dark" onClick={() => beginDelivery(order)}>
+                              {deliveryNeedsQr(order)
+                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
+                                : 'Entregar'}
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-sm" role="status">Pago pendiente</span>
+                        )}
+                        <Button variant="ghost" onClick={() => { setDetailId(null); setRemovingFrom(order); }}>
+                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
+                        </Button>
+                      </>);
 
   return (
     <CashierHome cashier={isCashier}>
@@ -537,11 +764,18 @@ export function PosPage() {
               <small>
                 {active
                   ? `Desde ${formatDate(active.abierta_en)} · fondo $${active.monto_inicial}`
-                  : session.isPending ? 'Consultando sesión operativa.' : session.isError ? 'No se pudo consultar la sesión.' : 'Abre la caja para recibir pedidos.'}
+                  : session.isPending ? 'Consultando sesión operativa.' : session.isError ? 'No se pudo consultar la sesión.' : lastClose.data ? lastCloseLabel(lastClose.data) : 'Abre la caja para recibir pedidos.'}
               </small>
             </div>
           </div>
-          <Button variant="secondary" disabled={session.isPending || (session.isError && !active)} onClick={() => setSessionOpen(true)}>{active ? 'Cerrar caja' : 'Abrir Caja'}</Button>
+          <div className="staff-cashbar__actions">
+            {isCashier && WALLET_CAJA_ENABLED && <Link className="button button--secondary" to="/app/saldo">Recargar saldo</Link>}
+            {isCashier && active && <Button variant="secondary" onClick={() => setDrawerOpen(true)}>Movimientos del cajón</Button>}
+            {isCashier && CORTES_REPORTE_ENABLED && <Link className="button button--secondary" to="/app/cortes">Corte de caja</Link>}
+            {canOperateSession && deliveryQr.data?.modo_escuela && <Link className="button button--secondary" to="/app/alumnos">Alumnos</Link>}
+            <Button variant="secondary" disabled={session.isPending || (session.isError && !active)} onClick={() => setSessionOpen(true)}>{active ? 'Cerrar caja' : 'Abrir Caja'}</Button>
+          </div>
+          {isCashier && active && <CashDrawer token={token} sessionId={active.id} open={drawerOpen} onOpenChange={setDrawerOpen} />}
           <AppSheet open={sessionOpen} onOpenChange={(open) => { setSessionOpen(open); if (!open) setClosingAmount(null); }} title={closingAmount !== null ? '¿Cerrar la caja?' : active ? 'Cerrar caja' : 'Abrir Caja'} description={closingAmount !== null ? 'Los pedidos en efectivo que sigan por cobrar se cancelarán y ya no se recibirán pedidos.' : 'Sesión operativa de Caja'}>
             <div hidden={closingAmount !== null}>
               {openMutation.isError && <Feedback tone="error">{errorMessage(openMutation.error)}</Feedback>}
@@ -600,6 +834,10 @@ export function PosPage() {
         </section>
       )}
 
+      {role === 'admin' && !session.isPending && !session.isError && (
+        <AdminCashSummary token={token} active={active ?? null} lastClose={lastClose.data} />
+      )}
+
       {role === 'admin' && (
         <Feedback tone="info">
           Administración controla la sesión y consulta pedidos; por seguridad, los cobros y entregas requieren una cuenta con rol de Caja.
@@ -617,65 +855,71 @@ export function PosPage() {
           <div className="section-heading">
             <div>
               <p className="eyebrow">Atención en Caja</p>
-              <h2 id="cashier-orders-title">Pedidos pendientes</h2>
+              <h2 id="cashier-orders-title">{boardTitle}</h2>
             </div>
-            <span className={`live-indicator ${heartbeat.isSuccess ? 'live-indicator--online' : ''}`}>
-              <span /> {heartbeat.isSuccess ? 'Caja en línea' : 'Conectando'}
-            </span>
+            <div className="pos-orders__tools">
+              <Button variant="secondary" onClick={() => setSearchOpen(true)} disabled={!searchableOrders.length}>
+                <Search aria-hidden="true" className="size-5" /> Buscar un pedido
+              </Button>
+              <span className={`live-indicator ${heartbeat.isSuccess ? 'live-indicator--online' : ''}`}>
+                <span /> {heartbeat.isSuccess ? 'Caja en línea' : 'Conectando'}
+              </span>
+            </div>
           </div>
+          <CashierSearch
+            open={searchOpen}
+            onOpenChange={setSearchOpen}
+            orders={searchableOrders}
+            onPick={(order) => {
+              setSearchOpen(false);
+              setDetailId(order.id);
+            }}
+          />
 
           {cashierQueue.isError && (
             <Feedback tone="error">No se pudo actualizar la fila de pedidos. {errorMessage(cashierQueue.error)}</Feedback>
           )}
 
+          <CashierLineTabs lines={lines} orders={queuedOrders} selected={activeLine} onSelect={chooseLine} />
+
           {cashierQueue.isError && !cashierQueue.data ? null : cashierQueue.isPending ? (
             <div className="orders-loading" role="status">Actualizando la fila de Caja…</div>
           ) : (
-            <CashierQueue cashOrders={cashOrders} readyOrders={readyOrders} actions={(order, group) => group === 'cash' ? (<>
-                        <Button disabled={!active} onClick={() => beginCash(order)}>
-                          <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order) ? 'Abonar cuenta' : mixedFlowActive ? 'Pago mixto' : 'Cobrar'}
-                        </Button>
-                        <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
-                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
-                        </Button>
-                      </>) : (<>
-                        {hasOutstandingCashBalance(order) ? (
-                          <Button disabled={!active || order.metodo_pago !== 'efectivo'} onClick={() => beginCash(order)}>
-                            <CircleDollarSign aria-hidden="true" className="size-5" /> {mixedPaymentsEnabled && isAccountOrder(order)
-                              ? 'Abonar cuenta'
-                              : mixedFlowActive
-                                ? `Pago mixto · ${formatMoney(order.saldo_pendiente!)}`
-                                : `Cobrar ${formatMoney(order.saldo_pendiente!)}`}
-                          </Button>
-                        ) : isCashierPaidDeliveryOrder(order) ? (
-                          <>
-                            <strong className="text-sm" role="status">PAGADO</strong>
-                            <Button variant="secondary" onClick={() => printOrderTicket(order, businessName ?? 'Establecimiento')}>
-                              <ReceiptText aria-hidden="true" className="size-5" /> Imprimir ticket
-                            </Button>
-                            <Button variant="dark" onClick={() => beginDelivery(order)}>
-                              {deliveryNeedsQr(order)
-                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
-                                : 'Entregar'}
-                            </Button>
-                          </>
-                        ) : isCashierDeferredDeliveryOrder(order) ? (
-                          <>
-                            <strong className="text-sm" role="status">Pendiente en cuenta</strong>
-                            <Button variant="dark" onClick={() => beginDelivery(order)}>
-                              {deliveryNeedsQr(order)
-                                ? <><ScanLine aria-hidden="true" className="size-5" /> Validar QR</>
-                                : 'Entregar'}
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-sm" role="status">Pago pendiente</span>
-                        )}
-                        <Button variant="ghost" onClick={() => setRemovingFrom(order)}>
-                          <XCircle aria-hidden="true" className="size-5" /> Quitar artículo
-                        </Button>
-                      </>)} />
+            <CashierBoard
+              lines={lines}
+              orders={lineOrders}
+              activeLine={activeLine}
+              barPrepares={barPrepares}
+              now={now}
+              busyId={readyBusyId}
+              primary={primaryAction}
+              onReady={(order) => void markBarReady(order)}
+              onOpen={(order) => setDetailId(order.id)}
+              onRemind={(order) => void remindCustomer(order)}
+              onNoShow={setNoShowOrder}
+              remindBusyId={remindBusyId}
+            />
           )}
+          {deliveryQr.data?.entrega_requiere_qr && <ScannerBar />}
+          <AppSheet
+            open={noShowOrder !== null}
+            onOpenChange={(open) => { if (!open && !noShowBusy) setNoShowOrder(null); }}
+            title={noShowOrder ? `¿No vino por el pedido #${noShowOrder.folio}?` : 'No vino'}
+            description="Sale de la fila y al cliente le llega el aviso de que no se recogió. No se devuelve dinero solo: si procede, la devolución la decides tú."
+          >
+            <div className="form-actions">
+              <Button variant="ghost" disabled={noShowBusy} onClick={() => setNoShowOrder(null)}>Cancelar</Button>
+              <Button variant="danger" loading={noShowBusy} onClick={() => void confirmNoShow()}>Sí, no vino</Button>
+            </div>
+          </AppSheet>
+          <AppSheet
+            open={detailOrder !== null}
+            onOpenChange={(open) => { if (!open) setDetailId(null); }}
+            title={detailOrder ? `Pedido #${detailOrder.folio}` : 'Pedido'}
+            description="El ticket completo: cobrar, entregar, imprimir o quitar un artículo."
+          >
+            {detailOrder && <CashierReceipt order={detailOrder} actions={ticketActions(detailOrder, isCashierCashOrder(detailOrder) ? 'cash' : 'ready')} />}
+          </AppSheet>
           {cashierQueue.hasNextPage && (
             <div className="orders-footer">
               <Button
@@ -731,7 +975,7 @@ export function PosPage() {
 
       <AppSheet
         open={Boolean(cashOrder)}
-        onOpenChange={(open) => { if (!open) setCashOrder(null); }}
+        onOpenChange={(open) => { if (!open) { setCashOrder(null); setPaymentProof(''); } }}
         title={cashOrder ? `Cobrar pedido ${cashOrder.folio}` : 'Cobrar pedido'}
         contentClassName="staff-payment-dialog"
         description={cashFlow === 'account'
@@ -769,6 +1013,7 @@ export function PosPage() {
               rememberMixedUnavailable();
             }}
             onCancel={() => setCashOrder(null)}
+            proofMode={cashProofMode}
             onDone={async (remaining, liquidated) => {
               setNotice(liquidated
                 ? <>Pago registrado. Pedido liquidado.</>
@@ -787,8 +1032,8 @@ export function PosPage() {
           <form
             className="transaction-form staff-payment"
             onSubmit={(event) => void cashForm.handleSubmit(({ amount }) => {
-              if (tipTooBig) return;
-              collectMutation.mutate({ order: cashOrder, amount, propina: tipValue });
+              if (tipTooBig || (cashProofMode && !paymentProof.trim())) return;
+              collectMutation.mutate({ order: cashOrder, amount, propina: tipValue, ...(cashProofMode ? { proof: paymentProof } : {}) });
             })(event)}
           >
             {mixedEndpointUnavailable && <Feedback tone="info">El pago mixto todavía no está disponible en el servidor. Registra el cobro completo en efectivo.</Feedback>}
@@ -813,13 +1058,17 @@ export function PosPage() {
                 }
               }}
             />
+            {cashProofMode && (
+              <QrTokenField value={paymentProof} onChange={setPaymentProof} mode={cashProofMode}
+                error={!paymentProof.trim() && collectMutation.isError ? 'Pide la prueba del cliente para cobrar.' : undefined} />
+            )}
             <div className={`change-preview ${change !== null ? 'change-preview--ready' : ''}`} aria-live="polite">
               <span>{change === null && receivedAmount && calculateChange(cashToCollect, receivedAmount) !== null ? 'Falta' : 'Cambio'}</span>
               <strong>{change === null ? receivedAmount && calculateChange(cashToCollect, receivedAmount) !== null ? formatMoney(calculateChange(cashToCollect, receivedAmount)!) : '—' : formatMoney(change)}</strong>
             </div>
             <div className="form-actions">
               <Button type="button" variant="ghost" onClick={() => setCashOrder(null)}>Cancelar</Button>
-              <Button type="submit" loading={collectMutation.isPending} disabled={change === null || tipTooBig} aria-disabled={change === null || tipTooBig}>
+              <Button type="submit" loading={collectMutation.isPending} disabled={change === null || tipTooBig || Boolean(cashProofMode && !paymentProof.trim())} aria-disabled={change === null || tipTooBig || Boolean(cashProofMode && !paymentProof.trim())}>
                 Confirmar cobro
               </Button>
             </div>
@@ -833,18 +1082,35 @@ export function PosPage() {
         title={deliveryOrder ? `Entregar pedido ${deliveryOrder.folio}` : 'Entregar pedido'}
         contentClassName="staff-delivery-dialog"
         description={deliveryOrder && deliveryNeedsQr(deliveryOrder)
-          ? 'Escanea el código del cliente. El sistema verificará que corresponda exactamente a este pedido.'
+          ? deliveryPrompt(deliveryQr.data?.validacion_entrega)
           : 'Confirma que el pedido corresponde al cliente antes de entregarlo.'}
       >
         {deliveryOrder && (
-          <div className="transaction-form">
+          <form
+            className="transaction-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (deliveryMutation.isPending) return;
+              // La pistola teclea y manda Enter de golpe: el campo ya tiene el código aunque el
+              // estado de React todavía no lo refleje, así que se lee del formulario.
+              const typed = new FormData(event.currentTarget).get('pickup-token');
+              const pickupToken = (typeof typed === 'string' ? typed : qrToken).trim();
+              if (deliveryNeedsQr(deliveryOrder) && !pickupToken) {
+                setQrMissing(true);
+                return;
+              }
+              deliveryMutation.mutate({ order: deliveryOrder, pickupToken });
+            }}
+          >
             {deliveryMutation.isError && <Feedback tone="error">{errorMessage(deliveryMutation.error)}</Feedback>}
             <OrderDetailContent order={deliveryOrder} />
             {deliveryNeedsQr(deliveryOrder) && (
               <QrTokenField
+                autoFocus
                 value={qrToken}
                 onChange={updateQrToken}
-                error={!qrToken.trim() && deliveryMutation.isError ? 'Captura el token de entrega.' : undefined}
+                mode={deliveryQr.data?.validacion_entrega}
+                error={!qrToken.trim() && (qrMissing || deliveryMutation.isError) ? deliveryMissing(deliveryQr.data?.validacion_entrega) : undefined}
               />
             )}
             <div className="form-actions">
@@ -852,16 +1118,15 @@ export function PosPage() {
                 Cancelar
               </Button>
               <Button
-                type="button"
+                type="submit"
                 variant="dark"
                 loading={deliveryMutation.isPending}
-                disabled={deliveryMutation.isPending || (deliveryNeedsQr(deliveryOrder) && !qrToken.trim())}
-                onClick={() => deliveryMutation.mutate({ order: deliveryOrder, pickupToken: qrToken.trim() })}
+                disabled={deliveryMutation.isPending}
               >
                 Confirmar entrega
               </Button>
             </div>
-          </div>
+          </form>
         )}
       </AppSheet>
       <RejectOrderDialog
@@ -904,6 +1169,17 @@ function pageDescription(role: string | undefined): string {
 function roleLabel(role: string | undefined): string {
   return ({ cajero: 'Caja', cocina: 'Cocina', mesero: 'Servicio en mesa' } as Record<string, string>)[role ?? '']
     ?? 'El dispositivo';
+}
+
+/** «Último cierre: contó $1,250.00 · 15 nov 2026, 22:10», y si cuadró o no contra lo esperado. */
+function lastCloseLabel(close: CashLastClose): string {
+  const parts = [`Último cierre: contó ${formatMoney(close.monto_final ?? '0.00')}`];
+  if (close.cerrada_en) parts.push(formatDate(close.cerrada_en));
+  const diff = close.diferencia != null ? moneyToCents(close.diferencia.replace(/^-/, '')) : null;
+  if (diff !== null && close.diferencia != null) {
+    parts.push(diff === 0n ? 'cuadró' : close.diferencia.startsWith('-') ? `faltaron ${formatMoney(centsToMoney(diff))}` : `sobraron ${formatMoney(centsToMoney(diff))}`);
+  }
+  return parts.join(' · ');
 }
 
 function formatDate(value: string): string {

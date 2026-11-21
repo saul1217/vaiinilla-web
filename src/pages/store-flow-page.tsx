@@ -1,12 +1,15 @@
 import { AppPageHeader } from '../components/app-page-header';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Clock3, Link2, CreditCard, MapPin, Image as ImageIcon, Workflow } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { CardPaymentsCard } from '../components/card-payments-card';
 import { StoreDirectoryCard } from '../components/store-directory-card';
 import { StoreImagesCard } from '../components/store-images-card';
 import { StoreVideosCard } from '../components/store-videos-card';
+import { StoreOperationsCard } from '../components/store-operations-card';
+import { StoreLinesCard } from '../components/store-lines-card';
+import { StoreDeliveryPreordersCard } from '../components/store-delivery-preorders-card';
 import { Choice } from '../components/choice';
 import { Button, Feedback, Field } from '../components/ui';
 import { useSessions } from '../context/session-context';
@@ -16,6 +19,7 @@ import { cardPaymentsStep } from '../lib/card-payments';
 import {
   BUSINESS_TYPE_LABELS,
   buildFlow,
+  deliveryValidationOf,
   FLOW_TEMPLATES,
   flowSummary,
   franjasError,
@@ -28,8 +32,14 @@ import {
   type BusinessType,
   type FlowSettings,
 } from '../lib/business-flow';
-import type { BusinessSettings } from '../types/api';
+import type { BusinessSettings, DeliveryValidation } from '../types/api';
 import { StoreFlowEditButton, StoreFlowEditorSheet, type StoreFlowEditor } from '../components/store-flow-editor-sheet';
+
+const EDITORS: Exclude<StoreFlowEditor, null>[] = ['flow', 'payments', 'directory', 'media'];
+
+function requestedEditor(value: string | null): StoreFlowEditor {
+  return EDITORS.find((editor) => editor === value) ?? null;
+}
 
 function mediaSummary(settings: BusinessSettings) {
   const images = [settings.logo_url, settings.imagen_url].filter(Boolean).length;
@@ -39,12 +49,22 @@ function mediaSummary(settings: BusinessSettings) {
 
 const KNOWN_TYPES = Object.keys(BUSINESS_TYPE_LABELS) as BusinessType[];
 
+// Cómo valida Caja la entrega para llevar. La credencial del alumno sirve en todos los que piden
+// algo, y en una mesa con su cuenta abierta nunca se pide nada.
+const DELIVERY_VALIDATION_OPTIONS: { value: DeliveryValidation; label: string; hint: string }[] = [
+  { value: 'qr_o_codigo', label: 'QR o código', hint: 'Caja escanea el QR del pedido o el cliente le dicta su código de 4 dígitos.' },
+  { value: 'qr', label: 'Solo QR', hint: 'Caja escanea el QR del pedido. El código de 4 dígitos no sirve.' },
+  { value: 'codigo', label: 'Solo código', hint: 'El cliente dicta su código de 4 dígitos; no hace falta escanear.' },
+  { value: 'ninguna', label: 'Sin validar', hint: 'Caja entrega sin pedir QR ni código.' },
+];
+
 function toSettings(data: BusinessSettings): FlowSettings | null {
   const tipo = KNOWN_TYPES.find((known) => known === data.tipo);
   if (!tipo) return null;
   return {
     tipo,
     entrega_requiere_qr: data.entrega_requiere_qr,
+    ...(data.validacion_entrega ? { validacion_entrega: data.validacion_entrega } : {}),
     permite_pago_al_final: data.permite_pago_al_final,
     permite_saldo: data.permite_saldo ?? true,
     gracia_liberacion_min: data.gracia_liberacion_min,
@@ -59,7 +79,19 @@ export function StoreFlowPage() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FlowSettings | null>(null);
   const [saved, setSaved] = useState(false);
-  const [editor, setEditor] = useState<StoreFlowEditor>(null);
+  // El buscador de ajustes llega con ?ajuste=: abre su editor o baja a su tarjeta. Cada búsqueda es
+  // una navegación nueva (location.key), así que vuelve a abrir aunque se pida el mismo ajuste, y la
+  // pantalla no se desmonta: lo que no se ha guardado se queda.
+  const location = useLocation();
+  const requested = new URLSearchParams(location.search).get('ajuste');
+  const [chosen, setEditor] = useState<StoreFlowEditor>(null);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const editor = chosen ?? (dismissedKey === (location.key ?? '') ? null : requestedEditor(requested));
+  const closeEditor = () => {
+    setEditor(null);
+    // En React Router 5 la key puede faltar (la primera entrada de un historial en memoria).
+    setDismissedKey(location.key ?? '');
+  };
   const opener = useRef<HTMLElement>(null);
   const openEditor = (next: Exclude<StoreFlowEditor, null>, event: React.MouseEvent<HTMLButtonElement>) => {
     opener.current = event.currentTarget;
@@ -90,6 +122,13 @@ export function StoreFlowPage() {
     enabled: Boolean(token),
     queryFn: () => api.businessSettings(token),
   });
+  const hasData = Boolean(query.data);
+  useEffect(() => {
+    if (!requested || !hasData || requestedEditor(requested)) return;
+    const section = document.getElementById(`ajuste-${requested}`);
+    section?.scrollIntoView?.({ block: 'start' });
+    section?.focus?.({ preventScroll: true });
+  }, [requested, hasData, location.key]);
   const current = query.data ? toSettings(query.data) : null;
   const settings = draft ?? current;
   const save = useMutation({
@@ -118,6 +157,9 @@ export function StoreFlowPage() {
   const steps = settings ? buildFlow(settings) : [];
   const summary = flowSummary(steps);
   const unknownType = Boolean(query.data && !current);
+  // Back con las migraciones 226 y 227: tipo fijo y modos de entrega.
+  const typeLocked = query.data?.tipo_bloqueado === true;
+  const deliveryModes = query.data?.validacion_entrega !== undefined;
 
   return (
     <div className="page-stack admin-screen admin-flow">
@@ -199,18 +241,25 @@ export function StoreFlowPage() {
           </StoreFlowEditButton>
         </article>
       </section>
+      {query.data && (
+        <div className="grid gap-4">
+          <StoreOperationsCard key={`ops-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
+          <StoreDeliveryPreordersCard key={`del-${scopeId}-${query.dataUpdatedAt}`} token={token} scopeId={scopeId} settings={query.data} />
+          <StoreLinesCard key={`lines-${scopeId}`} token={token} scopeId={scopeId} settings={query.data} />
+        </div>
+      )}
       <StoreFlowEditorSheet
         open={editor === 'payments'}
-        onOpenChange={(open) => !open && setEditor(null)}
+        onOpenChange={(open) => !open && closeEditor()}
         title="Pagos con tarjeta"
         returnFocusRef={opener}
       >
-        <CardPaymentsCard token={token} scopeId={scopeId} />
+        <CardPaymentsCard token={token} scopeId={scopeId} businessType={query.data?.tipo} />
       </StoreFlowEditorSheet>
       {query.data && (
         <StoreFlowEditorSheet
           open={editor === 'directory'}
-          onOpenChange={(open) => !open && setEditor(null)}
+          onOpenChange={(open) => !open && closeEditor()}
           title="Dónde te encuentran"
           returnFocusRef={opener}
         >
@@ -220,7 +269,7 @@ export function StoreFlowPage() {
       {query.data && (
         <StoreFlowEditorSheet
           open={editor === 'media'}
-          onOpenChange={(open) => !open && setEditor(null)}
+          onOpenChange={(open) => !open && closeEditor()}
           title="Imagen y videos"
           returnFocusRef={opener}
         >
@@ -233,7 +282,7 @@ export function StoreFlowPage() {
 
       <StoreFlowEditorSheet
         open={editor === 'flow'}
-        onOpenChange={(open) => !open && setEditor(null)}
+        onOpenChange={(open) => !open && closeEditor()}
         title="Cómo funciona tu tienda"
         description="Ajusta el flujo y guarda cuando esté listo."
         returnFocusRef={opener}
@@ -244,6 +293,13 @@ export function StoreFlowPage() {
               <h2 id="flow-templates-title" className="text-xl font-extrabold text-ink">
                 1. ¿Qué tipo de negocio es?
               </h2>
+              {typeLocked ? (
+                <p className="mt-1 text-sm text-muted">
+                  {settings ? BUSINESS_TYPE_LABELS[settings.tipo] : query.data?.tipo}. Vaiinilla dejó fijo el tipo
+                  de tu negocio; si necesitas cambiarlo, pídelo a Vaiinilla.
+                </p>
+              ) : (
+              <>
               <p className="mt-1 text-sm text-muted">
                 Una plantilla llena las opciones de abajo. No se guarda nada hasta que pulses «Guardar flujo».
               </p>
@@ -277,6 +333,8 @@ export function StoreFlowPage() {
                   Tus opciones no coinciden con una plantilla: es un flujo personalizado (
                   {BUSINESS_TYPE_LABELS[settings.tipo]}).
                 </p>
+              )}
+              </>
               )}
             </section>
 
@@ -331,6 +389,16 @@ export function StoreFlowPage() {
                   </div>
                   <div className="grid gap-2">
                     <p className="field__label">¿Cómo se entrega?</p>
+                    {deliveryModes ? (
+                      <Choice<DeliveryValidation>
+                        name="¿Cómo se entrega?"
+                        value={deliveryValidationOf(settings)}
+                        onChange={(value) =>
+                          change({ validacion_entrega: value, entrega_requiere_qr: value !== 'ninguna' })
+                        }
+                        options={DELIVERY_VALIDATION_OPTIONS}
+                      />
+                    ) : (
                     <Choice
                       name="¿Cómo se entrega?"
                       value={settings.entrega_requiere_qr}
@@ -348,6 +416,7 @@ export function StoreFlowPage() {
                         },
                       ]}
                     />
+                    )}
                   </div>
                   <div className="max-w-xs">
                     <Field

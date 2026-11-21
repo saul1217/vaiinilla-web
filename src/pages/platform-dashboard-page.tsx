@@ -46,6 +46,11 @@ export function PlatformDashboardPage() {
     enabled: Boolean(token),
     queryFn: () => api.platformAnalytics(token, period),
   });
+  const villoDevices = useQuery({
+    queryKey: ['platform-villo-devices'],
+    enabled: Boolean(token),
+    queryFn: ({ signal }) => api.platformVilloDevices(token, signal),
+  });
   const report = analytics.data;
   const operation = report?.operacion;
 
@@ -221,12 +226,32 @@ export function PlatformDashboardPage() {
         <div>
           <p className="eyebrow">VILLO</p>
           <h2>Consola del dispositivo</h2>
-          <p>Abre la guía y administra los dispositivos VILLO.</p>
+          <p>
+            Abre la guía y administra los dispositivos VILLO
+            {villoDevices.data ? ` · ${villoDevices.data.length} registrado${villoDevices.data.length === 1 ? '' : 's'}` : ''}.
+          </p>
         </div>
         <span>
           <ArrowRight aria-hidden="true" />
         </span>
       </Link>
+
+      {villoDevices.data && villoDevices.data.length > 0 && (
+        <section className="analytics-panel" aria-label="Dispositivos VILLO de plataforma">
+          <h2 className="text-base font-extrabold">Dispositivos VILLO ({villoDevices.data.length})</h2>
+          <ul className="mt-3 grid gap-2">
+            {villoDevices.data.map((dev) => (
+              <li key={dev.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink/10 px-4 py-2 text-sm">
+                <span>
+                  <strong>{dev.nombre || dev.id}</strong>
+                  {dev.establecimiento_nombre ? <small className="ml-2 text-muted">{dev.establecimiento_nombre}</small> : null}
+                </span>
+                <small className="text-muted">{dev.estado || 'registrado'}</small>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {report && (
         <p className="text-xs text-muted">

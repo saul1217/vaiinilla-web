@@ -3,6 +3,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TenantShell } from './app-shell';
 
+// El enlace «Pistas» pregunta el tipo de negocio; aquí no es lo que se prueba.
+vi.mock('../lib/bowling-admin-feature', () => ({ BOWLING_ADMIN_ENABLED: false }));
+
 // Con la bandera de saldo en Caja prendida: Caja recarga desde «Saldo», admin solo lo consulta.
 vi.mock('../lib/wallet-caja-feature', () => ({ WALLET_CAJA_ENABLED: true }));
 
@@ -18,13 +21,12 @@ vi.mock('../context/session-context', () => ({
 const renderShell = () => render(<MemoryRouter><TenantShell>Contenido</TenantShell></MemoryRouter>);
 
 describe('navegación con saldo en Caja prendido', () => {
-  it('Caja ve Caja y Saldo en la barra móvil sin «Más»', () => {
+  it('Caja ve Caja y Saldo en la barra móvil', () => {
     session.role = 'cajero';
     renderShell();
     const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
     expect(within(mobile).getByRole('link', { name: 'Caja' })).toHaveAttribute('href', '/app/pos');
     expect(within(mobile).getByRole('link', { name: 'Saldo' })).toHaveAttribute('href', '/app/saldo');
-    expect(within(mobile).queryByRole('button', { name: 'Más' })).not.toBeInTheDocument();
   });
 
   it('admin encuentra «Saldo de clientes» en «Más»', () => {

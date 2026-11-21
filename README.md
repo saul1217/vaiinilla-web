@@ -43,20 +43,25 @@ La aplicación consume el backend de Vaiinilla; no se conecta directamente a Sup
 
 | Ruta | Función |
 | --- | --- |
-| `/acceso` | Inicio de sesión de Administración/POS |
+| `/acceso` | Inicio de sesión de Administración/POS, con correo y contraseña o con Google (y el código de la app autenticadora si la cuenta lo tiene) |
 | `/accesos` | Accesos autorizados devueltos por el backend |
 | `/app` | Resumen administrativo |
 | `/app/menu` | Crear categorías y productos, configurar variantes y controlar disponibilidad |
 | `/app/invitaciones` | Crear, consultar, revocar y reenviar invitaciones |
 | `/app/pedidos` | Consultar pedidos activos, entregados e incidencias |
-| `/app/pos` | Abrir/cerrar Caja; para el rol Caja, cobrar efectivo y entregar con QR |
+| `/app/pos` | Abrir/cerrar Caja; para el rol Caja, cobrar efectivo y entregar con QR, movimientos del cajón, devoluciones y mesas; Administración ve el último cierre y lo que debe haber en caja |
+| `/app/cortes` | Corte del día y de cada turno, y reporte contable con CSV (Caja y admin) |
+| `/app/mi-turno` | Mi turno y mis propinas (Caja, Mesero y Cocina), con acceso al manual |
+| `/app/manual` | Manual «Paso a paso» de Caja, Cocina y Mesero |
+| `/app/alumnos` | Caja › Alumnos sin teléfono: buscar por nombre, matrícula, credencial QR o NFC, cobrar de su saldo con PIN y tope, entregar y hacer su credencial (admin y cajero, en modo escuela) |
+| `/app/inventario` | Insumos (alta, edición, entradas, mermas, ajustes, conteo y «Lo usan»), recetas, historial, reporte por periodo, avisos y asistente |
 | `/app/hotel`, `/app/hotel/habitaciones`, `/app/hotel/ajustes` | Admin de Hotel (resumen, alta de habitaciones en lote con QR y ajustes). Detrás de `HOTEL_ADMIN_ENABLED` (`src/lib/hotel-admin-feature.ts`, apagada); solo rol admin en un negocio con hotel |
 | `/app/hotel/recepcion`, `/app/hotel/ama-de-llaves` | Operación diaria del personal de hotel, con paridad a `ui/hotel/staff` de Android. Recepción (Caja y admin): llegadas y salidas, check-in con código de estancia, «Llegó» y cancelar reserva, cargos manuales y check-out con la cuenta y la forma de pago (efectivo o tarjeta, con `total_esperado` y `version_esperada`). Ama de llaves (Mesero y admin): tablero por piso con filtros, marcar lista o por limpiar una habitación vacía, y tomar o resolver solicitudes de huéspedes. Todas las escrituras llevan `Idempotency-Key`. Detrás de `HOTEL_STAFF_ENABLED` (`src/lib/hotel-staff-feature.ts`, apagada); solo en un negocio con hotel |
-| `/app/saldo` | Saldo de clientes: buscar al cliente, ver su saldo y movimientos y, solo con rol Caja, recargarle en efectivo (con confirmación e `Idempotency-Key`). Admin solo consulta. Detrás de `WALLET_CAJA_ENABLED` (`src/lib/wallet-caja-feature.ts`, apagada) |
-| `/app/boliche` | Boliche: pistas ahora (libre, en turno o reservada), rentar ahora o alargar el turno con duración y jugadores (hasta la capacidad de la pista) y cobrar en efectivo con cambio (apartar, cobrar, soltar el apartado y editar pista con `Idempotency-Key` por modal; si no se pudo soltar, avisa y deja reintentar); turnos de hoy con su cobro pendiente; y, solo admin, crear pistas en lote y editar precio por hora, capacidad y si se rentan. Paridad con Android (VenueContext boliche, renta del mesero). Detrás de `BOWLING_ADMIN_ENABLED` (`src/lib/bowling-admin-feature.ts`, apagada); roles admin, cajero y mesero en un negocio de tipo `boliche` |
-| `/app/reparto` | Reparto y encargos: «Por aceptar», «Me deben» y la agenda por día de los pedidos a domicilio y encargos, con aceptar, rechazar, salió a entregar, entregar con el código del cliente (admin puede entregar sin código si se bloqueó), cobrar en la puerta y cancelar, con `Idempotency-Key`. Paridad con la agenda de repostería de Android. Detrás de `REPARTO_ENABLED` (`src/lib/reparto-feature.ts`, apagada); solo admin y cajero |
-| `/app/escuela`, `/app/escuela/dias`, `/app/escuela/padron`, `/app/escuela/tutores`, `/app/escuela/devoluciones` | Admin de Escuela (código para unirse y reglas, menú y días sin servicio, padrón pegado de la hoja de cálculo, tutores y devoluciones o bajas), con paridad a Negocio › Escuela de Android. Detrás de `SCHOOL_ADMIN_ENABLED` (`src/lib/school-admin-feature.ts`, apagada); solo rol admin en un negocio con `modo_escuela` |
-| `/app/agenda` | Agenda de reservas por día y por cancha: ver, apartar (queda por cobrar en Caja), mover una reserva sin pagar a otro horario y cancelar (con reembolso si ya se pagó), con paridad a Mesas y espacios › Reservas de Android. Solo usa las rutas de `/reservas` que ya tiene el back. Detrás de `AGENDA_ENABLED` (`src/lib/agenda-feature.ts`, apagada); roles admin, cajero y mesero |
+| `/app/saldo` | Saldo de clientes: buscar al cliente, ver su saldo y movimientos y, solo con rol Caja, recargarle en efectivo (con confirmación e `Idempotency-Key`). Admin solo consulta. Detrás de `WALLET_CAJA_ENABLED` (`src/lib/wallet-caja-feature.ts`, prendida en develop) |
+| `/app/boliche` | Boliche: pistas ahora (libre, en turno o reservada), rentar ahora o alargar el turno con duración y jugadores (hasta la capacidad de la pista) y cobrar en efectivo con cambio (apartar, cobrar, soltar el apartado y editar pista con `Idempotency-Key` por modal; si no se pudo soltar, avisa y deja reintentar); turnos de hoy con su cobro pendiente; y, solo admin, crear pistas en lote y editar precio por hora, capacidad y si se rentan. Paridad con Android (VenueContext boliche, renta del mesero). Detrás de `BOWLING_ADMIN_ENABLED` (`src/lib/bowling-admin-feature.ts`, prendida en develop); roles admin, cajero y mesero en un negocio de tipo `boliche` |
+| `/app/reparto` | Reparto y encargos: «Por aceptar», «Me deben» y la agenda por día de los pedidos a domicilio y encargos, con aceptar, rechazar, salió a entregar, entregar con el código del cliente (admin puede entregar sin código si se bloqueó), cobrar en la puerta y cancelar, con `Idempotency-Key`. Paridad con la agenda de repostería de Android. Detrás de `REPARTO_ENABLED` (`src/lib/reparto-feature.ts`, prendida en develop); solo admin y cajero |
+| `/app/escuela`, `/app/escuela/dias`, `/app/escuela/padron`, `/app/escuela/tutores`, `/app/escuela/devoluciones` | Admin de Escuela (código para unirse y reglas, menú y días sin servicio, padrón pegado de la hoja de cálculo, tutores y devoluciones o bajas), con paridad a Negocio › Escuela de Android. Detrás de `SCHOOL_ADMIN_ENABLED` (`src/lib/school-admin-feature.ts`, prendida en develop); solo rol admin en un negocio con `modo_escuela` |
+| `/app/agenda` | Agenda de reservas por día y por cancha: ver, apartar (queda por cobrar en Caja), mover una reserva sin pagar a otro horario y cancelar (con reembolso si ya se pagó), con paridad a Mesas y espacios › Reservas de Android. Solo usa las rutas de `/reservas` que ya tiene el back. Detrás de `AGENDA_ENABLED` (`src/lib/agenda-feature.ts`, prendida en develop); roles admin, cajero y mesero |
 | `/invitaciones/aceptar` | Confirmar identidad y aceptar una invitación recibida por correo |
 | `/acceso/verificar` | Procesar el enlace de verificación de correo de Firebase |
 | `/acceso/recuperar` | Definir una contraseña nueva desde un enlace de recuperación |
@@ -82,6 +87,26 @@ requisitos`, `Lista para activar` y `Stripe conectado`. Si la sesión global exp
 regresa a `/plataforma/acceso`, conserva el establecimiento seleccionado en la pestaña y
 vuelve a `/plataforma/establecimientos` después de autenticar de nuevo. Efectivo, saldo,
 wallet y cashback siguen siendo flujos separados.
+
+### Tarjeta solo en cafeterías y aprobación de la plataforma (back #266 y #268)
+
+- La tarjeta solo se activa en cafeterías (decisión del 18-nov): en cualquier otro tipo de
+  negocio el back responde 409 `STRIPE_APPROVAL_CAFETERIA_ONLY`, y la Web deja «Sí, aceptar
+  tarjeta» deshabilitado con su explicación. Apagarla siempre se puede.
+- En cada cafetería, Super Admin ve si la tarjeta está aprobada, pendiente o revocada, con el
+  historial reciente, y la aprueba o la revoca con un motivo obligatorio (queda en el historial;
+  vacío da 400 `VALIDATION_ERROR`) e `Idempotency-Key`: `GET`, `POST .../stripe/aprobacion` y
+  `POST .../stripe/aprobacion/revocar`. Aprobar no prende la tarjeta; revocar la apaga y no
+  cancela pagos ya iniciados. En otros tipos, «Activar Stripe» no aparece.
+- En `/app/flujo`, el dueño de una cafetería ve el estado de la aprobación. Sin aprobación no
+  puede activar la tarjeta (solo apagarla); mientras no se conoce el tipo del negocio, el
+  candado sigue puesto. En una cafetería con aprobación vigente, «¿Quién paga la comisión?»
+  no deja elegir «El cliente», porque el precio del menú con tarjeta ya la considera; si ya
+  estaba prendida, se puede apagar. Mientras no se conoce el tipo, ese candado no se aplica
+  (el back responde 422 `STRIPE_PASS_FEE_NOT_ALLOWED` si tocara).
+- El mínimo por cobro con tarjeta (back #265) no tiene lógica en la Web: el personal no cobra
+  con tarjeta de Stripe aquí (Caja usa efectivo o terminal) y el aviso del carrito vive en la
+  landing.
 
 ## Seguridad
 

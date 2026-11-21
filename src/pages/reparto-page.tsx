@@ -23,6 +23,8 @@ import {
   dayLabel,
   deliveryLine,
   doneMessage,
+  paidBefore,
+  refundSentence,
   firstName,
   homeOrderStep,
   isCodeLocked,
@@ -97,9 +99,9 @@ function RepartoScreen({ token, role, storeId }: { token: string; role: string; 
       }
       return actions[actions.length - 1]!;
     },
-    onSuccess: (last, { actions }) => {
+    onSuccess: (last, { order, actions }) => {
       setActionError(null);
-      setNotice(actions.length > 1 ? 'Entregado y cobrado.' : doneMessage(last));
+      setNotice(actions.length > 1 ? 'Entregado y cobrado.' : doneMessage(last, paidBefore(order)));
       if (last.type === 'rechazar' || last.type === 'cancelaciones') setOpenId(null);
     },
     onError: (error) => {
@@ -259,9 +261,11 @@ function OrderPanel({ order, role, busy, notice, error, onRun }: {
 
     {asking
       ? <Card title={asking === 'rechazar' ? '¿Rechazar el encargo?' : '¿Cancelar el pedido?'}
-        description={asking === 'rechazar'
-          ? `A ${name} se le devuelve lo que pagó y le llega el motivo.`
-          : `A ${name} le llega el motivo. Lo que ya pagó se le devuelve.`}>
+        description={paidBefore(order) === null
+          ? asking === 'rechazar'
+            ? `A ${name} se le devuelve lo que pagó y le llega el motivo.`
+            : `A ${name} le llega el motivo. Lo que ya pagó se le devuelve.`
+          : `A ${name} le llega el motivo. ${refundSentence(paidBefore(order))}`}>
         <Field label="Motivo" maxLength={REASON_MAX} autoComplete="off" value={reason} disabled={busy}
           onChange={(event) => setReason(event.target.value.slice(0, REASON_MAX))}
           hint="Al menos 3 letras." />
