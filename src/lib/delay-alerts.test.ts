@@ -45,8 +45,36 @@ describe('lateOrders', () => {
     expect(lateOrders([order({ estado: 'cancelado' })], ON, NOW)).toEqual([]);
   });
 
-  it('sin cobrado_en cuenta desde creado_en y ordena del más atrasado al menos', () => {
-    const viejo = order({ id: 'p2', folio: 13, cobrado_en: undefined, creado_en: minutesAgo(9) });
+  it('un back sin cobrado_en cuenta desde creado_en y ordena del más atrasado al menos', () => {
+    const viejo = order({ id: 'p2', folio: 13, creado_en: minutesAgo(9) });
+    delete (viejo as Record<string, unknown>).cobrado_en;
     expect(lateOrders([order(), viejo], ON, NOW).map((o) => o.folio)).toEqual([13, 12]);
+  });
+
+  it('cobrado_en en null es un pedido sin cobrar (cocina prepara antes de cobrar): no cuenta', () => {
+    expect(lateOrders([order({ estado: 'preparando', cobrado_en: null })], ON, NOW)).toEqual([]);
+    expect(lateOrders([order({ saldo_pendiente: '20.00' })], ON, NOW)).toEqual([]);
+  });
+
+  it('un encargo para otro día no cuenta y uno de hoy cuenta desde su franja', () => {
+    const d = new Date(NOW);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dia = (delta: number) => {
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + delta);
+      return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+    };
+    const franjaDesde = (minutosAtras: number) => {
+      const x = new Date(NOW - minutosAtras * 60_000);
+      return `${pad(x.getHours())}:${pad(x.getMinutes())}-23:59`;
+    };
+    expect(lateOrders([order({ fecha_entrega: dia(1), cobrado_en: minutesAgo(600) })], ON, NOW)).toEqual([]);
+    const hoy = { fecha_entrega: dia(0), cobrado_en: minutesAgo(600) };
+    expect(lateOrders([order({ ...hoy, franja_entrega: franjaDesde(1) })], ON, NOW)).toEqual([]);
+    expect(lateOrders([order({ ...hoy, franja_entrega: franjaDesde(3) })], ON, NOW)[0]).toMatchObject({ minutes: 3 });
+  });
+
+  it('lo rechazado no cuenta como cocina', () => {
+    const items = [{ estacion_preparacion: 'caja' }, { estacion_preparacion: 'cocina', rechazo: { motivo: 'x', monto: '1' } }];
+    expect(lateOrders([order({ items })], ON, NOW)[0]).toMatchObject({ kitchen: false, limit: 2 });
   });
 });

@@ -312,6 +312,9 @@ export interface OrderDetail {
   llegada_en?: string | null;
   /** Cuándo entró el dinero; null mientras sigue por cobrar. Un back anterior no lo manda. */
   cobrado_en?: string | null;
+  /** Encargos y pedidos de la semana: día (YYYY-MM-DD) y franja ("13:00-14:00") de entrega. */
+  fecha_entrega?: string | null;
+  franja_entrega?: string | null;
   /** Cuándo quedó listo: a esa hora le llegó el aviso al cliente. */
   listo_en?: string | null;
   /** Con la barra preparando, las estaciones que todavía no sellan su parte. */

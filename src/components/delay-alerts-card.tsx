@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { lateOrders } from '../lib/delay-alerts';
 import type { BusinessSettings, OrderDetail } from '../types/api';
-import { Feedback } from './ui';
+import { AlertCircle } from 'lucide-react';
 
 /** Pedidos pagados que ya pasaron su límite sin entregarse. Solo sale si el negocio prendió el aviso. */
 export function DelayAlertsCard({
@@ -20,7 +20,9 @@ export function DelayAlertsCard({
   const late = lateOrders(orders ?? [], settings, nowMs);
   if (late.length === 0) return null;
   return (
-    <Feedback tone="error">
+    // role=status, no alert: la lista cambia cada minuto y un lector de pantalla no debe repetirla a gritos.
+    <div className="feedback feedback--error" role="status">
+      <AlertCircle aria-hidden="true" className="size-5 shrink-0" />
       <span className="grid gap-1">
         <strong>
           {late.length === 1 ? '1 pedido pagado va tarde' : `${late.length} pedidos pagados van tarde`}
@@ -35,6 +37,6 @@ export function DelayAlertsCard({
           Ver pedidos
         </Link>
       </span>
-    </Feedback>
+    </div>
   );
 }

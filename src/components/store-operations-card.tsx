@@ -27,10 +27,15 @@ export function StoreOperationsCard({
   token,
   scopeId,
   settings,
+  notice,
+  onNotice,
 }: {
   token: string;
   scopeId: string;
   settings: BusinessSettings;
+  /** Store flow remounts this card after each save (its key changes): the notice lives there so it survives. */
+  notice?: string | null;
+  onNotice?: (text: string | null) => void;
 }) {
   const queryClient = useQueryClient();
   const [prepMode, setPrepMode] = useState<PrepMode>(prepModeOf(settings));
@@ -58,7 +63,9 @@ export function StoreOperationsCard({
   const [retrasoSinCocina, setRetrasoSinCocina] = useState(savedNoKitchen);
   const [retrasoCocina, setRetrasoCocina] = useState(savedKitchen);
   const [preflight, setPreflight] = useState<ConfigTransitionPreflight | null>(null);
-  const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [localNotice, setLocalNotice] = useState<string | null>(null);
+  const savedNotice = notice !== undefined ? notice : localNotice;
+  const setSavedNotice = onNotice ?? setLocalNotice;
 
   const transitionChanges: Record<string, unknown> = {};
   if (barraPrepara !== (settings.barra_prepara === true)) transitionChanges.barra_prepara = barraPrepara;
@@ -73,8 +80,12 @@ export function StoreOperationsCard({
   if (cobroCodigoDisponible && cobroCodigo !== (settings.cobro_requiere_codigo === true)) patchChanges.cobro_requiere_codigo = cobroCodigo;
   if (cuentaDisponible && cuentaObligatoria !== (settings.cuenta_obligatoria === true)) patchChanges.cuenta_obligatoria = cuentaObligatoria;
   if (retrasoDisponible && retrasoActivo !== (settings.alerta_retraso_activa === true)) patchChanges.alerta_retraso_activa = retrasoActivo;
-  if (retrasoDisponible && retrasoSinCocina.trim() !== savedNoKitchen) patchChanges.alerta_retraso_sin_cocina_min = Number(retrasoSinCocina.trim());
-  if (retrasoDisponible && retrasoCocina.trim() !== savedKitchen) patchChanges.alerta_retraso_cocina_min = Number(retrasoCocina.trim());
+  const minutesProblem = (raw: string, max: number) =>
+    /^\d+$/.test(raw.trim()) && Number(raw) >= 1 && Number(raw) <= max ? null : `Escribe un número de 1 a ${max}.`;
+  const noKitchenProblem = retrasoDisponible && retrasoActivo ? minutesProblem(retrasoSinCocina, 120) : null;
+  const kitchenProblem = retrasoDisponible && retrasoActivo ? minutesProblem(retrasoCocina, 240) : null;
+  if (retrasoDisponible && !noKitchenProblem && retrasoSinCocina.trim() !== savedNoKitchen) patchChanges.alerta_retraso_sin_cocina_min = Number(retrasoSinCocina.trim());
+  if (retrasoDisponible && !kitchenProblem && retrasoCocina.trim() !== savedKitchen) patchChanges.alerta_retraso_cocina_min = Number(retrasoCocina.trim());
   const trimmedFondo = fondoSugerido.trim();
   const currentFondo = settings.fondo_sugerido ?? '';
   if (trimmedFondo !== currentFondo) patchChanges.fondo_sugerido = trimmedFondo || null;
@@ -199,6 +210,7 @@ export function StoreOperationsCard({
                 value={retrasoSinCocina}
                 onChange={(e) => { setSavedNotice(null); setRetrasoSinCocina(e.target.value); }}
                 hint="De 1 a 120. Ej. una botella de agua."
+                error={noKitchenProblem ?? undefined}
               />
               <Field
                 label="Límite con cocina (min)"
@@ -206,6 +218,7 @@ export function StoreOperationsCard({
                 value={retrasoCocina}
                 onChange={(e) => { setSavedNotice(null); setRetrasoCocina(e.target.value); }}
                 hint="De 1 a 240. Ej. un burrito."
+                error={kitchenProblem ?? undefined}
               />
             </div>
           )}
@@ -246,7 +259,7 @@ export function StoreOperationsCard({
         ]}
       />
       <div>
-        <Button type="button" loading={save.isPending} disabled={!hasChanges} onClick={() => save.mutate()}>
+        <Button type="button" loading={save.isPending} disabled={!hasChanges || Boolean(noKitchenProblem || kitchenProblem)} onClick={() => save.mutate()}>
           Guardar ajustes operativos
         </Button>
       </div>
