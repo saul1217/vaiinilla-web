@@ -8135,6 +8135,19 @@
                           "description": "Migración 228. null si el servidor aún no la tiene.",
                           "nullable": true,
                           "type": "boolean"
+                        },
+                        "nombre": {
+                          "description": "Nombre visible del negocio.",
+                          "maxLength": 120,
+                          "minLength": 1,
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "tienda_url": {
+                          "description": "Enlace general de la tienda (`<base pública>/e/<slug>`) para su QR de entrada; abre el menú aunque no esté en el directorio. null sin slug.\n",
+                          "format": "uri",
+                          "nullable": true,
+                          "type": "string"
                         }
                       },
                       "type": "object"
@@ -8213,6 +8226,10 @@
                   },
                   "caja_entrega_en_espacio": {
                     "description": "Caja lleva a la mesa o la barra lo que ella cobra.",
+                    "type": "boolean"
+                  },
+                  "cajas_independientes": {
+                    "description": "Migración 223. true: cada cajera abre su propia caja; sus cobros, cambio, recargas y corte van a ella. No se cambia con cajas abiertas (409 CASH_SESSION_OPEN).\n",
                     "type": "boolean"
                   },
                   "cobro_requiere_codigo": {
@@ -8345,6 +8362,12 @@
                   "modo_escuela": {
                     "description": "Padres e hijos. Solo si es true las apps muestran Mis hijos, Caja › Alumnos y Negocio › Escuela.",
                     "type": "boolean"
+                  },
+                  "nombre": {
+                    "description": "Nombre visible del negocio.",
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
                   },
                   "pausa_sin_conexion": {
                     "default": false,
@@ -10140,6 +10163,32 @@
         "summary": "Guardar los huéspedes",
         "tags": [
           "Hotel"
+        ]
+      }
+    },
+    "/api/v1/eventos": {
+      "get": {
+        "description": "Stream `text/event-stream` que avisa cuándo cambió algo que el cliente ve: `pedido` (`{ id, v }`, sus pedidos y los de sus tutelados), `llamada` (`{ id, v }`) y `mesa` (`{ espacio_id }`, la mesa compartida en la que participa). El aviso NO trae datos: el cliente relee con las rutas de siempre (`GET /pedidos/:id`, `GET /llamadas`, `GET /mesas/actual`). Al abrir manda `event: listo`; un comentario `: ping` cada 25 s; `event: resync` si el back pudo perder avisos (releer todo una vez); y `event: reconectar` antes de cerrar (cada 5 min o al vencer el token): el cliente reabre con su token vigente. Como mucho 3 streams por usuario (el cuarto cierra el más viejo). Rol cliente. Responde 404 si los avisos en tiempo real están apagados en el ambiente (`REALTIME_ENABLED`).\n",
+        "responses": {
+          "200": {
+            "description": "Stream de avisos (text/event-stream)."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "429": {
+            "description": "Demasiados streams abiertos desde la misma IP."
+          }
+        },
+        "summary": "Avisos en vivo del cliente (Server-Sent Events)",
+        "tags": [
+          "Tiempo real"
         ]
       }
     },
@@ -17669,6 +17718,7 @@
     },
     "/api/v1/personal/invitaciones/membresias/{id}": {
       "patch": {
+        "description": "Responde 409 CASH_SESSION_OPEN si el usuario tiene una caja abierta en el establecimiento.",
         "parameters": [
           {
             "in": "path",
@@ -17735,6 +17785,7 @@
     },
     "/api/v1/personal/invitaciones/membresias/{id}/desactivar": {
       "post": {
+        "description": "Responde 409 CASH_SESSION_OPEN si el usuario tiene una caja abierta en el establecimiento.",
         "parameters": [
           {
             "in": "path",
@@ -20133,6 +20184,40 @@
         ]
       }
     },
+    "/api/v1/publico/seguimiento/{token}/eventos": {
+      "get": {
+        "description": "Igual que `GET /eventos`, para el enlace de seguimiento: solo avisa `pedido` (`{ id, v }`) de ese pedido; el invitado relee `GET /publico/seguimiento/{token}`. 404 si el token no existe o si los avisos en tiempo real están apagados en el ambiente.\n",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stream de avisos (text/event-stream)."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "404": {
+            "description": "No existe o tiempo real apagado."
+          },
+          "429": {
+            "description": "Demasiados streams abiertos desde la misma IP."
+          }
+        },
+        "security": [],
+        "summary": "Avisos en vivo del seguimiento de invitado (Server-Sent Events)",
+        "tags": [
+          "Tiempo real"
+        ]
+      }
+    },
     "/api/v1/reportes/contable": {
       "get": {
         "description": "Ventas del periodo por forma de pago, categoría, producto, mesero (quien tomó el pedido) y mesa o pista, más propinas, cancelados, descuentos y ventas por día. Una venta cuenta el día en que se cobró (docs/reportes.md). Con `formato=csv` responde un archivo CSV por secciones, listo para Excel. Ver docs/cortes-y-reportes.md. Rol admin.\n",
@@ -20806,6 +20891,26 @@
           }
         },
         "summary": "Abrir sesión de caja",
+        "tags": [
+          "Caja"
+        ]
+      }
+    },
+    "/api/v1/sesiones-caja/abiertas": {
+      "get": {
+        "description": "Solo administración. Permite ver qué cajeros tienen caja abierta (útil con cajas independientes) y cerrarlas.",
+        "responses": {
+          "200": {
+            "description": "Lista de sesiones abiertas."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          }
+        },
+        "summary": "Listar todas las sesiones de caja abiertas del negocio",
         "tags": [
           "Caja"
         ]
@@ -24894,6 +24999,46 @@
         ]
       }
     },
+    "/api/v1/wallets/me/destinatarios/{usuarioId}": {
+      "get": {
+        "description": "Confirma que el usuario escaneado es cliente activo del mismo establecimiento y devuelve su nombre.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "usuarioId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Destinatario válido en esta tienda."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          }
+        },
+        "summary": "Verificar destinatario para transferir saldo por QR",
+        "tags": [
+          "Wallet"
+        ]
+      }
+    },
     "/api/v1/wallets/me/recargas-stripe": {
       "post": {
         "description": "Crea un PaymentIntent en la cuenta Stripe del establecimiento. `monto` es lo que entra al saldo; `pago.amount_cents` es lo que se cobra (incluye Stripe y la comisión). El saldo se acredita cuando llega el webhook de pago exitoso. Rol cliente; un tutor la usa con el contexto de su hijo.\n",
@@ -25034,6 +25179,65 @@
           }
         },
         "summary": "Estado de una recarga con tarjeta",
+        "tags": [
+          "Wallet"
+        ]
+      }
+    },
+    "/api/v1/wallets/me/transferencias": {
+      "post": {
+        "description": "Transfiere saldo de la cartera del cliente autenticado a otro cliente activo del mismo establecimiento (sin comisión, atómico e idempotente). Nunca cruza tiendas.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "destinatario_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "monto": {
+                    "example": "50.00",
+                    "pattern": "^\\\\d+\\\\.\\\\d{2}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "destinatario_id",
+                  "monto"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Transferencia aplicada."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          }
+        },
+        "summary": "Transferir saldo a un compañero de la misma tienda",
         "tags": [
           "Wallet"
         ]
@@ -25533,6 +25737,10 @@
     {
       "description": "Llamar al mesero y tablero de mesas",
       "name": "Llamadas de mesa"
+    },
+    {
+      "description": "Avisos en vivo por Server-Sent Events (avisar y releer)",
+      "name": "Tiempo real"
     },
     {
       "description": "Estancias, solicitudes del huésped, habitaciones y resumen del hotel",
