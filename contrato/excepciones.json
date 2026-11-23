@@ -1,0 +1,17 @@
+[
+  {
+    "llamada": "POST /pedidos/{}/cancelaciones",
+    "contiene": "«entrega_manual»",
+    "motivo": "Lectura estática: actionBody es un switch; para cancelaciones solo devuelve version_esperada y motivo."
+  },
+  {
+    "llamada": "POST /pedidos/{}/cancelaciones",
+    "contiene": "«codigo»",
+    "motivo": "Lectura estática: igual que entrega_manual (es de entregar-domicilio)."
+  },
+  {
+    "llamada": "POST /pedidos/{}/cancelaciones",
+    "contiene": "«metodo»",
+    "motivo": "Lectura estática: igual que entrega_manual (es de cobrar-entrega)."
+  }
+]

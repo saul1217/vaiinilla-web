@@ -164,17 +164,52 @@ export function InvitationAcceptancePage() {
   async function submitRegistration(values: Registration) {
     setBusy(true);
     resetMessages();
+    const email = values.email.trim().toLowerCase();
     try {
-      const nextUser = await createPasswordAccount(
-        values.email.trim().toLowerCase(),
-        values.password,
-      );
+      const nextUser = await createPasswordAccount(email, values.password);
       finishSignIn(nextUser);
       await sendVerification(nextUser);
     } catch (caught) {
-      setError(authenticationMessage(caught));
+      if (authErrorCode(caught) === 'auth/email-already-in-use') {
+        await continueExistingAccount(email, values.password);
+      } else {
+        setError(authenticationMessage(caught));
+      }
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * La cuenta ya existe en Firebase: casi siempre es de un intento anterior que se quedó a medias
+   * (sin verificar el correo, o sin nombre ni términos). Con la misma contraseña se entra y se sigue
+   * donde se quedó; si no coincide, se pasa a «Ya tengo cuenta» con el correo ya escrito.
+   */
+  async function continueExistingAccount(email: string, password: string) {
+    let result: Awaited<ReturnType<typeof passwordSignIn>>;
+    try {
+      result = await passwordSignIn(email, password);
+    } catch {
+      setAuthMode('login');
+      loginForm.reset({ email, password: '' });
+      setError('Ese correo ya tiene cuenta. Entra con tu contraseña o recupérala desde «Ya tengo cuenta».');
+      return;
+    }
+    if (result.mfaResolver) {
+      setResolver(result.mfaResolver);
+      return;
+    }
+    if (!result.user) return;
+    finishSignIn(result.user);
+    setNotice('Ya tenías cuenta con este correo. Seguimos con tu invitación.');
+    try {
+      if (!result.user.emailVerified) {
+        await sendVerification(result.user);
+        return;
+      }
+      await continueWithVerifiedUser(result.user);
+    } catch (caught) {
+      setError(authenticationMessage(caught));
     }
   }
 
@@ -710,6 +745,10 @@ function formatWait(seconds: number): string {
   if (seconds < 60) return `${seconds} s`;
   const minutes = Math.ceil(seconds / 60);
   return `${minutes} min`;
+}
+
+function authErrorCode(error: unknown): string | null {
+  return error instanceof FirebaseError ? error.code : null;
 }
 
 function authenticationMessage(error: unknown): string {

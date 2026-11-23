@@ -8,10 +8,12 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
   getMultiFactorResolver,
+  GoogleAuthProvider,
   multiFactor,
   onAuthStateChanged,
   setPersistence,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   TotpMultiFactorGenerator,
   updateProfile,
@@ -120,6 +122,27 @@ export async function passwordSignIn(
       return { mfaResolver: getMultiFactorResolver(auth, error as MultiFactorError) };
     }
     if (!hadBrowserSession || requireFreshSession) endBrowserSession();
+    throw error;
+  }
+}
+
+/**
+ * Entrar con Google (como Expo): abre la ventana de Google y, si la cuenta tiene código de la
+ * app autenticadora, regresa el resolver para pedirlo. Si la cuenta no existía, Firebase la crea.
+ */
+export async function googleSignIn(): Promise<PasswordSignInResult> {
+  const auth = await readyAuth();
+  const hadBrowserSession = hasBrowserSession();
+  beginBrowserSession();
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    return { user: (await signInWithPopup(auth, provider)).user };
+  } catch (error) {
+    if (error instanceof FirebaseError && error.code === 'auth/multi-factor-auth-required') {
+      return { mfaResolver: getMultiFactorResolver(auth, error as MultiFactorError) };
+    }
+    if (!hadBrowserSession) endBrowserSession();
     throw error;
   }
 }

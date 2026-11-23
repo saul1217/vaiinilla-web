@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,6 +11,11 @@ const apiMock = vi.hoisted(() => ({
   listOrders: vi.fn(),
   transitionOrder: vi.fn(),
   rejectOrder: vi.fn(),
+  operationalStatus: vi.fn(),
+  catalog: vi.fn(),
+  changeProductAvailability: vi.fn(),
+  schoolReservedDay: vi.fn(),
+  inventoryAlerts: vi.fn(),
 }));
 
 const sessionRole = vi.hoisted(() => ({ value: 'cocina' }));
@@ -69,7 +75,7 @@ function TestProvider({ children }: { children: ReactNode }) {
       mutations: { retry: false },
     },
   });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return <MemoryRouter><QueryClientProvider client={client}>{children}</QueryClientProvider></MemoryRouter>;
 }
 
 describe('tablero de Cocina', () => {
@@ -82,6 +88,8 @@ describe('tablero de Cocina', () => {
       estado: 'preparando',
       version: 3,
     });
+    apiMock.operationalStatus.mockResolvedValue({ modo_escuela: false });
+    apiMock.inventoryAlerts.mockResolvedValue({ agotados: [], para_manana: [], bajo_minimo: [] });
   });
 
   it.each(['cocina', 'admin'])('respeta el tema claro elegido por %s al entrar y salir', (role) => {
@@ -193,32 +201,75 @@ describe('tablero de Cocina', () => {
     expect(apiMock.transitionOrder).toHaveBeenCalledWith('tenant-token', 'otro-pedido', 'preparando', 5);
   });
 
-  it('marca como listo un pedido que estaba en preparación', async () => {
-    const preparingOrder: OrderDetail = {
-      ...pendingOrder,
-      estado: 'preparando',
-      version: 3,
-    };
-    apiMock.listOrders.mockResolvedValue({ orders: [preparingOrder], cursor: null });
-    apiMock.transitionOrder.mockResolvedValue({
-      ...preparingOrder,
-      estado: 'listo',
-      version: 4,
-    });
+  it('marca como listo un pedido que estaba en preparación después de 5 s, con la versión vigente', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const preparingOrder: OrderDetail = { ...pendingOrder, estado: 'preparando', version: 3 };
+      apiMock.listOrders.mockResolvedValue({ orders: [preparingOrder], cursor: null });
+      apiMock.transitionOrder.mockResolvedValue({ ...preparingOrder, estado: 'listo', version: 4 });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      render(<KitchenPage />, { wrapper: TestProvider });
+
+      await user.click(await screen.findByRole('button', { name: 'Marcar como listo' }));
+      // Durante la ventana para deshacer no se manda nada.
+      expect(await screen.findByText(/Pedido 42 listo · se manda en/)).toBeVisible();
+      expect(apiMock.transitionOrder).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(10_500);
+      await waitFor(() => expect(apiMock.transitionOrder).toHaveBeenCalledWith('tenant-token', pendingOrder.id, 'listo', 3));
+      expect(await screen.findByText('Pedido 42 marcado como listo.')).toBeVisible();
+      expect(screen.queryByRole('button', { name: /entregar|validar qr/i })).not.toBeInTheDocument();
+      expect(apiMock.transitionOrder.mock.calls.every((call) => call[2] !== 'entregado')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('«Deshacer» dentro de los 5 s no manda nada y regresa la comanda', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const preparingOrder: OrderDetail = { ...pendingOrder, estado: 'preparando', version: 3 };
+      apiMock.listOrders.mockResolvedValue({ orders: [preparingOrder], cursor: null });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      render(<KitchenPage />, { wrapper: TestProvider });
+
+      await user.click(await screen.findByRole('button', { name: 'Marcar como listo' }));
+      await user.click(await screen.findByRole('button', { name: 'Deshacer listo del pedido 42' }));
+      await vi.advanceTimersByTimeAsync(11_000);
+      expect(apiMock.transitionOrder).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Marcar como listo' })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('en una escuela ofrece «Para mañana» y con inventario avisa lo que se acabó', async () => {
+    apiMock.operationalStatus.mockResolvedValue({ modo_escuela: true });
+    apiMock.inventoryAlerts.mockResolvedValue({ agotados: [{ id: 1, nombre: 'Molletes', faltan: ['Bolillo'] }], para_manana: [], bajo_minimo: [] });
+    apiMock.schoolReservedDay.mockImplementation((_t: string, fecha: string) => Promise.resolve({
+      fecha, pedidos: 3, sin_servicio: null, productos: [{ producto_id: 9, nombre: 'Sándwich', cantidad: 3, pedidos: 3 }],
+    }));
     const user = userEvent.setup();
     render(<KitchenPage />, { wrapper: TestProvider });
 
-    await user.click(await screen.findByRole('button', { name: 'Marcar como listo' }));
+    expect(await screen.findByText('Se acabó: Bolillo')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Para mañana' }));
+    expect(await screen.findByText('3 apartados.')).toBeInTheDocument();
+    expect(screen.getByText('Sándwich')).toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(apiMock.transitionOrder).toHaveBeenCalledWith(
-      'tenant-token',
-      pendingOrder.id,
-      'listo',
-      3,
-    ));
-    expect(await screen.findByText('Pedido 42 marcado como listo.')).toBeVisible();
-    expect(screen.queryByRole('button', { name: /entregar|validar qr/i })).not.toBeInTheDocument();
-    expect(apiMock.transitionOrder.mock.calls.every((call) => call[2] !== 'entregado')).toBe(true);
+  it('«¿Qué se acabó?» apaga un producto y lo dice', async () => {
+    apiMock.catalog.mockResolvedValue({ categorias: [], productos: [{ id: 5, nombre: 'Molletes', disponible: true }, { id: 6, nombre: 'Chilaquiles', disponible: false }] });
+    apiMock.changeProductAvailability.mockResolvedValue({ id: 5, nombre: 'Molletes', disponible: false });
+    const user = userEvent.setup();
+    render(<KitchenPage />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: '¿Qué se acabó?' }));
+    const off = await screen.findByRole('switch', { name: 'Chilaquiles: se acabó' });
+    expect(off).toHaveAttribute('aria-checked', 'false');
+    await user.click(screen.getByRole('switch', { name: 'Molletes: se ofrece' }));
+    await waitFor(() => expect(apiMock.changeProductAvailability).toHaveBeenCalledWith('tenant-token', 5, false));
+    expect(await screen.findByText('Molletes ya no se ofrece en el menú ni en Caja.')).toBeInTheDocument();
   });
 
   it('identifica pedidos de mesa y no ofrece entrega', async () => {

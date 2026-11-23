@@ -24,6 +24,26 @@ export const WALLET_SEARCH_MAX = 80;
 /** Espera tras la última tecla antes de buscar, como Android (ReloadSearchDebounceMs). */
 export const WALLET_SEARCH_DEBOUNCE_MS = 350;
 
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/**
+ * Extrae el `usuario_id` (UUID) del QR personal del cliente:
+ * URL `/u/<uuid>`, esquema `vaiinilla:u:<uuid>` o UUID directo (pistola o cámara).
+ */
+export function parseWalletUserQr(raw: string): string | null {
+  const clean = raw.trim();
+  if (!clean) return null;
+  const direct = clean.match(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+  if (direct) return direct[1]!.toLowerCase();
+  const scheme = clean.match(/(?:\/u\/|vaiinilla:(?:\/\/)?u:)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+  if (scheme) return scheme[1]!.toLowerCase();
+  if (/^https?:\/\//i.test(clean)) {
+    const anyUuid = clean.match(UUID_PATTERN);
+    if (anyUuid) return anyUuid[0].toLowerCase();
+  }
+  return null;
+}
+
 /** El texto a buscar ya recortado, o null si todavía no alcanza para buscar. */
 export function searchQuery(text: string): string | null {
   const query = text.trim();

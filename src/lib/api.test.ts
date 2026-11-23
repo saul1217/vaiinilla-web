@@ -829,22 +829,30 @@ describe('Vaiinilla API client', () => {
     await expect(api.accountingReport('tenant-token', '2026-11-01', '2026-11-04')).resolves.toMatchObject({ resumen: { ventas: 100 } });
   });
 
-  it('envía la conversación al asistente de configuración', async () => {
+  it('envía la conversación al asistente de configuración como trabajo y espera su respuesta', async () => {
     const messages = [{ rol: 'dueno' as const, texto: 'Tengo una cafetería' }];
-    server.use(http.post(`${baseUrl}/establecimiento/asistente`, async ({ request }) => {
-      await expect(request.json()).resolves.toEqual({ mensajes: messages });
-      return HttpResponse.json({ data: { mensaje: '¿Qué horario manejas?', opciones: ['Mañana', 'Tarde'] }, meta: {}, error: null });
-    }));
+    server.use(
+      http.post(`${baseUrl}/establecimiento/asistente/trabajos`, async ({ request }) => {
+        await expect(request.json()).resolves.toEqual({ mensajes: messages });
+        return HttpResponse.json({ data: { trabajo_id: 'j1', estado: 'pensando' }, meta: {}, error: null }, { status: 202 });
+      }),
+      http.get(`${baseUrl}/establecimiento/asistente/trabajos/j1`, () =>
+        HttpResponse.json({ data: { trabajo_id: 'j1', estado: 'listo', respuesta: { mensaje: '¿Qué horario manejas?', opciones: ['Mañana', 'Tarde'] } }, meta: {}, error: null })),
+    );
     await expect(api.askStoreAssistant('tenant-token', messages)).resolves.toMatchObject({ mensaje: '¿Qué horario manejas?' });
   });
 
   it('manda los Excel del asistente en archivos', async () => {
     const messages = [{ rol: 'dueno' as const, texto: 'Mi inventario [excel1]' }];
     const files = [{ id: 'excel1', nombre: 'Inventario.xlsx', contenido: 'UEsDBA==' }];
-    server.use(http.post(`${baseUrl}/establecimiento/asistente`, async ({ request }) => {
-      await expect(request.json()).resolves.toEqual({ mensajes: messages, archivos: files });
-      return HttpResponse.json({ data: { mensaje: 'Leí tu Excel', opciones: [], propuesta: null, sigue: false, quedan_mensajes: 58 }, meta: {}, error: null });
-    }));
+    server.use(
+      http.post(`${baseUrl}/establecimiento/asistente/trabajos`, async ({ request }) => {
+        await expect(request.json()).resolves.toEqual({ mensajes: messages, archivos: files });
+        return HttpResponse.json({ data: { trabajo_id: 'j2', estado: 'pensando' }, meta: {}, error: null }, { status: 202 });
+      }),
+      http.get(`${baseUrl}/establecimiento/asistente/trabajos/j2`, () =>
+        HttpResponse.json({ data: { trabajo_id: 'j2', estado: 'listo', respuesta: { mensaje: 'Leí tu Excel', opciones: [], propuesta: null, sigue: false, quedan_mensajes: 58 } }, meta: {}, error: null })),
+    );
     await expect(api.askStoreAssistant('tenant-token', messages, files)).resolves.toMatchObject({ quedan_mensajes: 58 });
   });
 
@@ -891,4 +899,43 @@ describe('Vaiinilla API client', () => {
     );
     await expect(api.setInventoryKitchenPermission('tenant-token', true)).resolves.toEqual({ cocina_edita: true });
   });
+
+  it('consulta, aprueba y revoca la tarjeta de un negocio con motivo e Idempotency-Key', async () => {
+    const id = '3d196e4d-9082-4b5d-aa7a-65f0e21ac654';
+    const base = `${baseUrl}/plataforma/establecimientos/${id}/stripe/aprobacion`;
+    const aprobacion = { estado: 'aprobada', vigente: true, origen: 'plataforma', aprobada_en: '2026-11-18T10:00:00Z', revocada_en: null };
+    const posts: { path: string; key: string | null; body: unknown }[] = [];
+    server.use(
+      http.get(base, ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer platform-token');
+        return HttpResponse.json({
+          data: { establecimiento_id: id, tipo: 'cafeteria', aprobable: true, aprobacion, stripe: null, historial: [] },
+          meta: {},
+          error: null,
+        });
+      }),
+      http.post(base, async ({ request }) => {
+        posts.push({ path: 'aprobar', key: request.headers.get('Idempotency-Key'), body: await request.json() });
+        return HttpResponse.json({ data: { establecimiento_id: id, cambio: true, aprobacion, stripe: null }, meta: {}, error: null });
+      }),
+      http.post(`${base}/revocar`, async ({ request }) => {
+        posts.push({ path: 'revocar', key: request.headers.get('Idempotency-Key'), body: await request.json() });
+        return HttpResponse.json(
+          { data: null, meta: {}, error: { code: 'STRIPE_PLATFORM_APPROVAL_REQUIRED', message: 'x' } },
+          { status: 409 },
+        );
+      }),
+    );
+
+    await expect(api.platformCardApproval('platform-token', id)).resolves.toMatchObject({ aprobable: true, aprobacion: { vigente: true } });
+    await expect(api.decidePlatformCardApproval('platform-token', id, 'aprobar', 'Alta', 'key-1')).resolves.toMatchObject({ cambio: true });
+    const revocar = api.decidePlatformCardApproval('platform-token', id, 'revocar', 'Baja', 'key-2');
+    await expect(revocar).rejects.toBeInstanceOf(VaiinillaApiError);
+    await expect(revocar).rejects.toMatchObject({ status: 409, code: 'STRIPE_PLATFORM_APPROVAL_REQUIRED' });
+    expect(posts).toEqual([
+      { path: 'aprobar', key: 'key-1', body: { motivo: 'Alta' } },
+      { path: 'revocar', key: 'key-2', body: { motivo: 'Baja' } },
+    ]);
+  });
 });
+

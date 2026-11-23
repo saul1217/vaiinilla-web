@@ -16,6 +16,9 @@ const apiMock = vi.hoisted(() => ({
   deleteProductImage: vi.fn(),
   listManagedSpaces: vi.fn(),
   cardPayments: vi.fn(),
+  suggestAllergens: vi.fn(),
+  setProductArchived: vi.fn(),
+  archiveCategory: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
@@ -198,6 +201,75 @@ describe('administración del menú', () => {
     expect(await screen.findByRole('heading', { name: 'No hay coincidencias' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Limpiar búsqueda y filtros' }));
     expect(await screen.findByRole('heading', { name: 'Chocolate frío' })).toBeVisible();
+  });
+
+  it('sugiere alérgenos con nombre e ingredientes y agrega solo los que faltan', async () => {
+    apiMock.suggestAllergens.mockReset().mockResolvedValue({ alergenos: ['lacteos', 'gluten', 'soya'], motivo: 'Lleva leche y galleta.' });
+    apiMock.updateProduct.mockResolvedValue(product);
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+    await screen.findByRole('heading', { name: 'Chocolate frío' });
+    await user.click(screen.getByRole('button', { name: 'Editar Chocolate frío' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Ingredientes'), 'leche, galleta');
+    await user.click(within(dialog).getByRole('button', { name: /Sugerir alérgenos/ }));
+
+    expect(await within(dialog).findByText('Lleva leche y galleta. Revísalo antes de guardar.')).toBeInTheDocument();
+    expect(apiMock.suggestAllergens).toHaveBeenCalledWith('tenant-token', expect.objectContaining({ nombre: 'Chocolate frío', ingredientes: 'leche, galleta', productoId: 101 }));
+    await user.click(within(dialog).getByRole('button', { name: '+ Gluten' }));
+    expect(within(dialog).getByLabelText('Alérgenos')).toHaveValue('Leche, Gluten');
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar todos' }));
+    expect(within(dialog).getByLabelText('Alérgenos')).toHaveValue('Leche, Gluten, Lácteos, Soya');
+    expect(within(dialog).getByText('Ya marcaste todo lo que sugirió.')).toBeInTheDocument();
+  });
+
+  it('archiva un producto desde su edición, lo saca del menú y lo deja en Archivados para restaurarlo', async () => {
+    const archived = { ...product, id: 202, nombre: 'Té viejo', archivado: true };
+    apiMock.catalog.mockResolvedValue({ categorias: [{ id: 10, nombre: 'Bebidas', orden: 0 }], productos: [product, archived] });
+    apiMock.setProductArchived.mockReset().mockResolvedValue(product);
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+
+    await screen.findByRole('heading', { name: 'Chocolate frío' });
+    expect(apiMock.catalog).toHaveBeenCalledWith('tenant-token', { includeArchived: true });
+    expect(screen.queryByRole('heading', { name: 'Té viejo' })).not.toBeInTheDocument();
+    expect(screen.getByText(/1 producto · 0 ocultos/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Editar Chocolate frío' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Archivar/ }));
+    const confirm = await screen.findByRole('dialog', { name: '¿Archivar Chocolate frío?' });
+    await user.click(within(confirm).getByRole('button', { name: 'Archivar' }));
+    await waitFor(() => expect(apiMock.setProductArchived).toHaveBeenCalledWith('tenant-token', 101, true));
+    expect(await screen.findByText('Chocolate frío quedó archivado. Lo encuentras en Archivados.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Archivados \(1\)/ }));
+    const row = (await screen.findByText('Té viejo')).closest('li')!;
+    await user.click(within(row).getByRole('button', { name: /Restaurar/ }));
+    await waitFor(() => expect(apiMock.setProductArchived).toHaveBeenCalledWith('tenant-token', 202, false));
+    expect(await screen.findByText('Té viejo volvió al menú.')).toBeInTheDocument();
+  });
+
+  it('una categoría solo se archiva sin productos activos', async () => {
+    apiMock.catalog.mockResolvedValue({
+      categorias: [{ id: 10, nombre: 'Bebidas', orden: 0 }, { id: 11, nombre: 'Temporada', orden: 1 }],
+      productos: [product],
+    });
+    apiMock.archiveCategory.mockReset().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<MenuPage />, { wrapper: TestProvider });
+    await screen.findByRole('heading', { name: 'Chocolate frío' });
+
+    await user.click(screen.getAllByRole('button', { name: 'Editar categoría Bebidas' })[0]!);
+    let dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: /Archivar categoría/ })).toBeDisabled();
+    expect(within(dialog).getByText(/Tiene 1 producto activo/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+
+    await user.click(screen.getAllByRole('button', { name: 'Editar categoría Temporada' })[0]!);
+    dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /Archivar categoría/ }));
+    await waitFor(() => expect(apiMock.archiveCategory).toHaveBeenCalledWith('tenant-token', 11));
+    expect(await screen.findByText('Categoría Temporada archivada.')).toBeInTheDocument();
   });
 
   it('abre edición con los datos actuales y guarda el payload completo existente', async () => {

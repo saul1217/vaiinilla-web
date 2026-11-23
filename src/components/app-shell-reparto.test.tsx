@@ -3,6 +3,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { TenantShell } from './app-shell';
 
+// El enlace «Pistas» pregunta el tipo de negocio; aquí no es lo que se prueba.
+vi.mock('../lib/bowling-admin-feature', () => ({ BOWLING_ADMIN_ENABLED: false }));
+
 // Con la bandera de reparto prendida: admin y Caja lo ven; mesero y Cocina no.
 vi.mock('../lib/reparto-feature', () => ({ REPARTO_ENABLED: true }));
 
@@ -23,6 +26,16 @@ describe('navegación con reparto prendido', () => {
     renderShell();
     const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
     expect(within(mobile).getByRole('link', { name: 'Reparto' })).toHaveAttribute('href', '/app/reparto');
+  });
+
+  it('con más de cuatro destinos, Caja deja sus tres primeros en la barra y el resto en «Más»', () => {
+    session.role = 'cajero';
+    renderShell();
+    const mobile = screen.getByRole('navigation', { name: 'Navegación móvil' });
+    expect(within(mobile).getAllByRole('link').map((link) => link.textContent)).toEqual(['Caja', 'Saldo', 'Reparto']);
+    fireEvent.click(within(mobile).getByRole('button', { name: 'Más' }));
+    const more = screen.getByRole('navigation', { name: 'Más destinos' });
+    expect(within(more).getAllByRole('link').map((link) => link.textContent)).toEqual(['Filas en vivo', 'Agenda de reservas', 'Mi turno']);
   });
 
   it('admin encuentra «Reparto y encargos» en «Más»', () => {

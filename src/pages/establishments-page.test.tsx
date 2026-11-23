@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -17,6 +17,8 @@ const apiMock = vi.hoisted(() => ({
   updateEstablishment: vi.fn(),
   changeEstablishmentStatus: vi.fn(),
   inviteFirstAdmin: vi.fn(),
+  platformCardApproval: vi.fn(),
+  decidePlatformCardApproval: vi.fn(),
 }));
 
 const sessionMock = vi.hoisted(() => ({
@@ -107,9 +109,11 @@ describe('onboarding Stripe en Super Admin', () => {
     });
 
     const actor = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     renderPage();
 
-    await actor.click(await screen.findByRole('button', { name: 'Conectar Stripe' }));
+    await actor.click(await screen.findByRole('button', { name: 'Generar link para el dueño' }));
 
     await waitFor(() =>
       expect(apiMock.createPlatformStripeOnboarding).toHaveBeenCalledWith(
@@ -119,15 +123,21 @@ describe('onboarding Stripe en Super Admin', () => {
       ),
     );
     expect(windowOpenMock).toHaveBeenCalledWith(accountLinkUrl, '_blank', 'noopener,noreferrer');
-    expect(await screen.findByRole('link', { name: /Abrir Account Link/ })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: /Abrir enlace para el dueño/ })).toHaveAttribute(
       'href',
       accountLinkUrl,
     );
+    await actor.click(screen.getByRole('button', { name: 'Copiar link' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(accountLinkUrl));
+    expect(await screen.findByRole('button', { name: 'Link copiado' })).toBeVisible();
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(apiMock.getPlatformStripeConfiguration).toHaveBeenCalledWith('platform-token', establishment.id));
   });
 
   it('solo muestra activar cuando Stripe ya confirmó cargos y transferencias', async () => {
     const readyEstablishment: PlatformEstablishment = {
       ...establishment,
+      tipo: 'cafeteria',
       stripe: {
         stripe_account_id: 'acct_test_demo',
         stripe_enabled: false,
@@ -148,10 +158,18 @@ describe('onboarding Stripe en Super Admin', () => {
       payouts_enabled: true,
       estado_onboarding: 'habilitada',
     });
+    apiMock.platformCardApproval.mockResolvedValue({
+      establecimiento_id: establishment.id,
+      tipo: 'cafeteria',
+      aprobable: true,
+      aprobacion: { estado: 'aprobada', vigente: true },
+      stripe: null,
+      historial: [],
+    });
 
     const actor = userEvent.setup();
     renderPage(readyEstablishment);
-    await actor.click(await screen.findByRole('button', { name: 'Activar Stripe' }));
+    await actor.click(await screen.findByRole('button', { name: 'Activar tarjeta' }));
 
     await waitFor(() =>
       expect(apiMock.configurePlatformStripe).toHaveBeenCalledWith(
@@ -161,6 +179,31 @@ describe('onboarding Stripe en Super Admin', () => {
         expect.any(String),
       ),
     );
+  });
+
+  it('en un restaurante no ofrece activar Stripe: la tarjeta solo va en cafeterías (back #268)', async () => {
+    renderPage({
+      ...establishment,
+      nombre: 'Restaurante Demo',
+      tipo: 'restaurante',
+      stripe: {
+        stripe_account_id: 'acct_test_demo',
+        stripe_enabled: false,
+        estado_onboarding: 'habilitada',
+        charges_enabled: true,
+        payouts_enabled: true,
+        details_submitted: true,
+        requisitos_actuales: {},
+        capacidades: { card_payments: 'active', transfers: 'active' },
+        razon_deshabilitacion: null,
+        livemode: false,
+      },
+    });
+
+    expect(await screen.findByText('Tarjeta solo en cafeterías')).toBeVisible();
+    expect(screen.getByText(/solo se activan en cafeterías/i)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Activar tarjeta' })).not.toBeInTheDocument();
+    expect(apiMock.configurePlatformStripe).not.toHaveBeenCalled();
   });
 
   it('mantiene En revisión sin permitir activar localmente', async () => {
@@ -180,13 +223,42 @@ describe('onboarding Stripe en Super Admin', () => {
       },
     });
 
-    expect(await screen.findByText('En revisión')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Activar Stripe' })).not.toBeInTheDocument();
+    expect(await screen.findAllByText('En revisión')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Activar tarjeta' })).not.toBeInTheDocument();
+  });
+
+  it('muestra la etapa compacta con datos de la lista y el paso siguiente para el dueño', async () => {
+    renderPage({
+      ...establishment,
+      stripe: {
+        stripe_account_id: 'acct_test_demo', stripe_enabled: false, estado_onboarding: 'en_revision',
+        charges_enabled: false, payouts_enabled: false, details_submitted: true,
+        requisitos_actuales: {}, capacidades: {}, razon_deshabilitacion: null, livemode: false,
+      },
+    });
+    expect(await screen.findByLabelText('Estado de tarjeta: En revisión')).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Cobro con tarjeta' })).toBeVisible();
+    expect(apiMock.getPlatformStripeConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('al recuperar sesión vuelve a consultar Stripe y la aprobación', async () => {
+    window.sessionStorage.setItem('vaiinilla_platform_stripe_return', JSON.stringify({ establishmentId: establishment.id }));
+    apiMock.platformCardApproval.mockResolvedValue({
+      establecimiento_id: establishment.id, tipo: 'cafeteria', aprobable: true,
+      aprobacion: { estado: null, vigente: false }, stripe: null, historial: [],
+    });
+    renderPage({ ...establishment, tipo: 'cafeteria' });
+    await screen.findByText(/Sesión recuperada/);
+    await waitFor(() => {
+      expect(apiMock.getPlatformStripeConfiguration).toHaveBeenCalledWith('platform-token', establishment.id);
+      expect(apiMock.platformCardApproval).toHaveBeenCalled();
+    });
   });
 
   it('muestra el conflicto del backend si la cuenta deja de estar lista al activar', async () => {
     const readyEstablishment: PlatformEstablishment = {
       ...establishment,
+      tipo: 'cafeteria',
       stripe: {
         stripe_account_id: 'acct_test_demo',
         stripe_enabled: false,
@@ -206,13 +278,21 @@ describe('onboarding Stripe en Super Admin', () => {
         message: 'La cuenta conectada todavía no está habilitada para cobrar.',
       }),
     );
+    apiMock.platformCardApproval.mockResolvedValue({
+      establecimiento_id: establishment.id,
+      tipo: 'cafeteria',
+      aprobable: true,
+      aprobacion: { estado: 'aprobada', vigente: true },
+      stripe: null,
+      historial: [],
+    });
 
     const actor = userEvent.setup();
     renderPage(readyEstablishment);
-    await actor.click(await screen.findByRole('button', { name: 'Activar Stripe' }));
+    await actor.click(await screen.findByRole('button', { name: 'Activar tarjeta' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'La cuenta conectada todavía no está habilitada para cobrar.',
+      'La cuenta de Stripe todavía no está lista para cobrar. El dueño debe completar sus datos y esperar la confirmación de Stripe.',
     );
   });
 
@@ -226,7 +306,7 @@ describe('onboarding Stripe en Super Admin', () => {
 
     const actor = userEvent.setup();
     renderPage(establishment, true);
-    await actor.click(await screen.findByRole('button', { name: 'Conectar Stripe' }));
+    await actor.click(await screen.findByRole('button', { name: 'Generar link para el dueño' }));
 
     await waitFor(() => expect(sessionMock.clearPlatform).toHaveBeenCalled());
     expect(screen.getByTestId('location')).toHaveTextContent('/plataforma/acceso');
@@ -264,5 +344,169 @@ describe('crear establecimiento en Super Admin', () => {
     expect(input).toMatchObject({ nombre: 'Pádel Norte', slug: 'padel-norte', tipo: 'padel' });
     expect(input).not.toHaveProperty('identificador_cliente_etiqueta');
     expect(input).not.toHaveProperty('identificador_cliente_obligatorio');
+  });
+});
+
+describe('aprobación de tarjeta en Super Admin (cafeterías)', () => {
+  const cafeteria: PlatformEstablishment = { ...establishment, tipo: 'cafeteria' };
+  const sinAprobar = { estado: null, vigente: false, origen: null, aprobada_en: null, revocada_en: null };
+  const aprobada = {
+    estado: 'aprobada' as const,
+    vigente: true,
+    origen: 'plataforma' as const,
+    aprobada_en: '2026-11-18T10:00:00Z',
+    revocada_en: null,
+  };
+  const revocada = { ...aprobada, estado: 'revocada' as const, vigente: false, revocada_en: '2026-11-18T12:00:00Z' };
+  const consulta = (aprobacion: typeof sinAprobar | typeof aprobada | typeof revocada, historial: unknown[] = []) => ({
+    establecimiento_id: cafeteria.id,
+    tipo: 'cafeteria',
+    aprobable: true,
+    aprobacion,
+    stripe: null,
+    historial,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMock.getPlatformStripeConfiguration.mockResolvedValue(null);
+  });
+
+  it('solo las cafeterías consultan la aprobación', async () => {
+    renderPage({ ...establishment, tipo: 'restaurante' });
+    await screen.findByText('Cafetería Demo A');
+    expect(screen.queryByRole('region', { name: 'Aprobación de tarjeta' })).not.toBeInTheDocument();
+    expect(apiMock.platformCardApproval).not.toHaveBeenCalled();
+  });
+
+  it('explica por qué no se puede aprobar una cafetería suspendida', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(sinAprobar));
+    renderPage({ ...cafeteria, estado: 'suspendido' });
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    expect(await within(panel).findByRole('button', { name: /aprobar tarjeta/i })).toBeDisabled();
+    expect(within(panel).getByRole('status')).toHaveTextContent('Reactiva el establecimiento para poder aprobar');
+  });
+
+  it('avisa antes de aprobar cuando pasar comisión está encendido', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(sinAprobar));
+    renderPage({ ...cafeteria, stripe: { ...({
+      stripe_account_id: 'acct_test_demo', stripe_enabled: false, estado_onboarding: 'habilitada' as const,
+      charges_enabled: true, payouts_enabled: true, details_submitted: true, requisitos_actuales: {},
+      capacidades: {}, razon_deshabilitacion: null, livemode: false, pasar_comision_al_cliente: true,
+    }) } });
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    expect(await within(panel).findByText(/el dueño debe apagar «pasar comisión al cliente»/i)).toBeVisible();
+  });
+
+  it('explica el conflicto de comisión si el estado cambió antes de aprobar', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(sinAprobar));
+    apiMock.decidePlatformCardApproval.mockRejectedValue(new VaiinillaApiError(409, {
+      code: 'STRIPE_PASS_FEE_ON', message: 'conflicto',
+    }));
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    await user.click(await within(panel).findByRole('button', { name: /aprobar tarjeta/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/motivo/i), 'Alta autorizada');
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/debe apagarlo primero/i);
+  });
+
+  it('aprueba con motivo obligatorio e Idempotency-Key, y muestra el estado nuevo', async () => {
+    apiMock.platformCardApproval
+      .mockResolvedValueOnce(consulta(sinAprobar))
+      .mockResolvedValue(consulta(aprobada, [{ id: '1', accion: 'aprobar', motivo: 'Alta del lunes', creado_en: '2026-11-18T10:00:00Z' }]));
+    apiMock.decidePlatformCardApproval.mockResolvedValue({ establecimiento_id: cafeteria.id, cambio: true, aprobacion: aprobada, stripe: null });
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    expect(await within(panel).findByText('Pendiente de aprobación')).toBeVisible();
+    await user.click(within(panel).getByRole('button', { name: /aprobar tarjeta/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText(/motivo/i)).toHaveFocus();
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+    expect(await within(dialog).findByText(/escribe el motivo/i)).toBeVisible();
+    expect(apiMock.decidePlatformCardApproval).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText(/motivo/i), '  Alta del lunes  ');
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+
+    await waitFor(() => expect(apiMock.decidePlatformCardApproval).toHaveBeenCalledTimes(1));
+    const [token, id, decision, motivo, key] = apiMock.decidePlatformCardApproval.mock.calls[0] as string[];
+    expect([token, id, decision, motivo]).toEqual(['platform-token', cafeteria.id, 'aprobar', 'Alta del lunes']);
+    expect(key).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(await within(panel).findByText('Aprobada')).toBeVisible();
+    expect(within(panel).getByText('Historial (1)')).toBeInTheDocument();
+    expect(await screen.findByText(/tarjeta aprobada/i)).toBeVisible();
+  });
+
+  it('cancelar la revocación no llama al back', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(aprobada));
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    await user.click(await within(panel).findByRole('button', { name: /revocar aprobación/i }));
+    const dialog = await screen.findByRole('dialog', { name: /revocar la aprobación de tarjeta/i });
+    expect(within(dialog).getByText(/los pagos ya iniciados no se cancelan/i)).toBeVisible();
+    await user.click(within(dialog).getByRole('button', { name: 'Volver' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(apiMock.decidePlatformCardApproval).not.toHaveBeenCalled();
+  });
+
+  it('revoca tras confirmar, vuelve a consultar y deja visible el estado revocado', async () => {
+    apiMock.platformCardApproval.mockResolvedValueOnce(consulta(aprobada)).mockResolvedValue(consulta(revocada));
+    apiMock.decidePlatformCardApproval.mockResolvedValue({ establecimiento_id: cafeteria.id, cambio: true, aprobacion: revocada, stripe: null });
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    await user.click(await within(panel).findByRole('button', { name: /revocar aprobación/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/motivo/i), 'Contracargos');
+    await user.click(within(dialog).getByRole('button', { name: /revocar aprobación/i }));
+
+    await waitFor(() =>
+      expect(apiMock.decidePlatformCardApproval).toHaveBeenCalledWith('platform-token', cafeteria.id, 'revocar', 'Contracargos', expect.any(String)),
+    );
+    expect(await within(panel).findByText('Revocada')).toBeVisible();
+    expect(apiMock.platformCardApproval).toHaveBeenCalledTimes(2);
+    // El listado también se vuelve a pedir: revocar apaga stripe_enabled.
+    await waitFor(() => expect(apiMock.listEstablishments.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('un 409 se explica por código, conserva el estado y el reintento repite la llave', async () => {
+    apiMock.platformCardApproval.mockResolvedValue(consulta(sinAprobar));
+    apiMock.decidePlatformCardApproval.mockRejectedValue(
+      new VaiinillaApiError(409, { code: 'STRIPE_APPROVAL_CAFETERIA_ONLY', message: 'x' }),
+    );
+    const user = userEvent.setup();
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    await user.click(await within(panel).findByRole('button', { name: /aprobar tarjeta/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/motivo/i), 'Alta');
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/solo están disponibles en cafeterías/i);
+    await user.click(within(dialog).getByRole('button', { name: /aprobar tarjeta/i }));
+    await waitFor(() => expect(apiMock.decidePlatformCardApproval).toHaveBeenCalledTimes(2));
+    const keys = apiMock.decidePlatformCardApproval.mock.calls.map((call) => call[4] as string);
+    expect(keys[0]).toBe(keys[1]);
+    expect(within(panel).getByText('Pendiente de aprobación')).toBeVisible();
+  });
+
+  it('un 403 al consultar se muestra sin romper la ficha', async () => {
+    apiMock.platformCardApproval.mockRejectedValue(new VaiinillaApiError(403, { code: 'MFA_REQUIRED', message: 'x' }));
+    renderPage(cafeteria);
+
+    const panel = await screen.findByRole('region', { name: 'Aprobación de tarjeta' });
+    expect(await within(panel).findByRole('alert')).toHaveTextContent(/segundo factor/i);
+    expect(screen.getByRole('button', { name: /configurar/i })).toBeVisible();
   });
 });

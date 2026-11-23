@@ -135,8 +135,85 @@ export interface CashSession {
   cierre_automatico: boolean;
 }
 
+/** Un renglón del cajón (`GET /sesiones-caja/:id/movimientos`). Un cobro llega ya sin el cambio. */
+export interface CashDrawerMovement {
+  id: string;
+  /** apertura, cobro, propina, wallet_recharge, ajuste_entrada o ajuste_salida. */
+  tipo: string;
+  /** true solo en las salidas: a mano o por una devolución. */
+  sale: boolean;
+  monto: string;
+  motivo: string | null;
+  registrado_por: { nombre: string } | null;
+  pedido: { id: string; folio: number | null; espacio: string | null } | null;
+  devolucion_id: string | null;
+  creado_en: string;
+}
+
+export interface CashDrawerSummary {
+  fondo: string;
+  cobros_efectivo: string;
+  propinas: string;
+  recargas: string;
+  entradas: string;
+  salidas: string;
+  devoluciones_efectivo: string;
+  efectivo_esperado: string;
+  /** Lo cobrado con terminal en la sesión: no entra al cajón. Un back anterior no lo manda. */
+  cobros_tarjeta?: string;
+}
+
+export interface CashDrawerReport {
+  resumen: CashDrawerSummary;
+  movimientos: CashDrawerMovement[];
+}
+
+/** El último cierre (`GET /sesiones-caja/ultimo-cierre`): la sesión cerrada con su arqueo. */
+export interface CashLastClose extends CashSession {
+  efectivo_esperado?: string | null;
+  diferencia?: string;
+  ventas_efectivo?: string | null;
+}
+
+/** «Mi turno» (`GET /reportes/mi-turno`): lo de quien consulta, hoy y de lunes a domingo. */
+export interface MyShift {
+  hoy: {
+    propinas: string;
+    entregas: number;
+    mesas: number;
+    llamadas_atendidas: number;
+    /** Minutos promedio entre que llaman al mesero y alguien toma la llamada; null sin llamadas. */
+    respuesta_min: string | null;
+  };
+  semana: { propinas: string; por_dia: { fecha: string; propinas: string }[] };
+}
+
+/** Un insumo en el aviso de Cocina (GET /inventario/avisos). */
+export interface InventoryAlertSupply {
+  id: number;
+  nombre: string;
+  unidad: string;
+  existencia: number | string;
+  minimo?: number | string | null;
+  consumo_diario?: number | string | null;
+  proveedor?: { nombre?: string | null; telefono?: string | null } | null;
+}
+
+/** GET /inventario/avisos: lo agotado, lo que no alcanza para mañana y lo bajo el mínimo. */
+export interface InventoryAlerts {
+  dias_consumo?: number;
+  agotados: { id: number; nombre: string; faltan: string[] }[];
+  para_manana: InventoryAlertSupply[];
+  bajo_minimo: InventoryAlertSupply[];
+  total?: number;
+}
+
 export interface OperationalStatus {
   recibiendo_pedidos: boolean;
+  /** El negocio opera como escuela (padres e hijos): Cocina ve «Para mañana». Un back anterior no lo manda. */
+  modo_escuela?: boolean;
+  /** Caja pide la prueba del cliente para cobrar lo pedido en la app (migración 225). */
+  cobro_requiere_codigo?: boolean;
   local_sin_conexion?: boolean;
   sesion_caja_abierta: boolean;
   caja_en_linea: boolean;
@@ -149,7 +226,16 @@ export interface OperationalStatus {
   dentro_de_franja?: boolean;
   /** false = el personal entrega en el espacio sin pedir el QR. Un backend anterior no lo manda. */
   entrega_requiere_qr?: boolean;
+  /** Caja prepara los productos de la estación `caja` y los marca listos. Un backend anterior no lo manda. */
+  barra_prepara?: boolean;
+  /** false = el negocio no tiene cocina (lo prepara la barra). Un backend anterior no lo manda. */
+  tiene_cocina?: boolean;
+  /** Qué pide Caja para entregar. Un backend anterior no lo manda. */
+  validacion_entrega?: DeliveryValidation;
 }
+
+/** Cómo valida Caja la entrega de un pedido para llevar (migración 227 del back). */
+export type DeliveryValidation = 'qr_o_codigo' | 'qr' | 'codigo' | 'ninguna';
 
 export interface OrderSpace {
   id: number;
@@ -163,11 +249,13 @@ export interface OrderItemOption {
   precio_extra: string;
 }
 
+export type PreparationStation = 'cocina' | 'caja';
+
 export interface OrderItem {
   id: number;
   producto_id: number;
   nombre_producto: string;
-  estacion_preparacion: 'cocina' | 'caja';
+  estacion_preparacion: PreparationStation;
   cantidad: number;
   precio_digital_unitario: string;
   subtotal: string;
@@ -176,6 +264,12 @@ export interface OrderItem {
   notas?: string | null;
   /** Rechazo por artículo: ya no cuenta en el total. */
   rechazo?: { motivo: string; monto: string } | null;
+}
+
+export interface OrderLine {
+  id: number;
+  nombre: string;
+  express: boolean;
 }
 
 export interface OrderDetail {
@@ -189,10 +283,14 @@ export interface OrderDetail {
   sesion_espacio_id?: string | null;
   sesion_espacio_estado?: 'abierta' | 'cerrada' | null;
   espacio: OrderSpace | null;
+  /** Dónde se forma el cliente para recogerlo (migración 222). Sin el back nuevo no viene. */
+  fila?: OrderLine | null;
   subtotal: string;
   ahorro_combinado: string;
   cashback_otorgado: string;
   total: string;
+  /** Dónde nació el pedido: la app del cliente, el mostrador o una tablet VILLO. Un back anterior no lo manda. */
+  origen?: 'app' | 'mostrador' | 'villo' | null;
   /** Importes oficiales derivados en backend del ledger de pagos y reembolsos. */
   monto_pagado?: string;
   saldo_pendiente?: string;
@@ -212,6 +310,17 @@ export interface OrderDetail {
   motivo_pendiente_operativo?: 'caja_inactiva' | 'cocina_inactiva' | null;
   /** Drive-thru: cuándo el cliente avisó que llegó por su pedido; null si no ha avisado. */
   llegada_en?: string | null;
+  /** Cuándo entró el dinero; null mientras sigue por cobrar. Un back anterior no lo manda. */
+  cobrado_en?: string | null;
+  /** Encargos y pedidos de la semana: día (YYYY-MM-DD) y franja ("13:00-14:00") de entrega. */
+  fecha_entrega?: string | null;
+  franja_entrega?: string | null;
+  /** Cuándo quedó listo: a esa hora le llegó el aviso al cliente. */
+  listo_en?: string | null;
+  /** Con la barra preparando, las estaciones que todavía no sellan su parte. */
+  estaciones_pendientes?: PreparationStation[];
+  /** «Pasa por él»: el cliente recoge en la barra aunque pidió desde una mesa. */
+  recoge_en_barra?: boolean;
   /** Compra sin cuenta: pedido de un invitado (solo dio su nombre). */
   invitado?: boolean;
 }
@@ -536,6 +645,16 @@ export interface BusinessSettings {
   /** Logo del negocio (carrito y seguimiento en la app). Se cambia con su propia ruta. */
   logo_url?: string | null;
   tipos_disponibles: string[];
+  /** Sin «pedir sin cuenta» en este negocio (migración 228). null o ausente: el back no la tiene. */
+  cuenta_obligatoria?: boolean | null;
+  /** Aviso en Inicio de pedidos pagados sin entregar (migración 228). null o ausente: el back no lo tiene. */
+  alerta_retraso_activa?: boolean | null;
+  /** Minutos para avisar de un pedido sin nada de cocina (1 a 120, 2 por defecto). */
+  alerta_retraso_sin_cocina_min?: number | null;
+  /** Minutos para avisar de un pedido con algo de cocina (1 a 240, 5 por defecto). */
+  alerta_retraso_cocina_min?: number | null;
+  /** Caja pide el QR, el código o la credencial del cliente para cobrar lo pedido en la app (migración 225). Un back anterior no lo manda. */
+  cobro_requiere_codigo?: boolean;
   /** Padres e hijos: solo con true se muestra el admin de Escuela. Un backend anterior no lo manda. */
   modo_escuela?: boolean;
   /** Código de 6 caracteres para unirse a la escuela; null sin código. */
@@ -549,6 +668,124 @@ export interface BusinessSettings {
   /** "HH:MM" o null (sin hora). */
   hora_corte_pedido?: string | null;
   hora_corte_cancelacion?: string | null;
+  /** Operación de Caja y Cocina. */
+  barra_prepara?: boolean;
+  /** false = sin cocina: lo prepara la barra. Un backend anterior no lo manda. */
+  tiene_cocina?: boolean;
+  /** Cómo valida Caja la entrega. Un backend anterior no lo manda. */
+  validacion_entrega?: DeliveryValidation;
+  /** Vaiinilla fijó el tipo de negocio: no se puede cambiar aquí. Un backend anterior no lo manda. */
+  tipo_bloqueado?: boolean;
+  caja_entrega_en_espacio?: boolean;
+  entrega_en_espacio?: 'mesa' | 'barra' | 'ambas';
+  cocina_prepara_sin_cobrar?: boolean;
+  permite_pago_en_caja?: boolean;
+  fondo_sugerido?: string | null;
+  hora_inicio_dia?: string;
+  /** Reparto a domicilio y encargos con fecha. */
+  reparto_activo?: boolean;
+  reparto_costo?: string | null;
+  reparto_minimo?: string | null;
+  reparto_radio_km?: string | null;
+  permite_contra_entrega?: boolean;
+  encargos_requieren_aceptar?: boolean;
+  encargos_minutos_aceptar?: number | null;
+  anticipo_porcentaje?: number | null;
+  datos_transferencia?: string | null;
+  telefono_contacto?: string | null;
+  /** Filas para recoger (migración 222). Un backend anterior no los manda. */
+  reparto_filas?: 'lugar' | 'turno' | null;
+  fila_express_espacio_id?: number | null;
+  fila_express_hora_corte?: string | null;
+}
+
+export interface LineCounts {
+  por_cobrar: number;
+  en_preparacion: number;
+  listos: number;
+  entregados: number;
+  no_recogidos: number;
+}
+
+export interface LiveLine extends LineCounts {
+  id: number;
+  nombre: string;
+  express: boolean;
+}
+
+export interface LiveStaffRow {
+  usuario_id: string;
+  rol: 'cajero' | 'mesero' | 'cocina';
+  nombre: string | null;
+  entregados: number;
+  listos: number;
+  no_recogidos: number;
+  ultimo_movimiento: string | null;
+}
+
+/** GET /reportes/filas-en-vivo. */
+export interface LinesLiveBoard {
+  fecha_operativa: string;
+  reparto_filas: 'lugar' | 'turno';
+  antes_del_corte: boolean;
+  filas: LiveLine[];
+  sin_fila: LineCounts;
+  personal: LiveStaffRow[];
+}
+
+export interface WalletAdjustment {
+  usuario_id: string;
+  movimiento_id: string;
+  saldo_nuevo: string;
+  motivo: string;
+}
+
+export interface StaffShiftRow {
+  usuario_id: string;
+  nombre?: string | null;
+  rol?: string | null;
+  /** Pedidos que entregó hoy. */
+  entregas?: number;
+  /** Mesas distintas que atendió. */
+  mesas?: number;
+  /** "12.50" */
+  propinas?: string;
+  llamadas_atendidas?: number;
+  /** Minutos promedio en tomar una llamada de mesa; null sin llamadas. */
+  respuesta_min?: string | null;
+  [key: string]: unknown;
+}
+
+export interface StaffShiftsReport {
+  personal: StaffShiftRow[];
+}
+
+export interface ConfigTransitionPreflight {
+  permitido: boolean;
+  /** Motivos del contrato (OPERATIONS_IN_FLIGHT, HOTEL_TYPE_LOCKED…). */
+  reason_codes?: string[];
+  /** Lo que está abierto y bloquea el cambio, con su mensaje y cuántos hay. */
+  bloqueos?: { code: string; count: number; blocking: boolean; message: string }[];
+  advertencias?: { codigo?: string; mensaje?: string }[];
+  /** Hay que mandarla al aplicar (`version_esperada`). */
+  version_actual?: number;
+  [key: string]: unknown;
+}
+
+export interface PlatformVilloDevice {
+  id: string;
+  nombre?: string | null;
+  establecimiento_id?: string | null;
+  establecimiento_nombre?: string | null;
+  estado?: string | null;
+  ultimo_latido_en?: string | null;
+  [key: string]: unknown;
+}
+
+export interface PlatformAuthority {
+  es_autoridad?: boolean;
+  requiere_totp?: boolean;
+  [key: string]: unknown;
 }
 
 /** Las dos imágenes del negocio que sube su administración. */
@@ -615,12 +852,21 @@ export interface InventoryStock extends InventorySupply {
   existencia?: number | null;
   minimo?: number | null;
   bajo_minimo?: boolean;
+  categoria?: string | null;
+  costo_unitario?: number | null;
+  /** Existencia por costo. */
+  valor?: number | null;
+  proveedor_nombre?: string | null;
+  proveedor_telefono?: string | null;
+  /** Cuántos productos lo gastan (sus recetas). */
+  productos_que_lo_usan?: number;
 }
 
 /** GET /inventario/insumos completo; `permisos` falta si el backend no tiene la 205. */
 export interface InventoryOverview {
   insumos: InventoryStock[];
   permisos?: InventoryPermissions;
+  resumen?: { total?: number; bajo_minimo?: number; valor_total?: number };
 }
 
 export interface InventorySupplyInput {
@@ -629,13 +875,18 @@ export interface InventorySupplyInput {
   minimo: number;
   costo_unitario?: number;
   existencia_inicial?: number;
+  /** "" la borra. */
+  categoria?: string;
+  proveedor_nombre?: string;
+  proveedor_telefono?: string;
+  activo?: boolean;
 }
 
 export interface InventoryMovementInput {
   /** UUID; el mismo en un reintento para que el servidor no lo registre dos veces. */
   id: string;
   insumo_id: number;
-  tipo: 'entrada' | 'merma' | 'conteo';
+  tipo: 'entrada' | 'merma' | 'conteo' | 'ajuste';
   cantidad: number;
   costo_unitario?: number;
   nota?: string;
@@ -644,6 +895,62 @@ export interface InventoryMovementInput {
 export interface InventoryProduct {
   id: number;
   nombre: string;
+  categoria?: string;
+}
+
+/** Un renglón del historial (GET /inventario/movimientos). */
+export interface InventoryMovement {
+  id: string;
+  insumo_id: number;
+  insumo: string;
+  unidad: InventoryUnit;
+  /** venta, cancelacion, entrada, merma, conteo, ajuste o inicial. */
+  tipo: string;
+  cantidad: number;
+  existencia_resultante: number;
+  existencia_esperada: number | null;
+  nota: string | null;
+  folio: number | null;
+  registrado_por: string | null;
+  creado_en: string;
+}
+
+/** GET /inventario/reporte: lo que pasó con cada insumo en el periodo. */
+export interface InventoryReport {
+  desde: string;
+  hasta: string;
+  insumos: {
+    id: number;
+    nombre: string;
+    unidad: InventoryUnit;
+    inicial: number;
+    entradas: number;
+    vendido: number;
+    mermas: number;
+    diferencias: number;
+    final: number;
+    bajo_minimo: boolean;
+    costo_vendido: number;
+    costo_mermas: number;
+    costo_diferencias: number;
+  }[];
+  totales?: { costo_vendido?: number; costo_mermas?: number; costo_diferencias?: number; compras_monto?: number };
+}
+
+/** POST /inventario/asistente. */
+export interface InventoryAssistantReply {
+  mensaje: string;
+  opciones?: string[];
+  quedan_mensajes?: number;
+}
+
+/** Un producto que gasta un insumo (GET /inventario/insumos/:id/productos). */
+export interface SupplyProductLink {
+  producto_id: number;
+  nombre: string;
+  categoria_id: number;
+  categoria_nombre: string;
+  cantidad: number;
 }
 
 /** Una línea de la receta de un producto (GET /inventario/productos/{id}/receta). */
@@ -878,6 +1185,25 @@ export interface BookingRefundInput {
   monto_reembolso: string;
 }
 
+/** Reembolso que devuelve POST /reservas/:id/cancelacion al cancelar una pagada (docs/reservas-cancha.md del back). */
+export interface BookingCancelRefund {
+  id: string;
+  /** `efectivo`, `saldo` o `tarjeta` (la vía del pago). */
+  metodo: string;
+  monto: string;
+  monto_pagado: string;
+  /** `ninguna`, `cartera`, `caja` o `devolucion_pendiente`. */
+  salida: string;
+  /** Saldo del cliente después del reembolso, solo cuando la salida es `cartera`. */
+  saldo_nuevo?: string | null;
+  creado_en: string;
+  devolucion_id?: string | null;
+  sesion_caja_id?: string | null;
+}
+
+/** Respuesta de la cancelación: la reserva cancelada y su reembolso (`null` si no hubo). */
+export type CancelledBooking = StaffBooking & { reembolso?: BookingCancelRefund | null };
+
 /** Fila del reporte GET /reservas/reembolsos (registro solo de inserción). */
 export interface BookingRefund {
   id: string;
@@ -931,6 +1257,7 @@ export interface PlatformStripeSummary {
   capacidades: Record<string, unknown>;
   razon_deshabilitacion: string | null;
   livemode: boolean;
+  pasar_comision_al_cliente?: boolean;
 }
 
 /** La tarjeta del negocio vista por su dueño (GET /stripe/configuracion). */
@@ -942,6 +1269,50 @@ export interface TenantCardPayments {
   estado_onboarding: StripeOnboardingStatus;
   /** Si es true, el pago con tarjeta suma la comisión al precio; si no, el cliente paga el de mostrador. */
   pasar_comision_al_cliente?: boolean;
+  /** Aprobación de la plataforma (back #266). Un back anterior no la manda. */
+  aprobacion_plataforma?: CardPlatformApproval;
+}
+
+/** Aprobación de la plataforma para cobrar con tarjeta. `estado: null` = nunca aprobada. */
+export interface CardPlatformApproval {
+  estado: 'aprobada' | 'revocada' | null;
+  vigente: boolean;
+  /** `backfill` = heredada de la migración 217, no la decidió una persona. */
+  origen?: 'plataforma' | 'backfill' | null;
+  aprobada_en?: string | null;
+  revocada_en?: string | null;
+}
+
+export interface CardApprovalHistoryEntry {
+  id: string;
+  accion: 'aprobar' | 'revocar' | 'backfill' | (string & {});
+  actor_tipo?: string | null;
+  autoridad_id?: string | null;
+  estado_antes?: 'aprobada' | 'revocada' | null;
+  estado_despues?: 'aprobada' | 'revocada' | null;
+  stripe_enabled_antes?: boolean | null;
+  stripe_enabled_despues?: boolean | null;
+  motivo?: string | null;
+  creado_en: string;
+}
+
+/** GET /plataforma/establecimientos/{id}/stripe/aprobacion (solo Super Admin). */
+export interface PlatformCardApproval {
+  establecimiento_id: string;
+  tipo?: string;
+  /** Solo las cafeterías se pueden aprobar. */
+  aprobable: boolean;
+  aprobacion: CardPlatformApproval;
+  stripe: StripePlatformConfiguration | null;
+  historial?: CardApprovalHistoryEntry[];
+}
+
+/** POST .../stripe/aprobacion y .../aprobacion/revocar. */
+export interface PlatformCardApprovalDecision {
+  establecimiento_id: string;
+  cambio: boolean;
+  aprobacion: CardPlatformApproval;
+  stripe: StripePlatformConfiguration | null;
 }
 
 export interface StripeOnboarding {
@@ -959,6 +1330,8 @@ export interface StripePlatformConfiguration {
   charges_enabled: boolean;
   payouts_enabled: boolean;
   estado_onboarding: StripeOnboardingStatus;
+  pasar_comision_al_cliente?: boolean;
+  aprobacion_plataforma?: CardPlatformApproval;
 }
 
 export interface PlatformEstablishment {
@@ -969,6 +1342,8 @@ export interface PlatformEstablishment {
   hora_cierre_forzado: string;
   identificador_cliente_etiqueta: string;
   identificador_cliente_obligatorio: boolean;
+  /** Vaiinilla fijó el tipo: el negocio no lo puede cambiar. Un backend anterior no lo manda. */
+  tipo_bloqueado?: boolean;
   descripcion?: string | null;
   imagen_url?: string | null;
   direccion?: string | null;
@@ -995,6 +1370,7 @@ export interface EstablishmentInput {
   hora_cierre_forzado: string;
   identificador_cliente_etiqueta?: string;
   identificador_cliente_obligatorio?: boolean;
+  tipo_bloqueado?: boolean;
   descripcion?: string | null;
   imagen_url?: string | null;
   direccion?: string | null;
@@ -1015,6 +1391,8 @@ export interface CatalogCategory {
   id: number;
   nombre: string;
   orden: number;
+  /** Con `incluir_archivados` el back puede mandar las archivadas. */
+  archivada?: boolean;
 }
 
 export interface CatalogOption {
@@ -1045,6 +1423,8 @@ export interface CatalogProduct {
   disponible: boolean;
   imagen_url: string | null;
   grupos_opcion: CatalogOptionGroup[];
+  /** Solo llega con `incluir_archivados` (admin): el producto salió del menú pero se puede restaurar. */
+  archivado?: boolean;
 }
 
 export interface CatalogResponse {
@@ -1089,7 +1469,7 @@ export type RefundMethod = 'efectivo' | 'terminal' | 'otro';
 /** Dinero que el negocio debe regresar a mano; Caja lo confirma al devolverlo. */
 export interface PendingRefund {
   id: string;
-  origen: 'sobrante_cuenta' | 'rechazo_articulo' | 'cancelacion';
+  origen: 'sobrante_cuenta' | 'rechazo_articulo' | 'cancelacion' | 'reserva_cancelada';
   espacio_id: number | null;
   pedido_id: string | null;
   /** efectivo, terminal, saldo o una mezcla ("efectivo+terminal"). */

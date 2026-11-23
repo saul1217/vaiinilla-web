@@ -3,6 +3,7 @@
 // el 30 sep 2026). No hay plantilla de hotel: decisión de David.
 
 import { CASHBACK_ENABLED } from './features';
+import type { DeliveryValidation } from '../types/api';
 
 export type BusinessType = 'cafeteria' | 'restaurante' | 'padel' | 'bar' | 'food_truck' | 'drive_thru' | 'comedor' | 'evento';
 
@@ -14,6 +15,8 @@ export interface Franja {
 export interface FlowSettings {
   tipo: BusinessType;
   entrega_requiere_qr: boolean;
+  /** Cómo valida Caja la entrega; sin él se deriva de entrega_requiere_qr (back anterior). */
+  validacion_entrega?: DeliveryValidation;
   permite_pago_al_final: boolean;
   /** Permite recargas y compras con saldo / wallet (por defecto true). */
   permite_saldo?: boolean;
@@ -99,10 +102,17 @@ export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
 
 export const MAX_GRACE_MINUTES = 60;
 
+/** El modo de validación efectivo: el guardado o, si no lo hay, el que implica entrega_requiere_qr. */
+export function deliveryValidationOf(
+  settings: Pick<FlowSettings, 'entrega_requiere_qr' | 'validacion_entrega'>,
+): DeliveryValidation {
+  return settings.validacion_entrega ?? (settings.entrega_requiere_qr ? 'qr_o_codigo' : 'ninguna');
+}
+
 export function sameSettings(a: FlowSettings, b: FlowSettings): boolean {
   return (
     a.tipo === b.tipo &&
-    a.entrega_requiere_qr === b.entrega_requiere_qr &&
+    deliveryValidationOf(a) === deliveryValidationOf(b) &&
     a.permite_pago_al_final === b.permite_pago_al_final &&
     (a.permite_saldo ?? true) === (b.permite_saldo ?? true) &&
     a.gracia_liberacion_min === b.gracia_liberacion_min &&

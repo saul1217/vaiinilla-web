@@ -34,3 +34,16 @@ it('con cero cobros conserva el ticket listo y los dos vacíos son independiente
   expect(screen.getByRole('region', { name: 'Ticket 3' })).toBeVisible();
   expect(screen.queryByText('Sin entregas pendientes')).not.toBeInTheDocument();
 });
+it('lo elegido en «Buscar un pedido» se abre en el ticket, también si se elige dos veces', () => {
+  const { rerender } = render(<CashierQueue cashOrders={[a, b]} readyOrders={[c]} actions={actions} />);
+  expect(screen.getByRole('region', { name: 'Ticket 1' })).toBeVisible();
+  rerender(<CashierQueue cashOrders={[a, b]} readyOrders={[c]} actions={actions} pick={{ id: 'c', seq: 1 }} />);
+  expect(screen.getByRole('region', { name: 'Ticket 3' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Fila de Caja' })).toHaveFocus();
+  rerender(<CashierQueue cashOrders={[a, b]} readyOrders={[c]} actions={actions} pick={{ id: 'c', seq: 1 }} />);
+  expect(screen.getByRole('region', { name: 'Ticket 3' })).toBeVisible();
+  rerender(<CashierQueue cashOrders={[a, b]} readyOrders={[c]} actions={actions} pick={{ id: 'b', seq: 2 }} />);
+  expect(screen.getByRole('region', { name: 'Ticket 2' })).toBeVisible();
+  rerender(<CashierQueue cashOrders={[a, b]} readyOrders={[c]} actions={actions} pick={{ id: 'ya-no-esta', seq: 3 }} />);
+  expect(screen.getByRole('region', { name: 'Ticket 2' })).toBeVisible();
+});

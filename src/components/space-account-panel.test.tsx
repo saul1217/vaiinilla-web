@@ -16,6 +16,8 @@ const apiMock = vi.hoisted(() => ({
   startCounterRental: vi.fn(),
   payCounterRental: vi.fn(),
   cancelCounterRental: vi.fn(),
+  openSpaceSession: vi.fn(),
+  extendSpaceSession: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({ api: apiMock }));
@@ -107,6 +109,74 @@ describe('cuenta del espacio', () => {
 
     await waitFor(() => expect(onReleased).toHaveBeenCalledTimes(1));
     expect(apiMock.releaseSpace).toHaveBeenCalledWith('t', 7, 4);
+  });
+
+  it('abre la cuenta de una mesa libre y repite la llave si se reintenta el mismo toque', async () => {
+    const user = userEvent.setup();
+    apiMock.spaceSession.mockResolvedValue({ ...openAccount, estado: 'libre', saldada: true, sesion: null, cuenta: null });
+    apiMock.openSpaceSession.mockRejectedValueOnce(new Error('Sin conexión')).mockResolvedValueOnce(undefined);
+    render(<SpaceAccountPanel token="t" spaceId={7} availability={undefined} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: /Abrir cuenta/ }));
+    expect(await screen.findByText('Sin conexión')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Abrir cuenta/ }));
+
+    expect(await screen.findByText('Cuenta abierta.')).toBeInTheDocument();
+    const [first, second] = apiMock.openSpaceSession.mock.calls as unknown[][];
+    if (!first || !second) throw new Error('Se esperaban dos intentos');
+    expect(first.slice(0, 2)).toEqual(['t', 7]);
+    expect(first[3]).toBeUndefined();
+    expect(second[2]).toBe(first[2]);
+  });
+
+  it('una cancha no abre cuenta a mano: con precio se renta y sin precio se abre un turno', async () => {
+    apiMock.spaceSession.mockResolvedValue({ ...openAccount, espacio: court, estado: 'libre', saldada: true, sesion: null, cuenta: null });
+    const priced: SpaceAvailability = { espacio: court, estado: 'libre', saldada: true, inicio: null, fin_previsto: null, precio_hora: '300.00', proxima_reserva: null };
+    const { unmount } = render(<SpaceAccountPanel token="t" spaceId={3} availability={priced} />, { wrapper: TestProvider });
+    expect(await screen.findByText('Rentar ahora')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Abrir cuenta/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Abrir turno')).not.toBeInTheDocument();
+    unmount();
+
+    render(<SpaceAccountPanel token="t" spaceId={3} availability={{ ...priced, precio_hora: null }} />, { wrapper: TestProvider });
+    expect(await screen.findByText('Abrir turno')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Abrir cuenta/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /min$/ }).map((button) => button.textContent?.trim())).toEqual(['60 min', '90 min', '120 min']);
+  });
+
+  it('abre un turno de 90 min, lo alarga 15 min con la versión y pide confirmar antes de liberar', async () => {
+    const user = userEvent.setup();
+    const freeCourt = { ...openAccount, espacio: court, estado: 'libre' as const, saldada: true, sesion: null, cuenta: null };
+    const turn = {
+      ...freeCourt,
+      estado: 'ocupada' as const,
+      fin_previsto: '2999-01-01T19:30:00Z',
+      sesion: { id: 's9', estado: 'abierta', inicio: '2026-10-01T18:00:00Z', fin_previsto: '2999-01-01T19:30:00Z', version: 2 },
+      cuenta: { pedidos: [], total: 0, pendiente: 0, pagado: 0, saldada: true },
+    };
+    apiMock.spaceSession.mockResolvedValue(freeCourt);
+    apiMock.openSpaceSession.mockImplementation(() => {
+      apiMock.spaceSession.mockResolvedValue(turn);
+      return Promise.resolve();
+    });
+    apiMock.extendSpaceSession.mockResolvedValue(undefined);
+    apiMock.releaseSpace.mockResolvedValue(undefined);
+    const availability: SpaceAvailability = { espacio: court, estado: 'libre', saldada: true, inicio: null, fin_previsto: null, precio_hora: null, proxima_reserva: null };
+    render(<SpaceAccountPanel token="t" spaceId={3} availability={availability} />, { wrapper: TestProvider });
+
+    await user.click(await screen.findByRole('button', { name: '90 min' }));
+    expect(apiMock.openSpaceSession).toHaveBeenCalledWith('t', 3, expect.any(String), 90);
+    expect(await screen.findByText('Alargar turno')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '+15 min' }));
+    expect(apiMock.extendSpaceSession).toHaveBeenCalledWith('t', 3, 15, 2, expect.any(String));
+    expect(await screen.findByText('Turno alargado 15 min.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Liberar espacio/ }));
+    expect(apiMock.releaseSpace).not.toHaveBeenCalled();
+    expect(screen.getByText(/El tiempo que le quedaba se pierde/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Toca otra vez para liberar/ }));
+    await waitFor(() => expect(apiMock.releaseSpace).toHaveBeenCalledWith('t', 3, 2));
   });
 
   it('en efectivo no deja confirmar hasta que alcance y cobra la cuenta completa', async () => {

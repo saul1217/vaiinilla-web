@@ -1,7 +1,11 @@
+import { AllergenSuggestion } from '../components/allergen-suggestion';
+import { addAllergens } from '../lib/allergens';
 import { AppPageHeader } from '../components/app-page-header';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Archive,
+  ArchiveRestore,
   Image as ImageIcon,
   Layers3,
   NotebookTabs,
@@ -78,7 +82,7 @@ const productSchema = z.object({
 
 type CategoryForm = z.infer<typeof categorySchema>;
 type ProductForm = z.infer<typeof productSchema>;
-type AvailabilityFilter = 'todos' | 'disponibles' | 'ocultos';
+type AvailabilityFilter = 'todos' | 'disponibles' | 'ocultos' | 'archivados';
 
 export function MenuPage() {
   const { tenant } = useSessions();
@@ -92,40 +96,51 @@ export function MenuPage() {
   const [categoryEditor, setCategoryEditor] = useState<CatalogCategory | 'new' | null>(null);
   const [productEditor, setProductEditor] = useState<CatalogProduct | 'new' | null>(null);
   const [availabilityProduct, setAvailabilityProduct] = useState<CatalogProduct | null>(null);
+  const [archiving, setArchiving] = useState<CatalogProduct | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const catalog = useQuery({
     queryKey: ['catalog', scopeId],
-    queryFn: () => api.catalog(token),
+    // El menú es solo del admin: pide también lo archivado para poder restaurarlo.
+    queryFn: () => api.catalog(token, { includeArchived: true }),
     enabled: Boolean(token),
   });
 
   const categories = useMemo(
-    () => [...(catalog.data?.categorias ?? [])].sort((a, b) => a.orden - b.orden),
+    () => [...(catalog.data?.categorias ?? [])].filter((category) => !category.archivada).sort((a, b) => a.orden - b.orden),
     [catalog.data?.categorias],
   );
+  const activeProducts = useMemo(() => (catalog.data?.productos ?? []).filter((product) => !product.archivado), [catalog.data?.productos]);
+  const archivedProducts = useMemo(() => (catalog.data?.productos ?? []).filter((product) => product.archivado), [catalog.data?.productos]);
+  const showingArchived = availability === 'archivados';
 
   const products = useMemo(() => {
-    return (catalog.data?.productos ?? []).filter((product) => {
+    return (showingArchived ? archivedProducts : activeProducts).filter((product) => {
       const matchesSearch =
         deferredSearch === '' ||
         product.nombre.toLocaleLowerCase('es-MX').includes(deferredSearch) ||
         product.descripcion?.toLocaleLowerCase('es-MX').includes(deferredSearch);
       const matchesCategory = categoryFilter === 'todos' || product.categoria_id === categoryFilter;
       const matchesAvailability =
-        availability === 'todos' ||
+        availability === 'todos' || availability === 'archivados' ||
         (availability === 'disponibles' ? product.disponible : !product.disponible);
       return matchesSearch && matchesCategory && matchesAvailability;
     });
-  }, [availability, catalog.data?.productos, categoryFilter, deferredSearch]);
+  }, [activeProducts, archivedProducts, availability, categoryFilter, deferredSearch, showingArchived]);
+
+  const categoryName = (id: number) => (catalog.data?.categorias ?? []).find((category) => category.id === id)?.nombre ?? 'Sin categoría';
+  const restore = useMutation({
+    mutationFn: (product: CatalogProduct) => api.setProductArchived(token, product.id, false),
+    onSuccess: async (_, product) => refresh(`${product.nombre} volvió al menú.`),
+  });
 
   async function refresh(message: string) {
     await queryClient.invalidateQueries({ queryKey: ['catalog', scopeId] });
     setNotice(message);
   }
 
-  const totalProducts = catalog.data?.productos.length ?? 0;
-  const hiddenProducts = catalog.data?.productos.filter((product) => !product.disponible).length ?? 0;
+  const totalProducts = activeProducts.length;
+  const hiddenProducts = activeProducts.filter((product) => !product.disponible).length;
   const visibleCategories = categories.filter((category) => categoryFilter === 'todos' || category.id === categoryFilter);
   const matchingProducts = (categoryId: number) => products.filter((product) => product.categoria_id === categoryId);
 
@@ -176,7 +191,7 @@ export function MenuPage() {
           />
         </div>
         <div className="filter-bar" role="group" aria-label="Disponibilidad del producto">
-          {(['todos', 'disponibles', 'ocultos'] as const).map((value) => (
+          {(['todos', 'disponibles', 'ocultos', 'archivados'] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -184,7 +199,7 @@ export function MenuPage() {
               aria-pressed={availability === value}
               onClick={() => setAvailability(value)}
             >
-              {value === 'todos' ? 'Todos' : value === 'disponibles' ? 'Disponibles' : 'Ocultos'}
+              {value === 'todos' ? 'Todos' : value === 'disponibles' ? 'Disponibles' : value === 'ocultos' ? 'Ocultos' : `Archivados${archivedProducts.length ? ` (${archivedProducts.length})` : ''}`}
             </button>
           ))}
         </div>
@@ -197,7 +212,7 @@ export function MenuPage() {
         <button type="button" className={`category-row ${categoryFilter === 'todos' ? 'category-row--active' : ''}`} aria-pressed={categoryFilter === 'todos'} onClick={() => setCategoryFilter('todos')}><span>Todo el menú</span><strong>{totalProducts}</strong></button>
         <div className="category-list">
           {categories.map((category) => {
-            const count = catalog.data?.productos.filter((product) => product.categoria_id === category.id).length ?? 0;
+            const count = activeProducts.filter((product) => product.categoria_id === category.id).length;
             return <div key={category.id} className={`category-row category-row--split ${categoryFilter === category.id ? 'category-row--active' : ''}`}>
               <button type="button" aria-pressed={categoryFilter === category.id} onClick={() => setCategoryFilter(category.id)}><span title={category.nombre}>{category.nombre}</span><strong>{count}</strong></button>
               <button type="button" className="category-row__edit" aria-label={`Editar categoría ${category.nombre}`} title="Editar categoría" onClick={() => setCategoryEditor(category)}><Pencil aria-hidden="true" /></button>
@@ -209,6 +224,22 @@ export function MenuPage() {
       {catalog.isPending ? <div className="product-grid" aria-label="Cargando productos" aria-busy="true" role="status">
         {[0, 1, 2, 3].map((item) => <div key={item} className="admin-product-tile admin-product-tile--skeleton" />)}
       </div> : !catalog.isError && categories.length === 0 ? <EmptyState icon={<NotebookTabs aria-hidden="true" />} title="Aún no hay categorías" description="Crea una categoría para organizar el menú y agregar productos." action={<Button onClick={() => setCategoryEditor('new')}>Crear categoría</Button>} />
+      : !catalog.isError && showingArchived ? (products.length === 0
+        ? <EmptyState icon={<Archive aria-hidden="true" />} title="Nada archivado" description="Lo que archives sale del menú pero se queda aquí para restaurarlo cuando quieras." action={<Button variant="secondary" onClick={() => setAvailability('todos')}>Ver el menú</Button>} />
+        : <section className="menu-products" aria-labelledby="menu-archived-heading">
+          <div className="section-heading menu-section-heading"><div><h2 id="menu-archived-heading">Archivados</h2><span className="section-count">{products.length} {products.length === 1 ? 'producto' : 'productos'}</span></div></div>
+          <ul className="menu-archived">
+            {products.map((product) => (
+              <li key={product.id}>
+                <span><strong>{product.nombre}</strong><small>{categoryName(product.categoria_id)} · {formatMoney(product.precio_mostrador)}</small></span>
+                <Button variant="secondary" loading={restore.isPending && restore.variables?.id === product.id} disabled={restore.isPending} onClick={() => restore.mutate(product)}>
+                  <ArchiveRestore aria-hidden="true" className="size-4" /> Restaurar
+                </Button>
+              </li>
+            ))}
+          </ul>
+          {restore.isError && <Feedback tone="error">{errorMessage(restore.error)}</Feedback>}
+        </section>)
       : !catalog.isError && totalProducts === 0 ? <EmptyState icon={<NotebookTabs aria-hidden="true" />} title="Tu menú está vacío" description="Crea el primer producto y decide si se publica de inmediato." action={<Button onClick={() => setProductEditor('new')}>Crear producto</Button>} />
       : !catalog.isError && products.length === 0 ? <EmptyState icon={<Search aria-hidden="true" />} title="No hay coincidencias" description="Cambia la búsqueda o los filtros para volver a ver productos." action={<Button variant="secondary" onClick={() => { setSearch(''); setAvailability('todos'); setCategoryFilter('todos'); }}>Limpiar búsqueda y filtros</Button>} />
       : !catalog.isError && <div className="menu-category-sections">
@@ -235,7 +266,13 @@ export function MenuPage() {
         key={`category-${categoryEditor === 'new' ? 'new' : (categoryEditor?.id ?? 'closed')}`}
         open={categoryEditor !== null}
         category={categoryEditor === 'new' ? null : categoryEditor}
+        activeCount={categoryEditor && categoryEditor !== 'new' ? activeProducts.filter((product) => product.categoria_id === categoryEditor.id).length : 0}
         token={token}
+        onArchived={async (name) => {
+          setCategoryEditor(null);
+          if (categoryFilter !== 'todos') setCategoryFilter('todos');
+          await refresh(`Categoría ${name} archivada.`);
+        }}
         onOpenChange={(open) => {
           if (!open) setCategoryEditor(null);
         }}
@@ -251,12 +288,23 @@ export function MenuPage() {
         product={productEditor === 'new' ? null : productEditor}
         categories={categories}
         token={token}
+        onArchive={productEditor && productEditor !== 'new' ? () => { setArchiving(productEditor); setProductEditor(null); } : undefined}
         onOpenChange={(open) => {
           if (!open) setProductEditor(null);
         }}
         onSaved={async (editing) => {
           setProductEditor(null);
           await refresh(editing ? 'Producto actualizado.' : 'Producto creado y agregado al menú.');
+        }}
+      />
+
+      <ArchiveProductModal
+        product={archiving}
+        token={token}
+        onOpenChange={(open) => { if (!open) setArchiving(null); }}
+        onArchived={async (product) => {
+          setArchiving(null);
+          await refresh(`${product.nombre} quedó archivado. Lo encuentras en Archivados.`);
         }}
       />
 
@@ -283,15 +331,20 @@ export function MenuPage() {
 function CategoryFormModal({
   open,
   category,
+  activeCount,
   token,
   onOpenChange,
   onSaved,
+  onArchived,
 }: {
   open: boolean;
   category: CatalogCategory | null;
+  /** Productos activos de la categoría: solo se archiva vacía. */
+  activeCount: number;
   token: string;
   onOpenChange: (open: boolean) => void;
   onSaved: (editing: boolean) => Promise<void>;
+  onArchived: (name: string) => Promise<void>;
 }) {
   const editing = category !== null;
   const form = useForm<CategoryForm>({
@@ -305,6 +358,10 @@ function CategoryFormModal({
       editing ? api.updateCategory(token, category.id, input) : api.createCategory(token, input),
     onSuccess: () => onSaved(editing),
   });
+  const archive = useMutation({
+    mutationFn: () => api.archiveCategory(token, category!.id),
+    onSuccess: () => onArchived(category!.nombre),
+  });
 
   return (
     <AppSheet
@@ -315,6 +372,7 @@ function CategoryFormModal({
     >
       <AppSheet.Body>
       {mutation.isError && <Feedback tone="error">{errorMessage(mutation.error)}</Feedback>}
+      {archive.isError && <Feedback tone="error">{errorMessage(archive.error)}</Feedback>}
       <form
         className="space-y-5"
         onSubmit={(event) => void form.handleSubmit((data) => mutation.mutate(data))(event)}
@@ -335,6 +393,14 @@ function CategoryFormModal({
           error={form.formState.errors.orden?.message}
           {...form.register('orden', { valueAsNumber: true })}
         />
+        {editing && (
+          <div className="menu-category-archive">
+            <Button type="button" variant="ghost" loading={archive.isPending} disabled={activeCount > 0} onClick={() => archive.mutate()}>
+              <Archive aria-hidden="true" className="size-4" /> Archivar categoría
+            </Button>
+            <p className="field__hint">{activeCount > 0 ? `Tiene ${activeCount} ${activeCount === 1 ? 'producto activo' : 'productos activos'}: archívalos o cámbialos de categoría primero.` : 'Sale del menú. Sus ventas pasadas se conservan.'}</p>
+          </div>
+        )}
         <AppSheet.Footer>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
@@ -356,6 +422,7 @@ function ProductFormModal({
   token,
   onOpenChange,
   onSaved,
+  onArchive,
 }: {
   open: boolean;
   product: CatalogProduct | null;
@@ -363,6 +430,8 @@ function ProductFormModal({
   token: string;
   onOpenChange: (open: boolean) => void;
   onSaved: (editing: boolean) => Promise<void>;
+  /** Solo al editar: abre la confirmación para archivar. */
+  onArchive?: () => void;
 }) {
   const editing = product !== null;
   const queryClient = useQueryClient();
@@ -375,6 +444,7 @@ function ProductFormModal({
     name: 'grupos_opcion',
     keyName: 'fieldKey',
   });
+  const allergensText = useWatch({ control: form.control, name: 'alergenos' }) ?? '';
   const counterPrice = useWatch({
     control: form.control,
     name: 'precio_mostrador',
@@ -584,6 +654,13 @@ function ProductFormModal({
               error={form.formState.errors.alergenos?.message}
               registration={form.register('alergenos')}
             />
+            <AllergenSuggestion
+              token={token}
+              productId={product?.id ?? null}
+              current={allergensText}
+              getInput={() => ({ nombre: form.getValues('nombre'), ingredientes: form.getValues('ingredientes'), descripcion: form.getValues('descripcion') })}
+              onUse={(labels) => form.setValue('alergenos', addAllergens(form.getValues('alergenos'), labels).slice(0, 500), { shouldDirty: true, shouldValidate: true })}
+            />
           </div>
         </section>
 
@@ -774,6 +851,11 @@ function ProductFormModal({
         </label>
 
         <AppSheet.Footer>
+          {editing && onArchive && (
+            <Button type="button" variant="ghost" className="menu-archive-button" disabled={mutation.isPending} onClick={onArchive}>
+              <Archive aria-hidden="true" className="size-4" /> Archivar
+            </Button>
+          )}
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
@@ -891,6 +973,39 @@ function OptionGroupFields({
         ))}
       </div>
     </fieldset>
+  );
+}
+
+function ArchiveProductModal({
+  product,
+  token,
+  onOpenChange,
+  onArchived,
+}: {
+  product: CatalogProduct | null;
+  token: string;
+  onOpenChange: (open: boolean) => void;
+  onArchived: (product: CatalogProduct) => Promise<void>;
+}) {
+  const mutation = useMutation({
+    mutationFn: (target: CatalogProduct) => api.setProductArchived(token, target.id, true),
+    onSuccess: (_, target) => onArchived(target),
+  });
+  return (
+    <AppSheet
+      open={product !== null}
+      onOpenChange={(open) => { if (!open) mutation.reset(); onOpenChange(open); }}
+      title={`¿Archivar ${product?.nombre ?? 'producto'}?`}
+      description="Deja de verse en el menú y no se puede pedir. Sus ventas pasadas se conservan y puedes restaurarlo desde Archivados."
+    >
+      <AppSheet.Body>
+      {mutation.isError && <Feedback tone="error">{errorMessage(mutation.error)}</Feedback>}
+      <AppSheet.Footer>
+        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
+        <Button type="button" variant="danger" loading={mutation.isPending} onClick={() => product && mutation.mutate(product)}>Archivar</Button>
+      </AppSheet.Footer>
+      </AppSheet.Body>
+    </AppSheet>
   );
 }
 
